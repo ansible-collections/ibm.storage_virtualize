@@ -417,7 +417,7 @@ class IBMSVCvolume(object):
             relationship_name = data[0]['RC_name']
             if relationship_name:
                 rel_data = self.restapi.svc_obj_info(cmd='lsrcrelationship', cmdopts=None, cmdargs=[relationship_name])
-                if rel_data['copy_type'] == "activeactive" and not allow_hs:
+                if rel_data['copy_type'] == "activeactive" and not self.allow_hs:
                     unsupported_volume = True
         if unsupported_volume:
             self.module.fail_json(msg="The module cannot be used for managing Mirrored volume.")
