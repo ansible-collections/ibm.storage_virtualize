@@ -110,7 +110,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
             "snapshot_policy_safeguarded": "no"
         }
         vg = IBMSVCVG()
-        vg.get_existing_vg()
+        vg.get_existing_vg("test_volumegroup")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
