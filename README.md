@@ -1,134 +1,152 @@
-# collection_template
-You can build a new repository for an Ansible Collection using this template by following [Creating a repository from a template](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template). This README.md contains recommended headings for your collection README.md, with comments describing what each section should contain. Once you have created your collection repository, delete this paragraph and the title above it from your README.md.
+# Ansible Collection - ibm.storage_virtualize
 
-# Foo Collection for Ansible
-<!-- Add CI and code coverage badges here. Samples included below. -->
-[![CI](https://github.com/ansible-collections/REPONAMEHERE/workflows/CI/badge.svg?event=push)](https://github.com/ansible-collections/REPONAMEHERE/actions) [![Codecov](https://img.shields.io/codecov/c/github/ansible-collections/REPONAMEHERE)](https://codecov.io/gh/ansible-collections/REPONAMEHERE)
+[![Code of conduct](https://img.shields.io/badge/code%20of%20conduct-Ansible-silver.svg)](https://docs.ansible.com/ansible/latest/community/code_of_conduct.html )
 
-<!-- Describe the collection and why a user would want to use it. What does the collection do? -->
+This collection provides a series of Ansible modules and plugins for interacting with the IBM Storage Virtualize family products. These products include the IBM SAN Volume Controller, IBM FlashSystem family members built with IBM Storage Virtualize (FlashSystem 5xxx, 7xxx, 9xxx), IBM Storwize family, and IBM Storage Virtualize for Public Cloud. For more information regarding these products, see [IBM Documentation](https://www.ibm.com/docs/).
 
-## Code of Conduct
+## Requirements
 
-We follow the [Ansible Code of Conduct](https://docs.ansible.com/ansible/devel/community/code_of_conduct.html) in all our interactions within this project.
+- Ansible version 2.9 or higher
 
-If you encounter abusive behavior, please refer to the [policy violations](https://docs.ansible.com/ansible/devel/community/code_of_conduct.html#policy-violations) section of the Code for information on how to raise a complaint.
+## Installation
 
-## Communication
+To install the IBM Storage Virtualize collection hosted in Galaxy:
 
-<!--List available communication channels. In addition to channels specific to your collection, we also recommend to use the following ones.-->
-
-We announce releases and important changes through Ansible's [The Bullhorn newsletter](https://github.com/ansible/community/wiki/News#the-bullhorn). Be sure you are [subscribed](https://eepurl.com/gZmiEP).
-
-Join us in the `#ansible` (general use questions and support), `#ansible-community` (community and collection development questions), and other [IRC channels](https://docs.ansible.com/ansible/devel/community/communication.html#irc-channels).
-
-We take part in the global quarterly [Ansible Contributor Summit](https://github.com/ansible/community/wiki/Contributor-Summit) virtually or in-person. Track [The Bullhorn newsletter](https://eepurl.com/gZmiEP) and join us.
-
-For more information about communication, refer to the [Ansible Communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
-
-## Contributing to this collection
-
-<!--Describe how the community can contribute to your collection. At a minimum, fill up and include the CONTRIBUTING.md file containing how and where users can create issues to report problems or request features for this collection. List contribution requirements, including preferred workflows and necessary testing, so you can benefit from community PRs. If you are following general Ansible contributor guidelines, you can link to - [Ansible Community Guide](https://docs.ansible.com/ansible/devel/community/index.html). List the current maintainers (contributors with write or higher access to the repository). The following can be included:-->
-
-The content of this collection is made by people like you, a community of individuals collaborating on making the world better through developing automation software.
-
-We are actively accepting new contributors.
-
-Any kind of contribution is very welcome.
-
-You don't know how to start? Refer to our [contribution guide](CONTRIBUTING.md)!
-
-We use the following guidelines:
-
-* [CONTRIBUTING.md](CONTRIBUTING.md)
-* [REVIEW_CHECKLIST.md](REVIEW_CHECKLIST.md)
-* [Ansible Community Guide](https://docs.ansible.com/ansible/latest/community/index.html)
-* [Ansible Development Guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
-* [Ansible Collection Development Guide](https://docs.ansible.com/ansible/devel/dev_guide/developing_collections.html#contributing-to-collections)
-
-## Collection maintenance
-
-The current maintainers are listed in the [MAINTAINERS](MAINTAINERS) file. If you have questions or need help, feel free to mention them in the proposals.
-
-To learn how to maintain / become a maintainer of this collection, refer to the [Maintainer guidelines](MAINTAINING.md).
-
-## Governance
-
-<!--Describe how the collection is governed. Here can be the following text:-->
-
-The process of decision making in this collection is based on discussing and finding consensus among participants.
-
-Every voice is important. If you have something on your mind, create an issue or dedicated discussion and let's discuss it!
-
-## Tested with Ansible
-
-<!-- List the versions of Ansible the collection has been tested with. Must match what is in galaxy.yml. -->
-
-## External requirements
-
-<!-- List any external resources the collection depends on, for example minimum versions of an OS, libraries, or utilities. Do not list other Ansible collections here. -->
-
-### Supported connections
-<!-- Optional. If your collection supports only specific connection types (such as HTTPAPI, netconf, or others), list them here. -->
-
-## Included content
-
-<!-- Galaxy will eventually list the module docs within the UI, but until that is ready, you may need to either describe your plugins etc here, or point to an external docsite to cover that information. -->
-
-## Using this collection
-
-<!--Include some quick examples that cover the most common use cases for your collection content. It can include the following examples of installation and upgrade (change NAMESPACE.COLLECTION_NAME correspondingly):-->
-
-### Installing the Collection from Ansible Galaxy
-
-Before using this collection, you need to install it with the Ansible Galaxy command-line tool:
 ```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME
+ansible-galaxy collection install ibm.storage_virtualize
 ```
 
-You can also include it in a `requirements.yml` file and install it with `ansible-galaxy collection install -r requirements.yml`, using the format:
+To upgrade to the latest version of the IBM Storage Virtualize collection:
+
+```bash
+ansible-galaxy collection install ibm.storage_virtualize --force
+```
+
+## Usage
+
+### Playbooks
+
+To use a module from the IBM Storage Virtualize collection, please reference the full namespace, collection name, and module name that you want to use:
+
 ```yaml
 ---
-collections:
-  - name: NAMESPACE.COLLECTION_NAME
+- name: Using the IBM Storage Virtualize collection
+  hosts: localhost
+  tasks:
+    - name: Gather info from storage
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: x.x.x.x
+        domain:
+        username: username
+        password: password
+        log_path: /tmp/playbook.debug
+        gather_subset: all
 ```
 
-Note that if you install the collection from Ansible Galaxy, it will not be upgraded automatically when you upgrade the `ansible` package. To upgrade the collection to the latest available version, run the following command:
-```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME --upgrade
+Alternatively, you can add a full namepsace and collection name in the `collections` element:
+
+```yaml
+---
+- name: Using the IBM Storage Virtualize collection
+  collections:
+    - ibm.storage_virtualize
+  gather_facts: no
+  connection: local
+  hosts: localhost
+  tasks:
+    - name: Gather info from storage
+      ibm_svc_info:
+        clustername: x.x.x.x
+        domain:
+        username: username
+        password: password
+        log_path: /tmp/playbook.debug
+        gather_subset: all
 ```
 
-You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `0.1.0`:
+## Supported Resources
 
-```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME:==0.1.0
-```
+### Modules
 
-See [Ansible Using collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
+- ibm_svc_auth - Generates an authentication token for a user on Storage Virtualize systems
+- ibm_svc_complete_initial_setup - Completes the initial setup configuration for LMC systems
+- ibm_svc_host - Manages hosts on Storage Virtualize systems
+- ibm_svc_hostcluster - Manages host cluster on Storage Virtualize systems
+- ibm_svc_info - Collects information on Storage Virtualize systems
+- ibm_svc_initial_setup - Manages initial setup configuration on Storage Virtualize systems
+- ibm_svc_manage_callhome - Manages configuration of Call Home feature on Storage Virtualize systems
+- ibm_svc_manage_consistgrp_flashcopy - Manages FlashCopy consistency groups on Storage Virtualize systems
+- ibm_svc_manage_cv - Manages the change volume in remote copy replication on Storage Virtualize systems
+- ibm_svc_manage_flashcopy - Manages FlashCopy mappings on Storage Virtualize systems
+- ibm_svc_manage_ip - Manages IP provisioning on Storage Virtualize systems
+- ibm_svc_manage_migration - Manages volume migration between clusters on Storage Virtualize systems
+- ibm_svc_manage_mirrored_volume - Manages mirrored volumes on Storage Virtualize systems
+- ibm_svc_manage_ownershipgroup - Manages ownership groups on Storage Virtualize systems
+- ibm_svc_manage_portset - Manages IP portset on Storage Virtualize systems
+- ibm_svc_manage_replication - Manages remote copy replication on Storage Virtualize systems
+- ibm_svc_manage_replicationgroup - Manages remote copy consistency groups on Storage Virtualize systems
+- ibm_svc_manage_safeguarded_policy - Manages safeguarded policy configuration on Storage Virtualize systems
+- ibm_svc_manage_sra - Manages the remote support assistance configuration on Storage Virtualize systems
+- ibm_svc_manage_user - Manages user on Storage Virtualize systems
+- ibm_svc_manage_usergroup - Manages user groups on Storage Virtualize systems
+- ibm_svc_manage_volume - Manages standard volumes on Storage Virtualize systems
+- ibm_svc_manage_volumegroup - Manages volume groups on Storage Virtualize systems
+- ibm_svc_mdisk - Manages MDisks for Storage Virtualize systems
+- ibm_svc_mdiskgrp - Manages pools for Storage Virtualize systems
+- ibm_svc_start_stop_flashcopy - Starts or stops FlashCopy mapping and consistency groups on Storage Virtualize systems
+- ibm_svc_start_stop_replication - Starts or stops remote-copy independent relationships or consistency groups on Storage Virtualize systems
+- ibm_svc_vol_map - Manages volume mapping for Storage Virtualize systems
+- ibm_svcinfo_command - Runs svcinfo CLI command on Storage Virtualize systems over SSH session
+- ibm_svctask_command - Runs svctask CLI command(s) on Storage Virtualize systems over SSH session
+- ibm_sv_manage_awss3_cloudaccount - Manages Amazon S3 cloud account configuration on Storage Virtualize systems
+- ibm_sv_manage_cloud_backup - Manages cloud backups on Storage Virtualize systems
+- ibm_sv_manage_fc_partnership - Manages Fibre Channel (FC) partnership on Storage Virtualize systems
+- ibm_sv_manage_fcportsetmember - Manages addition or removal of ports from the Fibre Channel (FC) portsets on Storage Virtualize systems
+- ibm_sv_manage_ip_partnership - Manages IP partnership configuration on Storage Virtualize systems
+- ibm_sv_manage_provisioning_policy - Manages provisioning policy configuration on Storage Virtualize systems
+- ibm_sv_manage_replication_policy - Manages policy-based replication configuration on Storage Virtualize systems
+- ibm_sv_manage_snapshot - Manages snapshots (mutual consistent images of a volume) on Storage Virtualize systems
+- ibm_sv_manage_snapshotpolicy - Manages snapshot policy configuration on Storage Virtualize systems
+- ibm_sv_manage_ssl_certificate - Exports an existing system certificate on to Storage Virtualize systems
+- ibm_sv_manage_truststore_for_replication - Manages certificate trust stores for replication on Storage Virtualize family systems
+- ibm_sv_restore_cloud_backup - Restores cloud backups on Storage Virtualize systems
+- ibm_sv_switch_replication_direction - Switches the replication direction on Storage Virtualize systems
 
-## Release notes
+### Other Feature Information
+- SV Ansible Collection v1.8.0 provides the new 'ibm_svc_complete_initial_setup' module, to complete the automation of Day 0 configuration on Licensed Machine Code (LMC) systems.
+  For non-LMC systems, login to the user-interface is required in order to complete the automation of Day 0 configuration.
+- SV Ansible Collection v1.7.0 provided `Setup and Configuration Automation` through different modules. This feature helps user to automate Day 0 configuration.
+  This feature includes three modules:
+  - ibm_svc_initial_setup
+  - ibm_svc_manage_callhome 
+  - ibm_svc_manage_sra
+- By proceeding and using these modules, the user acknowledges that [IBM Privacy Statement](https://www.ibm.com/privacy) has been read and understood.
 
-See the [changelog](https://github.com/ansible-collections/REPONAMEHERE/tree/main/CHANGELOG.rst).
+### Prerequisite
 
-## Roadmap
+- Paramiko must be installed to use ibm_svctask_command and ibm_svcinfo_command modules.
 
-<!-- Optional. Include the roadmap for this collection, and the proposed release/versioning strategy so users can anticipate the upgrade/update cycle. -->
+## Limitation
 
-## More information
+The modules in the IBM Storage Virtualize Ansible collection leverage REST APIs to connect to the IBM Storage Virtualize system. This has following limitations:
+1. Using the REST APIs to list more than 2000 objects may create a loss of service from the API side, as it automatically restarts due to memory constraints.
+2. It is not possible to access REST APIs using an IPv6 address on a cluster.
+3. The Ansible collection can run on all IBM Storage Virtualize system versions above 8.1.3, except versions 8.3.1.3, 8.3.1.4 and 8.3.1.5.
+4. At time of release of the SV Ansible v1.8.0 collection, no module is available for non LMC systems to automate license agreements acceptance, including EULA.
+   User will be presented with a GUI setup wizard upon user-interface login, whether the Ansible modules have been used for initial configuration or not.
 
-<!-- List out where the user can find additional information, such as working group meeting times, slack/IRC channels, or documentation for the product this collection automates. At a minimum, link to: -->
+## Releasing, Versioning, and Deprecation
 
-- [Ansible Collection overview](https://github.com/ansible-collections/overview)
-- [Ansible User guide](https://docs.ansible.com/ansible/devel/user_guide/index.html)
-- [Ansible Developer guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
-- [Ansible Collections Checklist](https://github.com/ansible-collections/overview/blob/main/collection_requirements.rst)
-- [Ansible Community code of conduct](https://docs.ansible.com/ansible/devel/community/code_of_conduct.html)
-- [The Bullhorn (the Ansible Contributor newsletter)](https://us19.campaign-archive.com/home/?u=56d874e027110e35dea0e03c1&id=d6635f5420)
-- [News for Maintainers](https://github.com/ansible-collections/news-for-maintainers)
+1. IBM Storage Virtualize Ansible Collection releases follow a quarterly release cycle.
+2. IBM Storage Virtualize Ansible Collection releases follow [semantic versioning](https://semver.org/).
+3. IBM Storage Virtualize Ansible modules deprecation cycle is aligned with [Ansible](https://docs.ansible.com/ansible/latest/dev_guide/module_lifecycle.html).
 
-## Licensing
+## Contributing
 
-<!-- Include the appropriate license information here and a pointer to the full licensing details. If the collection contains modules migrated from the ansible/ansible repo, you must use the same license that existed in the ansible/ansible repo. See the GNU license example below. -->
+Currently we are not accepting community contributions.
+Though, you may periodically review this content to learn when and how contributions can be made in the future.
+IBM Storage Virtualize Ansible Collection maintainers can follow the [Maintainer guidelines](https://docs.ansible.com/ansible/devel/community/maintainers.html).
 
-GNU General Public License v3.0 or later.
+## License
 
-See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
+GNU General Public License v3.0
