@@ -1,1 +1,7 @@
-releases: {}
+releases:
+  2.0.0:
+    release_date: '2023-06-30'
+    changes:
+      minor_changes:
+        - ibm_svc_mdisk - Added support for Distributed Arrays (DRAID).
+        - ibm_svc_manage_flashcopy - Added support for backup type snapshots.
