@@ -1,0 +1,156 @@
+name: ibm.storage_virtualize Ansible CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '25 10 * * *'
+
+jobs:
+  sanity:
+    name: Sanity (${{ matrix.ansible }} on storage_virtualize
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible:
+          - stable-2.9
+          - stable-2.10
+          - stable-2.11
+          - stable-2.12
+          - stable-2.13
+          - stable-2.14
+        python:
+          - '2.7'
+          - '3.8'
+          - '3.9'
+        exclude:
+          - ansible: stable-2.9
+            python: '3.9'
+          - ansible: stable-2.12
+            python: '2.7'
+          - ansible: stable-2.13
+            python: '2.7'
+          - ansible: stable-2.14
+            python: '2.7'
+          - ansible: stable-2.14
+            python: '3.8'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Upgrade PIP
+        run: python${{ matrix.python }} -m pip install --upgrade pip
+
+      - name: Install ansible (${{ matrix.ansible }})
+        run: python${{ matrix.python }} -m pip install https://github.com/ansible/ansible/archive/${{ matrix.ansible }}.tar.gz --disable-pip-version-check
+
+      - name: Make directory for ansible-test 
+        run: |
+          pwd
+          mkdir -p ansible_collections/ibm/storage_virtualize
+          rsync -av . ansible_collections/ibm/storage_virtualize --exclude ansible_collections/ibm/storage_virtualize
+      - name: Run sanity tests storage_virtualize
+        run: ansible-test sanity -v --color --python ${{ matrix.python }} --docker --coverage
+        working-directory: ./ansible_collections/ibm/storage_virtualize
+
+  units:
+    name: Units (${{ matrix.ansible }} on storage_virtualize
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible:
+          - stable-2.9
+          - stable-2.10
+          - stable-2.11
+          - stable-2.12
+          - stable-2.13
+          - stable-2.14
+        python:
+          - '2.7'
+          - '3.8'
+          - '3.9'
+        exclude:
+          - ansible: stable-2.9
+            python: '3.9'
+          - ansible: stable-2.12
+            python: '2.7'
+          - ansible: stable-2.13
+            python: '2.7'
+          - ansible: stable-2.14
+            python: '2.7'
+          - ansible: stable-2.14
+            python: '3.8'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Upgrade PIP
+        run: python${{ matrix.python }} -m pip install --upgrade pip
+
+      - name: Install ansible (${{ matrix.ansible }})
+        run: python${{ matrix.python }} -m pip install https://github.com/ansible/ansible/archive/${{ matrix.ansible }}.tar.gz --disable-pip-version-check
+
+      - name: Make directory for ansible-test 
+        run: |
+          pwd
+          mkdir -p ansible_collections/ibm/storage_virtualize
+          rsync -av . ansible_collections/ibm/storage_virtualize --exclude ansible_collections/ibm/storage_virtualize
+          
+      - name: Install dependencies
+        run: python${{ matrix.python }} -m pip install paramiko
+
+      - name: Run unit test cases
+        run: ansible-test units -v --color --python ${{ matrix.python }} --requirements --coverage
+        working-directory: ./ansible_collections/ibm/storage_virtualize
+  
+  galaxy-importer:
+    name: Validate storage_virtualize with galaxy-importer tool.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python3
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Upgrade PIP
+        run: python3.9 -m pip install --upgrade pip
+
+      - name: Install ansible
+        run: python3.9 -m pip install ansible --disable-pip-version-check
+
+      - name: Install galaxy-importer tool
+        run: python3.9 -m pip install galaxy_importer --disable-pip-version-check
+
+      - name: Make directory to sync
+        run: |
+          pwd
+          mkdir -p ansible_collections/ibm/storage_virtualize
+          rsync -av . ansible_collections/ibm/storage_virtualize --exclude ansible_collections/ibm/storage_virtualize
+
+      - name: Build the tar package
+        run: ansible-galaxy collection build
+        working-directory: ./ansible_collections/ibm/storage_virtualize
+
+      - name: Run galaxy-importer tool on storage_virtualize
+        run: |
+          export GALAXY_IMPORTER_CONFIG=$(readlink -f galaxy-importer.cfg)
+          env | grep galaxy
+          python3.9 -m galaxy_importer.main ibm-storage_virtualize-*.tar.gz
+        working-directory: ./ansible_collections/ibm/storage_virtualize
