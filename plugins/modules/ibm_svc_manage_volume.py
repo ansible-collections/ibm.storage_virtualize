@@ -291,7 +291,7 @@ class IBMSVCvolume(object):
                 old_name=dict(type='str', required=False),
                 enable_cloud_snapshot=dict(type='bool'),
                 cloud_account_name=dict(type='str'),
-                allow_hs=dict(type='bool')
+                allow_hs=dict(type='bool', default=False)
             )
         )
 
