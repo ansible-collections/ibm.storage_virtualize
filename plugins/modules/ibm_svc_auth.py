@@ -57,7 +57,7 @@ notes:
     - This module supports C(check_mode).
 '''
 
-EXAMPLES = ''' 
+EXAMPLES = '''
 - name: Obtain an authentication token
   register: result
   ibm.storage_virtualize.ibm_svc_auth:
@@ -79,7 +79,7 @@ EXAMPLES = '''
     unit: b
 '''
 
-RETURN = ''' 
+RETURN = '''
 token:
     description: Authentication token for a user.
     returned: success
