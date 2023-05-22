@@ -1,4 +1,4 @@
- name: Using Storage Virtualize collection to create a volume group
+- name: Using Storage Virtualize collection to create a volume group
   hosts: localhost
   vars:
     - clustername: clustername
