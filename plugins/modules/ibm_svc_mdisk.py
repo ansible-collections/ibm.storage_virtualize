@@ -89,27 +89,27 @@ options:
       - Specifies the class that is being used to create the array.
       - Applies when I(state=present).
     type: str
-    version_added: '1.13.0'
+    version_added: '2.0.0'
   drivecount:
     description:
       - Specifies the number of the drives.
       - The value must be a number in the range 2 - 128.
       - Applies when I(state=present).
     type: str
-    version_added: '1.13.0'
+    version_added: '2.0.0'
   stripewidth:
     description:
       - Specifies the width of a single unit of redundancy within a distributed set of drives
       - The value must be a number in the range 2 - 16.
       - Applies when I(state=present).
     type: str
-    version_added: '1.13.0'
+    version_added: '2.0.0'
   old_name:
     description:
       - Specifies the old name of an existing pool.
       - Applies when I(state=present), to rename the existing pool.
     type: str
-    version_added: '1.13.0'
+    version_added: '2.0.0'
 author:
     - Peng Wang(@wangpww)
 notes:
@@ -216,7 +216,7 @@ class IBMSVCmdisk(object):
                 self.module.fail_json(msg="The parameters 'drive' and "
                                       "'driveclass, drivecount, stripewidth' are mutually exclusive.")
         elif self.state == 'absent':
-            invalids = ('drive', 'driveclass', 'level', 'drivecount', 'encrypt', 'old_name', 'stripewidth')
+            invalids = ('drive', 'driveclass', 'level', 'drivecount', 'old_name', 'stripewidth')
             invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None}))
 
             if invalid_exists:
