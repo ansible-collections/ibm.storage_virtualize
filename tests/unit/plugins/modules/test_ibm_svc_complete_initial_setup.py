@@ -96,6 +96,9 @@ class TestIBMSVCInitS(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_setup_with_lmc(self, connect_mock, disconnect_mock, lmc_mock):
+        if not paramiko:
+            self.skipTest('Paramiko missing')
+
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -116,6 +119,9 @@ class TestIBMSVCInitS(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_setup_without_lmc(self, connect_mock, disconnect_mock, lmc_mock):
+        if not paramiko:
+            self.skipTest('Paramiko missing')
+
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
