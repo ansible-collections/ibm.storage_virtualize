@@ -57,9 +57,9 @@ jobs:
           # ignore.txt file.
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          # - stable-2.9 # Only if your collection supports Ansible 2.9
-          # - stable-2.10 # Only if your collection supports ansible-base 2.10
-          # - stable-2.11 # Only if your collection supports ansible-core 2.11
+          - stable-2.9 # Only if your collection supports Ansible 2.9
+          - stable-2.10 # Only if your collection supports ansible-base 2.10
+          - stable-2.11 # Only if your collection supports ansible-core 2.11
           - stable-2.12
           - stable-2.13
           - stable-2.14
@@ -118,9 +118,9 @@ jobs:
         ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          # - stable-2.9 # Only if your collection supports Ansible 2.9
-          # - stable-2.10 # Only if your collection supports ansible-base 2.10
-          # - stable-2.11 # Only if your collection supports ansible-core 2.11
+          - stable-2.9 # Only if your collection supports Ansible 2.9
+          - stable-2.10 # Only if your collection supports ansible-base 2.10
+          - stable-2.11 # Only if your collection supports ansible-core 2.11
           - stable-2.12
           - stable-2.13
           - stable-2.14
@@ -140,8 +140,9 @@ jobs:
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
           test-deps: >-
-            ansible.netcommon
-            ansible.utils
+            paramiko
+            #ansible.netcommon
+            #ansible.utils
           # OPTIONAL If set to true, will test only against changed files,
           # which should improve CI performance. See limitations on
           # https://github.com/ansible-community/ansible-test-gh-action#pull-request-change-detection
@@ -183,7 +184,6 @@ jobs:
           - devel
         # - milestone
         python:
-          - '2.6'
           - '2.7'
           - '3.5'
           - '3.6'
