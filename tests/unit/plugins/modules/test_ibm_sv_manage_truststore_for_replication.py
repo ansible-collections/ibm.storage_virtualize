@@ -55,7 +55,7 @@ def fail_json(*args, **kwargs):  # pylint: disable=unused-argument
 
 
 class TestIBMSVTrustStore(unittest.TestCase):
-
+    @unittest.skipIf(not paramiko, 'Paramiko missing')
     def setUp(self):
         self.mock_module_helper = patch.multiple(basic.AnsibleModule,
                                                  exit_json=exit_json,
