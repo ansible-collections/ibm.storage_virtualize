@@ -137,6 +137,7 @@ jobs:
         uses: ansible-community/ansible-test-gh-action@release/v1
         #pre-test-cmd: python3.9 -m pip install paramiko
         #pre-test-cmd: pip install -r requirements.txt
+        pre-test-cmd: requirements.txt
         #uses: actions/setup-python@v4
         with:
           ansible-core-version: ${{ matrix.ansible }}

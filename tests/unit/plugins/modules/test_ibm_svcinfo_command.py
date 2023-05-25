@@ -15,7 +15,6 @@ from mock import patch
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_ssh import IBMSVCssh
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svcinfo_command import IBMSVCsshClient
 
 
