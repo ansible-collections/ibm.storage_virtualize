@@ -129,12 +129,25 @@ jobs:
         # - milestone
 
     steps:
+      - name: >- 
+          Install dependencies
+        run: python3.9 -m pip install paramiko
+
       - name: >-
-          Perform unit testing against
-          Ansible version ${{ matrix.ansible }}
+          Run unit test cases
+        uses: ansible-community/ansible-test-gh-action@release/v1
+        with:
+          ansible-core-version: ${{ matrix.ansible }}
+          origin-python-version: 3.9
+        #run: ansible-test units -v --color --python 3.9 --requirements --coverage
+        #working-directory: ./ansible_collections/ibm/storage_virtualize
+
+          #- name: >-
+          #Perform unit testing against
+          #Ansible version ${{ matrix.ansible }}
         # See the documentation for the following GitHub action on
         # https://github.com/ansible-community/ansible-test-gh-action/blob/main/README.md
-        uses: ansible-community/ansible-test-gh-action@release/v1
+        #uses: ansible-community/ansible-test-gh-action@release/v1
         #pre-test-cmd: python3.9 -m pip install paramiko
         #pre-test-cmd: pip install -r requirements.txt
         pre-test-cmd: requirements.txt
