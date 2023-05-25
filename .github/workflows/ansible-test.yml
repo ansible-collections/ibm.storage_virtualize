@@ -85,7 +85,6 @@ jobs:
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
-          target-python-version: 3.9
           testing-type: sanity
           # OPTIONAL If your sanity tests require code
           # from other collections, install them like this
@@ -140,7 +139,6 @@ jobs:
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
-          target-python-version: 3.9
           testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
@@ -152,6 +150,7 @@ jobs:
           # which should improve CI performance. See limitations on
           # https://github.com/ansible-community/ansible-test-gh-action#pull-request-change-detection
           pull-request-change-detection: true
+        run: pip install -r requirements.txt
 
 ###
 # Integration tests (RECOMMENDED)
