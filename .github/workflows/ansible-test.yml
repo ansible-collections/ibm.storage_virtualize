@@ -129,11 +129,6 @@ jobs:
         # - milestone
 
     steps:
-            #- name: Install dependencies
-            #with:
-            #python-version: '3.9'
-            #cache: 'pip' # caching pip dependencies
-            #run: pip install -r requirements.txt
       - name: >-
           Perform unit testing against
           Ansible version ${{ matrix.ansible }}
