@@ -129,6 +129,12 @@ jobs:
         # - milestone
 
     steps:
+      - name: Install dependencies
+        with:
+            python-version: '3.9'
+            cache: 'pip' # caching pip dependencies
+        run: pip install -r requirements.txt
+
       - name: >-
           Perform unit testing against
           Ansible version ${{ matrix.ansible }}
@@ -136,15 +142,16 @@ jobs:
         # https://github.com/ansible-community/ansible-test-gh-action/blob/main/README.md
         uses: ansible-community/ansible-test-gh-action@release/v1
         #pre-test-cmd: python3.9 -m pip install paramiko
-        pre-test-cmd: pip install -r requirements.txt
+        #pre-test-cmd: pip install -r requirements.txt
+        #uses: actions/setup-python@v4
         with:
-          ansible-core-version: ${{ matrix.ansible }}
-          origin-python-version: 3.9
-          testing-type: units
+            ansible-core-version: ${{ matrix.ansible }}
+            origin-python-version: 3.9
+            testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
-          test-deps: >-
-            pypi.paramiko
+          #test-deps: >-
+          #pypi.paramiko
             #ansible.netcommon
             #ansible.utils
           # OPTIONAL If set to true, will test only against changed files,
