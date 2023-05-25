@@ -60,7 +60,7 @@ jobs:
           #- stable-2.9 # Only if your collection supports Ansible 2.9
           #- stable-2.10 # Only if your collection supports ansible-base 2.10
           #- stable-2.11 # Only if your collection supports ansible-core 2.11
-          - stable-2.12
+          #- stable-2.12
           - stable-2.13
           - stable-2.14
           - devel
@@ -85,6 +85,7 @@ jobs:
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
+          target-python-version: 3.9
           testing-type: sanity
           # OPTIONAL If your sanity tests require code
           # from other collections, install them like this
@@ -135,8 +136,11 @@ jobs:
         # See the documentation for the following GitHub action on
         # https://github.com/ansible-community/ansible-test-gh-action/blob/main/README.md
         uses: ansible-community/ansible-test-gh-action@release/v1
+        pre-test-cmd: python3.9 -m pip install paramiko
         with:
           ansible-core-version: ${{ matrix.ansible }}
+          origin-python-version: 3.9
+          target-python-version: 3.9
           testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
@@ -179,7 +183,7 @@ jobs:
           # - stable-2.9 # Only if your collection supports Ansible 2.9
           # - stable-2.10 # Only if your collection supports ansible-base 2.10
           # - stable-2.11 # Only if your collection supports ansible-core 2.11
-          - stable-2.12
+          # - stable-2.12
           - stable-2.13
           - stable-2.14
           - devel
