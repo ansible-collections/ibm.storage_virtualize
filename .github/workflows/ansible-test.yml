@@ -135,7 +135,8 @@ jobs:
         # See the documentation for the following GitHub action on
         # https://github.com/ansible-community/ansible-test-gh-action/blob/main/README.md
         uses: ansible-community/ansible-test-gh-action@release/v1
-        pre-test-cmd: python3.9 -m pip install paramiko
+        #pre-test-cmd: python3.9 -m pip install paramiko
+        pre-test-cmd: pip install -r requirements.txt
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
@@ -150,7 +151,7 @@ jobs:
           # which should improve CI performance. See limitations on
           # https://github.com/ansible-community/ansible-test-gh-action#pull-request-change-detection
           pull-request-change-detection: true
-        run: pip install -r requirements.txt
+          #run: pip install -r requirements.txt
 
 ###
 # Integration tests (RECOMMENDED)
