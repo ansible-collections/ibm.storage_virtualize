@@ -131,7 +131,7 @@ jobs:
     steps:
       - name: >- 
           Install dependencies
-        run: python3.9 -m pip install paramiko
+        run: pip install paramiko
 
       - name: >-
           Run unit test cases
