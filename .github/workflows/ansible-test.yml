@@ -139,9 +139,9 @@ jobs:
         #pre-test-cmd: pip install -r requirements.txt
         #uses: actions/setup-python@v4
         with:
-            ansible-core-version: ${{ matrix.ansible }}
-            origin-python-version: 3.9
-            testing-type: units
+          ansible-core-version: ${{ matrix.ansible }}
+          origin-python-version: 3.9
+          testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
           test-deps: python3.9 -m pip install paramiko
