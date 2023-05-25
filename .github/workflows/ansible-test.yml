@@ -139,6 +139,7 @@ jobs:
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
+          pull-request-change-detection: true
         #run: ansible-test units -v --color --python 3.9 --requirements --coverage
         #working-directory: ./ansible_collections/ibm/storage_virtualize
 
@@ -150,15 +151,15 @@ jobs:
         #uses: ansible-community/ansible-test-gh-action@release/v1
         #pre-test-cmd: python3.9 -m pip install paramiko
         #pre-test-cmd: pip install -r requirements.txt
-        pre-test-cmd: requirements.txt
+        #pre-test-cmd: requirements.txt
         #uses: actions/setup-python@v4
-        with:
-          ansible-core-version: ${{ matrix.ansible }}
-          origin-python-version: 3.9
-          testing-type: units
+        #with:
+        #ansible-core-version: ${{ matrix.ansible }}
+        #origin-python-version: 3.9
+        # testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
-          test-deps: python3.9 -m pip install paramiko
+          # test-deps: python3.9 -m pip install paramiko
           #test-deps: >-
           #pypi.paramiko
             #ansible.netcommon
@@ -166,7 +167,7 @@ jobs:
           # OPTIONAL If set to true, will test only against changed files,
           # which should improve CI performance. See limitations on
           # https://github.com/ansible-community/ansible-test-gh-action#pull-request-change-detection
-          pull-request-change-detection: true
+          #pull-request-change-detection: true
           #run: pip install -r requirements.txt
 
 ###
