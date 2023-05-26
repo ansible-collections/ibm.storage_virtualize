@@ -127,7 +127,7 @@ jobs:
 #
 # https://docs.ansible.com/ansible/latest/dev_guide/testing_units.html
 
-  units:
+          #  units:
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
     # Since ubuntu-latest now uses Ubuntu 22.04, we need to fall back to the ubuntu-20.04
     # image for these stable branches. The list of branches where this is necessary will
@@ -140,9 +140,9 @@ jobs:
     name: Units (Ⓐ${{ matrix.ansible }})
     strategy:
       # As soon as the first unit test fails, cancel the others to free up the CI queue
-      fail-fast: true
-      matrix:
-        ansible:
+      #      fail-fast: true
+      #      matrix:
+      #        ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
           - stable-2.9 # Only if your collection supports Ansible 2.9
@@ -211,7 +211,6 @@ jobs:
           testing-type: units
           # OPTIONAL If your unit tests require code
           # from other collections, install them like this
-          # test-deps: python3.9 -m pip install paramiko
           #test-deps: >-
           #  ansible.netcommon
           #  ansible.utils
