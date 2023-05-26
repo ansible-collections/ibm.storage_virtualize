@@ -26,7 +26,7 @@ on:
   # testing against latest version of ansible-test for each ansible-core
   # version
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '25 10 * * *'
 
 concurrency:
   group: >-
@@ -57,14 +57,40 @@ jobs:
           # ignore.txt file.
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          #- stable-2.9 # Only if your collection supports Ansible 2.9
-          #- stable-2.10 # Only if your collection supports ansible-base 2.10
-          #- stable-2.11 # Only if your collection supports ansible-core 2.11
-          #- stable-2.12
+          - stable-2.9 # Only if your collection supports Ansible 2.9
+          - stable-2.10 # Only if your collection supports ansible-base 2.10
+          - stable-2.11 # Only if your collection supports ansible-core 2.11
+          - stable-2.12
           - stable-2.13
           - stable-2.14
           - devel
         # - milestone
+        python:
+          - '2.7'
+          - '3.5'
+          - '3.6'
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+        exclude:
+          # Because ansible-test doesn't support Python 3.9 for Ansible 2.9
+          # and Python 3.10 is supported in 2.12 or later.
+          - ansible: stable-2.9
+            python: '3.9'
+          - ansible: stable-2.9
+            python: '3.10'
+          - ansible: stable-2.10
+            python: '3.10'
+          - ansible: stable-2.11
+            python: '3.10'
+          # Python 2.6 is not supported with ansible-core >= 2.13
+          - ansible: stable-2.13
+            python: '2.6'
+          - ansible: stable-2.14
+            python: '2.6'
+          - ansible: devel
+            python: '2.6'
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
     # Since ubuntu-latest now uses Ubuntu 22.04, we need to fall back to the ubuntu-20.04
     # image for these stable branches. The list of branches where this is necessary will
@@ -85,6 +111,7 @@ jobs:
         with:
           ansible-core-version: ${{ matrix.ansible }}
           origin-python-version: 3.9
+          #origin-python-version: ${{ matrix.python }}
           testing-type: sanity
           # OPTIONAL If your sanity tests require code
           # from other collections, install them like this
@@ -101,49 +128,94 @@ jobs:
 #
 # https://docs.ansible.com/ansible/latest/dev_guide/testing_units.html
 
-          #  units:
+  units:
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
     # Since ubuntu-latest now uses Ubuntu 22.04, we need to fall back to the ubuntu-20.04
     # image for these stable branches. The list of branches where this is necessary will
     # shrink over time, check out https://github.com/ansible-collections/news-for-maintainers/issues/28
     # for the latest list.
-    #    runs-on: >-
-    #     ${{ contains(fromJson(
-    #          '["stable-2.9", "stable-2.10", "stable-2.11"]'
-    #      ), matrix.ansible) && 'ubuntu-20.04' || 'ubuntu-latest' }}
-    #    name: Units (Ⓐ${{ matrix.ansible }})
-    #    strategy:
+    runs-on: >-
+       ${{ contains(fromJson(
+           '["stable-2.9", "stable-2.10", "stable-2.11"]'
+       ), matrix.ansible) && 'ubuntu-20.04' || 'ubuntu-latest' }}
+    name: Units (Ⓐ${{ matrix.ansible }})
+    strategy:
       # As soon as the first unit test fails, cancel the others to free up the CI queue
-      #      fail-fast: true
-      #      matrix:
-      #        ansible:
+      fail-fast: true
+      matrix:
+        ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          #- stable-2.9 # Only if your collection supports Ansible 2.9
-          #- stable-2.10 # Only if your collection supports ansible-base 2.10
-          #- stable-2.11 # Only if your collection supports ansible-core 2.11
-          #- stable-2.12
-          #- stable-2.13
-          #- stable-2.14
+          - stable-2.9 # Only if your collection supports Ansible 2.9
+          - stable-2.10 # Only if your collection supports ansible-base 2.10
+          - stable-2.11 # Only if your collection supports ansible-core 2.11
+          - stable-2.12
+          - stable-2.13
+          - stable-2.14
           #- devel
         # - milestone
+        python:
+          - '2.7'
+          - '3.5'
+          - '3.6'
+          - '3.7'
+          - '3.8'
+          - '3.9'
+          - '3.10'
+        exclude:
+          # Because ansible-test doesn't support Python 3.9 for Ansible 2.9
+          # and Python 3.10 is supported in 2.12 or later.
+          - ansible: stable-2.9
+            python: '3.9'
+          - ansible: stable-2.9
+            python: '3.10'
+          - ansible: stable-2.10
+            python: '3.10'
+          - ansible: stable-2.11
+            python: '3.10'
+          - ansible: stable-2.11
+            python: '2.6'
+          - ansible: stable-2.12
+            python: '3.6'
+          - ansible: stable-2.12
+            python: '3.7'
+          # Python 2.6 is not supported with ansible-core >= 2.13
+          - ansible: stable-2.13
+            python: '2.6'
+          - ansible: stable-2.13
+            python: '3.6'
+          - ansible: stable-2.13
+            python: '3.7'
+          - ansible: stable-2.14
+            python: '2.6'
+          - ansible: stable-2.14
+            python: '3.6'
+          - ansible: stable-2.14
+            python: '3.7'
+#          - ansible: devel
+#            python: '2.6'
 
-            #    steps:
-            #      - name: >- 
-            #          Install dependencies
-            #        run: pip install paramiko
-
-            #      - name: >-
-            #          Run unit test cases
-            #        uses: ansible-community/ansible-test-gh-action@release/v1
-            #        with:
-            #          ansible-core-version: ${{ matrix.ansible }}
-            #          origin-python-version: 3.9
-            #          pull-request-change-detection: true
+    steps:
+      - name: >- 
+          Install paramiko dependency
+        run: pip install paramiko
+      - name: >-
+          Perform unit testing against
+          Ansible version ${{ matrix.ansible }}
+          under Python ${{ matrix.python }}
+        uses: ansible-community/ansible-test-gh-action@release/v1
+        with:
+          ansible-core-version: ${{ matrix.ansible }}
+          #origin-python-version: ${{ matrix.python }}
+          target-python-version: ${{ matrix.python }}
+          testing-type: units
+          #test-deps: >-
+          #  ansible.netcommon
+          #pull-request-change-detection: true
         #run: ansible-test units -v --color --python 3.9 --requirements --coverage
         #working-directory: ./ansible_collections/ibm/storage_virtualize
 
-          #- name: >-
+   #- name: >-
           #Perform unit testing against
           #Ansible version ${{ matrix.ansible }}
         # See the documentation for the following GitHub action on
@@ -197,10 +269,10 @@ jobs:
         ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          # - stable-2.9 # Only if your collection supports Ansible 2.9
-          # - stable-2.10 # Only if your collection supports ansible-base 2.10
-          # - stable-2.11 # Only if your collection supports ansible-core 2.11
-          # - stable-2.12
+          - stable-2.9 # Only if your collection supports Ansible 2.9
+          - stable-2.10 # Only if your collection supports ansible-base 2.10
+          - stable-2.11 # Only if your collection supports ansible-core 2.11
+          - stable-2.12
           - stable-2.13
           - stable-2.14
           - devel
@@ -263,7 +335,7 @@ jobs:
 
     needs:
       - sanity
-        #- units
+      - units
       - integration
 
     runs-on: ubuntu-latest
