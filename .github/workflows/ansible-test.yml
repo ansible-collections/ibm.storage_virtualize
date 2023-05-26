@@ -127,7 +127,7 @@ jobs:
 #
 # https://docs.ansible.com/ansible/latest/dev_guide/testing_units.html
 
-          #  units:
+  units:
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
     # Since ubuntu-latest now uses Ubuntu 22.04, we need to fall back to the ubuntu-20.04
     # image for these stable branches. The list of branches where this is necessary will
