@@ -140,9 +140,9 @@ jobs:
     name: Units (Ⓐ${{ matrix.ansible }})
     strategy:
       # As soon as the first unit test fails, cancel the others to free up the CI queue
-      #      fail-fast: true
-      #      matrix:
-      #        ansible:
+      fail-fast: true
+      matrix:
+        ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
           - stable-2.9 # Only if your collection supports Ansible 2.9
