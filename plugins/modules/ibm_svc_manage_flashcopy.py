@@ -256,6 +256,8 @@ class IBMSVCFlashcopy(object):
         if not self.state:
             self.module.fail_json(msg="Missing mandatory parameter: state")
 
+        self.changed = False
+
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -482,7 +484,6 @@ class IBMSVCFlashcopy(object):
         return msg
 
     def apply(self):
-        changed = False
         msg = None
         modify = []
 
@@ -496,11 +497,11 @@ class IBMSVCFlashcopy(object):
                 if self.state == "present":
                     modify = self.fcmap_probe(mdata)
                     if modify:
-                        changed = True
+                        self.changed = True
                     else:
                         msg = "mapping [%s] already exists" % self.name
                 elif self.state == "absent":
-                    changed = True
+                    self.changed = True
             else:
                 if self.state == "present":
                     if not sdata:
@@ -514,11 +515,11 @@ class IBMSVCFlashcopy(object):
                         elif sdata[0]["capacity"] != tdata[0]["capacity"]:
                             self.module.fail_json(msg="source and target must be of same size")
                     if sdata and not tdata:
-                        changed = True
+                        self.changed = True
                 elif self.state == "absent":
                     msg = "mapping [%s] does not exist" % self.name
 
-        if changed:
+        if self.changed:
             if self.state == "present" and not modify:
                 if None in [self.source, self.target, self.copytype]:
                     self.module.fail_json(msg="Required while creating FlashCopy mapping: 'source', 'target' and 'copytype'")
@@ -551,7 +552,7 @@ class IBMSVCFlashcopy(object):
         if self.module.check_mode:
             msg = 'skipping changes due to check mode.'
 
-        self.module.exit_json(msg=msg, changed=changed)
+        self.module.exit_json(msg=msg, changed=self.changed)
 
 
 def main():
