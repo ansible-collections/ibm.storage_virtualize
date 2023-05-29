@@ -84,7 +84,7 @@ jobs:
         uses: ansible-community/ansible-test-gh-action@release/v1
         with:
           ansible-core-version: ${{ matrix.ansible }}
-          origin-python-version: 3.9
+          #origin-python-version: 3.9
           testing-type: sanity
           # OPTIONAL If your sanity tests require code
           # from other collections, install them like this
