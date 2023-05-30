@@ -7,6 +7,7 @@ This collection provides a series of Ansible modules and plugins for interacting
 ## Requirements
 
 - Ansible version 2.9 or higher
+- Python 2.7, Python 3.5 and newer
 
 ## Installation
 
