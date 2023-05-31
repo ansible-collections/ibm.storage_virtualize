@@ -489,6 +489,7 @@ class IBMSVCFlashcopy(object):
 
         if self.state == 'present' and self.old_name:
             msg = self.flashcopy_rename()
+            self.module.exit_json(msg=msg, changed=self.changed)
         elif self.state == 'absent' and self.old_name:
             self.module.fail_json(msg="Rename functionality is not supported when 'state' is absent.")
         else:
