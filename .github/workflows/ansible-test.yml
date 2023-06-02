@@ -19,7 +19,7 @@ on:
   push:
     branches:
       - main
-      - stable-*
+      - develop
   pull_request:
   # Run CI once per day (at 06:00 UTC)
   # This ensures that even if there haven't been commits that we are still
@@ -223,9 +223,9 @@ jobs:
         ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
-          - stable-2.9 # Only if your collection supports Ansible 2.9
-          - stable-2.10 # Only if your collection supports ansible-base 2.10
-          - stable-2.11 # Only if your collection supports ansible-core 2.11
+          # - stable-2.9 # Only if your collection supports Ansible 2.9
+          # - stable-2.10 # Only if your collection supports ansible-base 2.10
+          # - stable-2.11 # Only if your collection supports ansible-core 2.11
           - stable-2.12
           - stable-2.13
           - stable-2.14
