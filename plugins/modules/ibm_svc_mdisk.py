@@ -193,6 +193,9 @@ class IBMSVCmdisk(object):
         self.stripewidth = self.module.params.get('stripewidth', '')
         self.old_name = self.module.params.get('old_name', '')
 
+        # internal variable
+        self.changed = False
+
         self.basic_checks()
 
         self.restapi = IBMSVCRestApi(
@@ -357,6 +360,12 @@ class IBMSVCmdisk(object):
     def mdisk_probe(self, data):
         props = []
 
+        ns = ('drive', 'driveclass', 'drivecount', 'level', 'stripewidth')
+        ns = ', '.join((var for var in ns if getattr(self, var) not in {'', None}))
+
+        if ns:
+            self.module.fail_json(msg='Not supported parameters passed for update: {0}'.format(ns))
+
         if self.encrypt:
             if self.encrypt != data['encrypt']:
                 props += ['encrypt']
@@ -398,14 +407,17 @@ class IBMSVCmdisk(object):
                 if self.state == 'present':
                     if not mdisk_data:
                         self.mdisk_create()
+                        self.changed = True
                         msg = "Mdisk [%s] has been created." % self.name
                     else:
                         # This is where we would modify
                         self.mdisk_update(modify)
                         msg = "Mdisk [%s] has been modified." % self.name
+                        self.changed = True
                 elif self.state == 'absent':
                     self.mdisk_delete()
                     msg = "Volume [%s] has been deleted." % self.name
+                    self.changed = True
             else:
                 self.log("exiting with no changes")
                 if self.state == 'absent':
@@ -416,7 +428,7 @@ class IBMSVCmdisk(object):
             if self.module.check_mode:
                 msg = 'skipping changes due to check mode'
 
-        self.module.exit_json(msg=msg, changed=changed)
+        self.module.exit_json(msg=msg, changed=self.changed)
 
 
 def main():
