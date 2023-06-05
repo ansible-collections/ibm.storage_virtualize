@@ -193,6 +193,9 @@ class IBMSVCmdisk(object):
         self.stripewidth = self.module.params.get('stripewidth', '')
         self.old_name = self.module.params.get('old_name', '')
 
+        # internal variable
+        self.changed = False
+
         self.basic_checks()
 
         self.restapi = IBMSVCRestApi(
