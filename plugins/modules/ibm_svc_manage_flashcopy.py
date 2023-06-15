@@ -16,6 +16,7 @@ short_description: This module manages FlashCopy mappings on IBM Storage Virtual
                    family systems
 description:
   - Ansible interface to manage 'mkfcmap', 'rmfcmap', and 'chfcmap' volume commands.
+    This module configures "clone", "snapshot" or "backup" type FlashCopy mappings.
 version_added: "1.4.0"
 options:
     name:
@@ -505,6 +506,8 @@ class IBMSVCFlashcopy(object):
                     self.changed = True
             else:
                 if self.state == "present":
+                    if None in [self.source]:
+                        self.module.fail_json(msg="Required while creating FlashCopy mapping: 'source'")
                     if not sdata:
                         self.module.fail_json(msg="The source volume [%s] doesn't exist." % self.source)
                     if tdata:

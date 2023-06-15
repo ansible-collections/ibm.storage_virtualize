@@ -358,28 +358,25 @@ class IBMSVCmdisk(object):
 
     # TBD: Implement a more generic way to check for properties to modify.
     def mdisk_probe(self, data):
-        props = []
+        ns = []
 
-        ns = ('drive', 'driveclass', 'drivecount', 'level', 'stripewidth')
-        ns = ', '.join((var for var in ns if getattr(self, var) not in {'', None}))
+        field_mappings = (
+            ('drivecount', data['drive_count']),
+            ('level', data['raid_level']),
+            ('encrypt', data['encrypt'])
+        )
 
-        if ns:
-            self.module.fail_json(msg='Not supported parameters passed for update: {0}'.format(ns))
+        for field, existing_value in field_mappings:
+            ns.append(existing_value != getattr(self, field))
 
-        if self.encrypt:
-            if self.encrypt != data['encrypt']:
-                props += ['encrypt']
-
-        if props is []:
-            props = None
-
-        self.log("mdisk_probe props='%s'", data)
-        return props
+        self.log("mdisk_probe props='%s'", ns)
+        return ns
 
     def apply(self):
         changed = False
         msg = None
         modify = []
+        ns = []
 
         mdisk_data = self.mdisk_exists(self.name)
         if self.state == 'present' and self.old_name:
@@ -395,8 +392,8 @@ class IBMSVCmdisk(object):
                 elif self.state == 'present':
                     # This is where we detect if chmdisk should be called.
                     modify = self.mdisk_probe(mdisk_data)
-                    if modify:
-                        changed = True
+                    if any(modify):
+                        self.log("Modification is not supported")
             else:
                 if self.state == 'present':
                     self.log("CHANGED: mdisk does not exist, "
@@ -423,7 +420,7 @@ class IBMSVCmdisk(object):
                 if self.state == 'absent':
                     msg = "Mdisk [%s] did not exist." % self.name
                 else:
-                    msg = "Mdisk [%s] already exists." % self.name
+                    msg = "Mdisk [%s] already exists. No modifications done" % self.name
 
             if self.module.check_mode:
                 msg = 'skipping changes due to check mode'
