@@ -384,7 +384,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_mdisk_invalid_parameter(self, svc_authorize_mock,
-                                                get_existing_mdisk_mock):
+                                            get_existing_mdisk_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
