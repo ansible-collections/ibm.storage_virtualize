@@ -1,0 +1,22 @@
+primary_cluster_name: Primary
+primary_cluster_ip: x.x.x.x
+primary_cluster_username: username
+primary_cluster_password: password
+secondary_cluster_name: Secondary
+secondary_cluster_ip: y.y.y.y
+secondary_cluster_username: username1
+secondary_cluster_password: password1
+linkbandwidthmbits: 100
+backgroundcopyrate: 50
+compressed: no
+primary_link1_ip: a.b.c.d
+primary_link2_ip: e.f.g.h
+secondary_link1_ip: i.j.k.l
+secondary_link2_ip: m.n.o.p
+vdisk_prefix: RC_
+vdisk_size: 10
+num_of_GMCVrel: 5
+num_of_GMrel: 5
+num_of_MMrel:
+changeVolprefix: cv__
+host_name: hostA
