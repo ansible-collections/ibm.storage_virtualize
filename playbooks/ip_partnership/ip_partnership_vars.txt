@@ -13,10 +13,14 @@ primary_link1_ip: a.b.c.d
 primary_link2_ip: e.f.g.h
 secondary_link1_ip: i.j.k.l
 secondary_link2_ip: m.n.o.p
+primary_link1_portset: portset1
+primary_link2_portset: portset2
+secondary_link1_portset: portset1
+secondary_link2_portset: portset2
 vdisk_prefix: RC_
 vdisk_size: 10
 num_of_GMCVrel: 5
 num_of_GMrel: 5
 num_of_MMrel:
-changeVolprefix: cv__
+changeVolprefix: cv_
 host_name: hostA
