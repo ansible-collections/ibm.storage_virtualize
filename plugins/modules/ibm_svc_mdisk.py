@@ -376,7 +376,6 @@ class IBMSVCmdisk(object):
         changed = False
         msg = None
         modify = []
-        ns = []
 
         mdisk_data = self.mdisk_exists(self.name)
         if self.state == 'present' and self.old_name:
