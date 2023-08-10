@@ -1,7 +1,7 @@
 - name: Using the IBM Spectrum Virtualize collection to Create MM Relations, map to host.
   hosts: localhost
   collections:
-    - ibm.spectrum_virtualize
+    - ibm.storage_virtualize
   gather_facts: no
   connection: local
   vars_files:
@@ -94,7 +94,7 @@
         state: present
 
     - name: Create remote copy
-      ibm.spectrum_virtualize.ibm_svc_manage_replication:
+      ibm.storage_virtualize.ibm_svc_manage_replication:
         name: '{{item.0}}'
         clustername: "{{ primary_cluster_ip }}"
         username: "{{ primary_cluster_username }}"

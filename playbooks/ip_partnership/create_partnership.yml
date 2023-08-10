@@ -1,7 +1,7 @@
 - name: Using the IBM Spectrum Virtualize collection to create IP Partnership on both clusers, check state is fully configured.
   hosts: localhost
   collections:
-    - ibm.spectrum_virtualize
+    - ibm.storage_virtualize
   gather_facts: no
   connection: local
   vars_files:
