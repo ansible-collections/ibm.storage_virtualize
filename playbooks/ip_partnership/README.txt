@@ -6,8 +6,8 @@ Prerequisite:
 
 These playbooks creates IP partnership and Remote copy relationships between a primary cluster and the secondary cluster.
   - It uses storage virtualize ansible modules.
-  - These playbooks are designed to create IP partnership between source cluster to destination cluster. These are designed in a way that it assigns the IP paddresses if specified and uses if existing IPs if there are only portsets details passed in inventroy file
-  - These playbooks also creates multiple Remote copy relationships (Metro Mirro, Global Mirro, Global Mirror with Change Volume).
+  - The playbook is designed to create IP partnership between source cluster to destination cluster. It takes the input IPs and portset details and configures theIP Partnership, if portset details are missing then it automatically fetches the it for the input IPs and create the partnership.
+  - These playbooks also create multiple Remote copy relationships (Metro Mirror, Global Mirro, Global Mirror with Change Volume).
 
 
 There are total 3 files used for this use-case.
@@ -26,7 +26,7 @@ There are total 3 files used for this use-case.
 	 - host_name		: It is the host name to which all the volumes should be mapped after creation. It assumes Host Ips are already assigned and host is already created on both clusters and are logged in.
 
   2. create_partnership:
-     This playbook creates the IP partnership between primary and secondary clusters with default portset 1 and or 2 based on the input IPs provided. It keeps backgroundcopy as 50 and linkbandwidthmbits as 100 default values if not provided by user
+     This playbook creates the IP partnership between primary and secondary clusters using input IPs & portset details. Incase portset detail is not provided, then it fetches the portste values of input IPs and creates the partnership. It keeps backgroundcopy as 50 and linkbandwidthmbits as 100 default values if not provided by user
   
   3. create_MM_relationships:
      This playbook creates the Metro mirror relationships for the partnership configured using above playbook "create_partnership" or on an existing partnership. This playbook creates associated vdisks with vdisk_prefix name specified in inventroy file ip_partnership_vars. It also maps all the vdisks to specified host.

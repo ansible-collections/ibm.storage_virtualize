@@ -1,4 +1,4 @@
-- name: Using the IBM Spectrum Virtualize collection to create IP Partnership on both clusers, check state is fully configured.
+- name: Using the IBM Storage Virtualize collection to create IP Partnership on both clusers, check state is fully configured.
   hosts: localhost
   collections:
     - ibm.storage_virtualize

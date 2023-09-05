@@ -1,4 +1,4 @@
-- name: Using the IBM Spectrum Virtualize collection to Create MM Relations, map to host.
+- name: Using the IBM Storage Virtualize collection to Create MM Relations, map to host.
   hosts: localhost
   collections:
     - ibm.storage_virtualize
@@ -45,14 +45,15 @@
       debug: var=Aux_vdisk_list
 
     - name: Create master volume
-      ibm_svc_vdisk:
+      ibm_svc_manage_volume:
         clustername: "{{ primary_cluster_ip }}"
         username: "{{ primary_cluster_username }}"
         password: "{{ primary_cluster_password }}"
         log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
         name: "{{ item }}"
         state: present
-        mdiskgrp: 0
+        pool: "{{pool_name}}"
+        pool_name: Pool0
         size: "{{vdisk_size| default(10)}}"
         unit: gb
       loop: "{{Master_vdisk_list}}"
@@ -60,14 +61,15 @@
     - name: print users
       debug: var=Aux_vdisk_list
     - name: Create aux volume
-      ibm_svc_vdisk:
+      ibm_svc_manage_volume:
         clustername: "{{ secondary_cluster_ip }}"
         username: "{{ secondary_cluster_username }}"
         password: "{{ secondary_cluster_password }}"
         log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
         name: '{{ item }}'
         state: present
-        mdiskgrp: 0
+        pool: "{{pool_name}}"
+        pool_name: Pool0
         size: "{{vdisk_size| default(10)}}"
         unit: gb
       loop: "{{ Aux_vdisk_list }}"
