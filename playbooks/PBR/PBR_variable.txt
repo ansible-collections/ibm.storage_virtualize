@@ -1,0 +1,12 @@
+primary_cluster_name: Cluster_9_199_142_151
+primary_cluster_ip: 9.199.142.151
+primary_cluster_username: superuser
+primary_cluster_password: l0destone
+secondary_cluster_name: Cluster_9_199_142_215
+secondary_cluster_ip: 9.199.142.215
+secondary_cluster_username: superuser
+secondary_cluster_password: l0destone
+host_name: secondhost
+volume_size: 500
+volume_prefix: volu_
+number_of_volumes: 3
