@@ -1035,6 +1035,46 @@ class TestIBMSVCvdisk(unittest.TestCase):
             vg.apply()
         self.assertTrue(exc.value.args[0]['changed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_storage_partition(self, mock_svc_authorize,
+                                      svc_obj_info_mock,
+                                      svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volumegroup',
+            'partition': 'partition1',
+            'state': 'present'
+        })
+        data = {
+            "id": "8",
+            "name": "test_volumegroup",
+            "volume_count": "0",
+            "backup_status": "empty",
+            "last_backup_time": "",
+            "owner_id": "",
+            "owner_name": "",
+            "safeguarded_policy_id": "",
+            "safeguarded_policy_name": "",
+            "safeguarded_policy_start_time": "",
+            "snapshot_policy_name": "",
+            "snapshot_policy_suspended": "no",
+            "ignore_user_flash_copy_maps": "no",
+            "snapshot_policy_safeguarded": "no",
+            "partition_name": ""
+        }
+
+        vg = IBMSVCVG()
+        probe_data = vg.vg_probe(data)
+        self.assertTrue('partition' in probe_data)
+
 
 if __name__ == '__main__':
     unittest.main()
