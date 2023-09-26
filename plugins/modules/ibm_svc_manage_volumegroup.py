@@ -189,6 +189,21 @@ options:
             - Valid when I(state=present), to rename an existing volume group.
         type: str
         version_added: '2.0.0'
+    partition:
+        description:
+            - Specifies the name of the storage partition to be assigned to the volume group.
+            - Applies when I(state=present).
+            - Supported from Storage Virtualize family systems 8.6.1.0 or later.
+        type: str
+        version_added: 2.1.0
+    nopartition:
+        description:
+            - If specified `True`, removes the volume group from the storage partition.
+            - Parameters I(partition) and I(nopartition) are mutually exclusive.
+            - Applies when I(state=present) to modify an existing volume group.
+            - Supported from Storage Virtualize family systems 8.6.1.0 or later.
+        type: bool
+        version_added: 2.1.0
 author:
     - Shilpi Jain(@Shilpi-J)
     - Sanjaikumaar M (@sanjaikumaar)
@@ -311,7 +326,9 @@ class IBMSVCVG(object):
                 ignoreuserfcmaps=dict(type='str', choices=['yes', 'no']),
                 replicationpolicy=dict(type='str'),
                 noreplicationpolicy=dict(type='bool'),
-                old_name=dict(type='str', required=False)
+                old_name=dict(type='str', required=False),
+                partition=dict(type='str'),
+                nopartition=dict(type='bool')
             )
         )
 
@@ -346,6 +363,8 @@ class IBMSVCVG(object):
         self.replicationpolicy = self.module.params.get('replicationpolicy', '')
         self.noreplicationpolicy = self.module.params.get('noreplicationpolicy', False)
         self.old_name = self.module.params.get('old_name', '')
+        self.partition = self.module.params.get('partition', '')
+        self.nopartition = self.module.params.get('nopartition', False)
 
         # Dynamic variable
         self.parentuid = None
@@ -403,7 +422,9 @@ class IBMSVCVG(object):
             "safeguardpolicyname": self.safeguardpolicyname,
             "nosafeguardpolicy": self.nosafeguardpolicy,
             "snapshotpolicy": self.snapshotpolicy,
-            "nosnapshotpolicy": self.nosnapshotpolicy
+            "nosnapshotpolicy": self.nosnapshotpolicy,
+            "partition": self.partition,
+            "nopartition": self.nopartition
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -415,7 +436,8 @@ class IBMSVCVG(object):
             ('ownershipgroup', 'snapshotpolicy'),
             ('ownershipgroup', 'policystarttime'),
             ('snapshotpolicy', 'safeguardpolicyname'),
-            ('replicationpolicy', 'noreplicationpolicy')
+            ('replicationpolicy', 'noreplicationpolicy'),
+            ('partition', 'nopartition')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -448,7 +470,8 @@ class IBMSVCVG(object):
             ('nosafeguardpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'safeguardpolicyname'),
-            ('replicationpolicy', 'noreplicationpolicy')
+            ('replicationpolicy', 'noreplicationpolicy'),
+            ('partition', 'nopartition')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -530,7 +553,9 @@ class IBMSVCVG(object):
             ('noownershipgroup', not bool(data.get('owner_name', ''))),
             ('nosafeguardpolicy', not bool(data.get('safeguarded_policy_name', ''))),
             ('nosnapshotpolicy', not bool(data.get('snapshot_policy_name', ''))),
-            ('noreplicationpolicy', not bool(data.get('replication_policy_name', '')))
+            ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
+            ('partition', data.get('partition_name', '')),
+            ('nopartition', not bool(data.get('partition_name', '')))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
@@ -604,6 +629,9 @@ class IBMSVCVG(object):
 
         if self.replicationpolicy:
             cmdopts['replicationpolicy'] = self.replicationpolicy
+
+        if self.partition:
+            cmdopts['partition'] = self.partition
 
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup

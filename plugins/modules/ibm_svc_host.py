@@ -124,6 +124,21 @@ options:
            - Valid when I(state=present), to create or modify a host.
        type : str
        version_added: '1.12.0'
+    partition:
+       description:
+           - Specifies the storage partition to be associated with the host.
+           - Valid when I(state=present), to create or modify a host.
+           - Supported from Storage Virtualize family systems 8.6.1.0 or later.
+       type : str
+       version_added: '2.1.0'
+    nopartition:
+       description:
+           - If specified as C(True), the host object is removed from the storage partition.
+           - Parameters I(partition) and I(nopartition) are mutually exclusive.
+           - Valid when I(state=present), to modify an existing host.
+           - Supported from Storage Virtualize family systems 8.6.1.0 or later.
+       type : bool
+       version_added: '2.1.0'
     log_path:
         description:
             - Path of debug log file.
@@ -238,7 +253,9 @@ class IBMSVChost(object):
                 nohostcluster=dict(type='bool'),
                 old_name=dict(type='str', required=False),
                 nqn=dict(type='str', required=False),
-                portset=dict(type='str', required=False)
+                portset=dict(type='str', required=False),
+                partition=dict(type='str', required=False),
+                nopartition=dict(type='bool', required=False)
             )
         )
 
@@ -266,6 +283,8 @@ class IBMSVChost(object):
         self.old_name = self.module.params.get('old_name', '')
         self.nqn = self.module.params.get('nqn', '')
         self.portset = self.module.params.get('portset', '')
+        self.partition = self.module.params.get('partition', '')
+        self.nopartition = self.module.params.get('nopartition', '')
 
         self.basic_checks()
 
@@ -313,8 +332,11 @@ class IBMSVChost(object):
         )
 
     def basic_checks(self):
+        if self.state == 'present':
+            if self.partition and self.nopartition:
+                self.module.fail_json(msg='Mutually exclusive parameters: partition, nopartition')
         if self.state == 'absent':
-            fields = [f for f in ['protocol', 'portset', 'nqn', 'type'] if getattr(self, f)]
+            fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a host'.format(', '.join(fields)))
@@ -329,7 +351,9 @@ class IBMSVChost(object):
             "type": self.type,
             "site": self.site,
             "hostcluster": self.hostcluster,
-            "nohostcluster": self.nohostcluster
+            "nohostcluster": self.nohostcluster,
+            "partition": self.partition,
+            "nopartition": self.nopartition
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -362,6 +386,10 @@ class IBMSVChost(object):
         if self.hostcluster and self.nohostcluster:
             self.module.fail_json(msg="You must not pass in both hostcluster and "
                                       "nohostcluster to the module.")
+
+        if self.partition and self.nopartition:
+            self.module.fail_json(msg="You must not pass in both partition and "
+                                      "nopartition to the module.")
 
         if self.hostcluster and (self.hostcluster != data['host_cluster_name']):
             if data['host_cluster_name'] != '':
@@ -404,6 +432,16 @@ class IBMSVChost(object):
             if self.portset != data['portset_name']:
                 props += ['portset']
 
+        if self.partition and self.partition != data['partition_name']:
+            if data['partition_name'] != '':
+                self.module.fail_json(msg="Host already belongs to partition [%s]" % data['partition_name'])
+            else:
+                props += ['partition']
+
+        if self.nopartition:
+            if data['partition_name'] != '':
+                props += ['nopartition']
+
         self.log("host_probe props='%s'", props)
         return props
 
@@ -419,6 +457,9 @@ class IBMSVChost(object):
         if self.hostcluster and self.nohostcluster:
             self.module.fail_json(msg="You must not pass in both hostcluster and "
                                       "nohostcluster to the module.")
+
+        if self.hostcluster and self.partition:
+            self.module.fail_json(msg='You must not pass in both hostcluster and partition to the module.')
 
         if self.module.check_mode:
             self.changed = True
@@ -445,6 +486,8 @@ class IBMSVChost(object):
             cmdopts['site'] = self.site
         if self.portset:
             cmdopts['portset'] = self.portset
+        if self.partition:
+            cmdopts['partition'] = self.partition
 
         self.log("creating host command '%s' opts '%s'",
                  self.fcwwpn, self.type)
@@ -542,6 +585,10 @@ class IBMSVChost(object):
             cmdopts['site'] = self.site
         if 'portset' in modify:
             cmdopts['portset'] = self.portset
+        if 'partition' in modify:
+            cmdopts['partition'] = self.partition
+        if 'nopartition' in modify:
+            cmdopts['nopartition'] = self.nopartition
         if cmdopts:
             cmdargs = [self.name]
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
