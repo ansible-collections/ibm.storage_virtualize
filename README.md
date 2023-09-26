@@ -106,9 +106,12 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 - ibm_sv_manage_ip_partnership - Manages IP partnership configuration on Storage Virtualize systems
 - ibm_sv_manage_provisioning_policy - Manages provisioning policy configuration on Storage Virtualize systems
 - ibm_sv_manage_replication_policy - Manages policy-based replication configuration on Storage Virtualize systems
+- ibm_sv_manage_security - Manages configuration of security options on IBM Storage Virtualize family storage systems
 - ibm_sv_manage_snapshot - Manages snapshots (mutual consistent images of a volume) on Storage Virtualize systems
 - ibm_sv_manage_snapshotpolicy - Manages snapshot policy configuration on Storage Virtualize systems
 - ibm_sv_manage_ssl_certificate - Exports an existing system certificate on to Storage Virtualize systems
+- ibm_sv_manage_storage_partition - Manages storage partition configuration on Storage Virtualize systems
+- ibm_sv_manage_syslog_server - Manages syslog server configuration on Storage Virtualize systems
 - ibm_sv_manage_truststore_for_replication - Manages certificate trust stores for replication on Storage Virtualize family systems
 - ibm_sv_restore_cloud_backup - Restores cloud backups on Storage Virtualize systems
 - ibm_sv_switch_replication_direction - Switches the replication direction on Storage Virtualize systems

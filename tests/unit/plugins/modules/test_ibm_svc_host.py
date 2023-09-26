@@ -624,6 +624,32 @@ class TestIBMSVChost(unittest.TestCase):
         obj.input_nqn = ['nqn.2014-08.com.example:nvme:nvm-example-sn-d78434', 'nqn.2014-08.com.example:nvme:nvm-example-sn-d78431']
         self.assertEqual(obj.host_nqn_update(), None)
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_host_storage_partition_update(self, svc_authorize_mock, svc_obj_info_mock, src):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test',
+            'state': 'present',
+            'partition': 'partition1'
+        })
+        svc_obj_info_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '', 'site_name': 'site2', 'partition_name': ''
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            obj = IBMSVChost()
+            obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,10 +2,11 @@
 
 namespace: ibm
 name: storage_virtualize
-version: 2.0.0
+version: 2.1.0
 readme: README.md
 authors:
   - Shilpi Jain (github.com/Shilpi-J)
+  - Sumit Gupta (github.com/sumitguptaibm)
 description: Ansible Collections for IBM Storage Virtualize
 license_file: LICENSE
 tags:

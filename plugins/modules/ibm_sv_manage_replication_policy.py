@@ -62,7 +62,7 @@ options:
     topology:
         description:
             - Specifies the policy topology.
-        choices: [ 2-site-async-dr ]
+        choices: [ 2-site-async-dr, 2-site-ha ]
         type: str
     location1system:
         description:
@@ -148,7 +148,7 @@ class IBMSVReplicationPolicy:
                 ),
                 topology=dict(
                     type='str',
-                    choices=['2-site-async-dr']
+                    choices=['2-site-async-dr', '2-site-ha']
                 ),
                 location1system=dict(
                     type='str',
@@ -183,12 +183,12 @@ class IBMSVReplicationPolicy:
         self.location2iogrp = self.module.params.get('location2iogrp', '')
         self.rpoalert = self.module.params.get('rpoalert', '')
 
-        self.basic_checks()
-
         # logging setup
         self.log_path = self.module.params['log_path']
         log = get_logger(self.__class__.__name__, self.log_path)
         self.log = log.info
+
+        self.basic_checks()
 
         # Dynamic variables
         self.changed = False
@@ -283,6 +283,9 @@ class IBMSVReplicationPolicy:
                         msg='Policy modification is not supported. '
                             'Please delete and recreate new policy.'
                     )
+            elif current_value and f in {'rpoalert'}:
+                if self.topology == '2-site-ha':
+                    continue
             elif current_value and current_value != v:
                 self.module.fail_json(
                     msg='Policy modification is not supported. '

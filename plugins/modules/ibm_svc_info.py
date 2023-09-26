@@ -3,6 +3,7 @@
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -132,6 +133,8 @@ options:
     - enclosurestatshistory - lists the history values of all enclosure statistics including power consumed,
                               temperature in fahrenheit and temperature in celsius.
     - driveclass - lists all drive classes in the system
+    - security - display the current system Secure Sockets Layer (SSL) or Transport Layer Security (TLS) security and
+      password rules settings
     choices: [vol, pool, node, iog, host, hostvdiskmap, vdiskhostmap, hc, fcport
               , iscsiport, fc, fcmap, fcconsistgrp, rcrelationship, rcconsistgrp
               , vdiskcopy, targetportfc, array, system, 'cloudaccount', 'cloudaccountusage',
@@ -142,7 +145,7 @@ options:
                'dnsserver', 'systemcertificate', 'sra', 'syslogserver', 'enclosurestatshistory',
                'emailserver', 'emailuser', 'provisioningpolicy', 'volumegroupsnapshot',
                'truststore', 'callhome', 'ip', 'portset', 'safeguardedpolicy',
-               'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', all]
+               'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', 'security', all]
     default: "all"
 notes:
     - This module supports C(check_mode).
@@ -620,6 +623,14 @@ DriveClass:
     type: list
     elements: dict
     sample: [{...}]
+Security:
+    description:
+        - Data will be populated when I(gather_subset=security) or I(gather_subset=all)
+        - Displays current security settings of the system
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
 '''
 
 from traceback import format_exc
@@ -692,6 +703,7 @@ class IBMSVCGatherInfo(object):
                                             'enclosurestats',
                                             'enclosurestatshistory',
                                             'driveclass',
+                                            'security',
                                             'all'
                                             ]),
             )
@@ -821,7 +833,8 @@ class IBMSVCGatherInfo(object):
             'Mdisk': [],
             'SafeguardedSchedule': [],
             'EventLog': [],
-            'DriveClass': []
+            'DriveClass': [],
+            'Security': []
         }
 
         cmd_mappings = {
@@ -879,7 +892,8 @@ class IBMSVCGatherInfo(object):
             'eventlog': ('EventLog', 'lseventlog', False),
             'enclosurestats': ('EnclosureStats', 'lsenclosurestats', False),
             'enclosurestatshistory': ('EnclosureStatsHistory', 'lsenclosurestats -history power_w:temp_c:temp_f', True),
-            'driveclass': ('DriveClass', 'lsdriveclass', False)
+            'driveclass': ('DriveClass', 'lsdriveclass', False),
+            'security': ('Security', 'lssecurity', False)
         }
 
         if subset == ['all']:
