@@ -275,7 +275,6 @@ class IBMSVReplicationPolicy:
         self.log('replication policy probe data: %s', field_mappings)
         for f, v in field_mappings:
             current_value = str(getattr(self, f))
-            self.log("FIRST: current_value=%s, val=%s, f=%s", current_value, v, f)
             if current_value and f in {'location1system', 'location2system'}:
                 try:
                     next(iter(filter(lambda val: val[1] == current_value, v)))
