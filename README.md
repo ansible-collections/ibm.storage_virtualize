@@ -138,6 +138,9 @@ The modules in the IBM Storage Virtualize Ansible collection leverage REST APIs 
 3. The Ansible collection can run on all IBM Storage Virtualize system versions above 8.1.3, except versions 8.3.1.3, 8.3.1.4 and 8.3.1.5.
 4. At time of release of the SV Ansible v1.8.0 collection, no module is available for non LMC systems to automate license agreements acceptance, including EULA.
    User will be presented with a GUI setup wizard upon user-interface login, whether the Ansible modules have been used for initial configuration or not.
+5. For some modules, the collection uses paramiko library which internally uses cryptography package. Python cryptography package versions <41.0.3 are vulnerable
+   to CVE-2023-38325. As a workaround, python packages >=3.6 and cryptography >= 41.0.3 can be installed.
+   Security bulletin to follow.
 
 ## Releasing, Versioning, and Deprecation
 
