@@ -413,7 +413,7 @@ update the topolgy from standard mirror to HyperSwap")
         if self.vdisk_type == "local hyperswap" and self.expand_flag:
             cmd = "expandvolume"
         elif self.vdisk_type == "local hyperswap" and self.shrink_flag:
-            self.module.fail_json(msg="Size of a HyperSwap Volume cannot be shrinked")
+            self.module.fail_json(msg="A HyperSwap Volume cannot be reduced in size")
         elif self.vdisk_type == "standard mirror" and self.expand_flag:
             cmd = "expandvdisksize"
         elif self.vdisk_type == "standard mirror" and self.shrink_flag:
