@@ -16,6 +16,10 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
+# from urllib import open_url
+# from six import quote
+# from six import HTTPError
+
 
 def svc_argument_spec():
     """
