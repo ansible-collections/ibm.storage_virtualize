@@ -14,8 +14,11 @@ import json
 from mock import patch
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
-from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_mirrored_volume import IBMSVCvolume
+# from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
+# from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_mirrored_volume import IBMSVCvolume
+from ibm_svc_utils import IBMSVCRestApi
+from ibm_svc_manage_mirrored_volume import IBMSVCvolume
+
 
 
 def set_module_args(args):
