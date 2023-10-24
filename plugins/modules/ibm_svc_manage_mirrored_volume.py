@@ -415,15 +415,10 @@ update the topolgy from standard mirror to HyperSwap")
                 self.module.fail_json(msg="missing required argument: type")
         elif not self.poolA or not self.poolB:
             # transformation is allowed within a single pool.
-            if self.type == "transform" and not self.poolB:
-                if self.vdisk_type == "standard":
-                    if self.poolA == self.discovered_standard_vol_pool:
+            if self.type == "transform" and self.vdisk_type == "standard":
+                    if (self.poolA == self.discovered_standard_vol_pool) or (self.poolB == self.discovered_standard_vol_pool):
                         props += ['addvdiskcopy']
-            elif self.type == "transform" and not self.poolA:
-                if self.vdisk_type == "standard":
-                    if self.poolB == self.discovered_standard_vol_pool:
-                        props += ['addvdiskcopy']
-            elif self.vdisk_type == "standard":
+            elif self.vdisk_type == "standard" and self.type != "transform":
                 if self.poolA == self.discovered_standard_vol_pool or self.poolB == self.discovered_standard_vol_pool:
                     self.log("Standard Volume already exists, no modifications done")
                     return props
@@ -435,10 +430,11 @@ update the topolgy from standard mirror to HyperSwap")
                     else:
                         self.module.fail_json(msg="One of the input pools must belong to the Volume")
             elif self.poolB:
-                if self.poolB == self.discovered_poolA or self.poolB == self.discovered_poolB:
-                    props += ['rmvolumecopy']
-                else:
-                    self.module.fail_json(msg="One of the input pools must belong to the Volume")
+                if self.type != "transform" and self.vdisk_type == "standard":
+                    if self.poolB == self.discovered_poolA or self.poolB == self.discovered_poolB:
+                        props += ['rmvolumecopy']
+                    else:
+                        self.module.fail_json(msg="One of the input pools must belong to the Volume")
         if not (self.poolA or not self.poolB) and not self.size:
             if (self.system_topology == "hyperswap" and self.type == "local hyperswap"):
                 self.module.fail_json(msg="Type must be standard if either PoolA or PoolB is not specified.")
@@ -791,11 +787,6 @@ You must pass in poolA and poolB to the module.")
                         # if not create_vdisk_flag:
                         self.volume_create()
                         msg = "HyperSwap Volume %s has been created." % self.name
-                        changed = True
-                    elif self.type == "transform":
-                        self.isdrpool()
-                        self.vdisk_create()
-                        msg = "Volume %s has been transformed and the original copy has been deleted." % self.name
                         changed = True
                 else:
                     # This is where we would modify if required
