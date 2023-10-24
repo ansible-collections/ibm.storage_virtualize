@@ -70,6 +70,9 @@ options:
       a "standard mirror" volume gets created.
     - If a "standard" mirrored volume exists and either I(PoolA) or I(PoolB)
       is specified, the mirrored volume gets converted to a standard volume.
+    - Transform allows a volume to be changed between thin and thick/generic provisioning and automatically deletes the old copy after sync
+    - Transform also allows Volume Mirror to be used for migration between pools. A volume will move to a different pool (within the same IO Group for non-disruption)
+      and the original copy will be deleted after synchronization
     choices: [ local hyperswap, standard, transform ]
     type: str
   thin:
