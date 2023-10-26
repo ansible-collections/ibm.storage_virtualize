@@ -535,17 +535,21 @@ class IBMSVCvolume(object):
                 }
         # check for change in -thin parameter
         if self.thin is not None:
-            if self.thin is True:
+            if self.thin is True and (data[1]['se_copy'] == 'no' or data[1]['compressed_copy'] == 'yes'):
                 # a standard volume or a compressed volume
-                if (data[0]['capacity'] == data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'yes'):
-                    props['thin'] = {
-                        'status': True
-                    }
-            else:
-                if (data[0]['capacity'] != data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'no'):
-                    props['thin'] = {
-                        'status': True
-                    }
+                # if (int(data[0]['capacity']) == data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'yes'):
+                # changed logic to use se_copy instead of comparing values
+                props['thin'] = {
+                    'status': True
+                }
+                self.log('value of self.thin %s', self.thin )
+
+            # Removed compare with compressed_copy. A volume can be compressed_copy = 'no' with se_copy = 'yes' so this would always be 
+            # True if self.thin was False
+            elif (self.thin is False and data[1]['se_copy'] == 'yes'):
+                props['thin'] = {
+                    'status': True
+                }
         # check for change in -compressed parameter
         if self.compressed is True:
             # not a compressed volume
