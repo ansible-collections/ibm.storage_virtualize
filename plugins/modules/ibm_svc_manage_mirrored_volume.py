@@ -631,6 +631,8 @@ update the topolgy from standard mirror to HyperSwap")
             cmdopts['rsize'] = self.rsize
         elif self.thin:
             cmdopts['rsize'] = "2%"
+            # Set autoexpand to true. Short of having an autoexpand setting this should be the case for any thin volume
+            cmdopts['autoexpand'] = True
         elif self.rsize and not self.thin:
             self.module.fail_json(msg="To configure 'rsize', parameter 'thin' should be passed and the value should be 'true'.")
         if self.deduplicated:
