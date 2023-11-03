@@ -1,8 +1,8 @@
 # See https://docs.ansible.com/ansible/latest/dev_guide/collections_galaxy_meta.html
 
-namespace: ibm
+namespace: irw
 name: storage_virtualize
-version: 2.1.0
+version: 2.1.1
 readme: README.md
 authors:
   - Shilpi Jain (github.com/Shilpi-J)
