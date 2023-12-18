@@ -166,6 +166,95 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
         self.assertDictEqual(exc.value.args[0]['Host'][0], host_ret[0])
         self.assertDictEqual(exc.value.args[0]['Volume'][0], vol_ret[0])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_vol_volgrp_population_and_volgrpsnapshot_result_by_gather_info(self, svc_authorize_mock,
+                                                                            svc_obj_info_mock):
+        'Test ibm_svc_info module for lsvolumepopulation, lsvolumegrouppopulation and lsvolumesgroupsnapshot'
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'gather_subset': 'volumepopulation,volumegrouppopulation,volumegroupsnapshot',
+        })
+
+        vol_population_ret = [{
+            "data_to_move": "",
+            "estimated_completion_time": "",
+            "rate": "",
+            "source_snapshot": "ssthin0",
+            "source_volume_id": "2",
+            "source_volume_name": "del_volume21697369620971",
+            "start_time": "231127004946",
+            "type": "thinclone",
+            "volume_group_id": "2",
+            "volume_group_name": "th_volgrp0",
+            "volume_id": "11",
+            "volume_name": "del_volume21697369620971-5"
+        }, {
+            "data_to_move": "",
+            "estimated_completion_time": "",
+            "rate": "",
+            "source_snapshot": "ssthin0",
+            "source_volume_id": "0",
+            "source_volume_name": "volume0",
+            "start_time": "231127004946",
+            "type": "thinclone",
+            "volume_group_id": "2",
+            "volume_group_name": "th_volgrp0",
+            "volume_id": "3",
+            "volume_name": "volume0-5"
+        }]
+
+        volgrp_population_ret = [{
+            "data_to_move": "",
+            "estimated_completion_time": "",
+            "id": "2",
+            "parent_uid": "0",
+            "rate": "",
+            "restore_estimated_completion_time": "",
+            "restore_snapshot_name": "",
+            "restore_start_time": "",
+            "source_snapshot": "ssthin0",
+            "source_volume_group_id": "0",
+            "source_volume_group_name": "volumegroup0",
+            "start_time": "231127004946",
+            "volume_group_name": "th_volgrp0",
+            "volume_group_type": "thinclone"
+        }]
+
+        volgrp_snapshot_ret = [{
+            "auto_snapshot": "no",
+            "expiration_time": "",
+            "id": "1",
+            "matches_group": "yes",
+            "name": "ssthin0",
+            "operation_completion_estimate": "",
+            "operation_start_time": "",
+            "owner_id": "",
+            "owner_name": "",
+            "parent_uid": "0",
+            "protection_provisioned_capacity": "33.00GB",
+            "protection_written_capacity": "2.25MB",
+            "safeguarded": "no",
+            "state": "active",
+            "time": "231127004706",
+            "volume_group_id": "0",
+            "volume_group_name": "volumegroup0"
+        }]
+
+        svc_obj_info_mock.side_effect = [vol_population_ret, volgrp_population_ret, volgrp_snapshot_ret]
+        with pytest.raises(AnsibleExitJson) as exc:
+            IBMSVCGatherInfo().apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertDictEqual(exc.value.args[0]['VolumePopulation'][0], vol_population_ret[0])
+        self.assertDictEqual(exc.value.args[0]['VolumePopulation'][1], vol_population_ret[1])
+        self.assertDictEqual(exc.value.args[0]['VolumeGroupPopulation'][0], volgrp_population_ret[0])
+        self.assertDictEqual(exc.value.args[0]['VolumeGroupSnapshot'][0], volgrp_snapshot_ret[0])
+
 
 if __name__ == '__main__':
     unittest.main()

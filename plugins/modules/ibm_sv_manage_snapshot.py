@@ -3,6 +3,7 @@
 
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sanjaikumaar M <sanjaikumaar.m@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -51,8 +52,8 @@ options:
         type: str
     state:
         description:
-            - Creates, updates (C(present)) or deletes (C(absent)) a snapshot.
-        choices: [ present, absent ]
+            - Creates, updates (C(present)), restores from (C(restore)) or deletes (C(absent)) a snapshot.
+        choices: [ present, restore, absent ]
         required: true
         type: str
     name:
@@ -104,6 +105,13 @@ options:
             - Applies, when I(state=present) to create a safeguarded snapshot.
         type: int
         version_added: 1.10.0
+    retentionminutes:
+        description:
+            - Specifies the retention period in minutes in range 1 - 1440.
+            - I(retentionminutes) and I(retentiondays) are mutually exclusive.
+            - Applies, when I(state=present) to create a transient snapshot.
+        type: int
+        version_added: 2.3.0
     validate_certs:
         description:
             - Validates certification.
@@ -111,6 +119,7 @@ options:
         type: bool
 author:
     - Sanjaikumaar M (@sanjaikumaar)
+    - Sumit Kumar Gupta (@sumitguptaibm)
 notes:
     - This module supports C(check_mode).
     - This module automates the new Snapshot function, implemented by Storage Virtualize, which is using a
@@ -160,6 +169,26 @@ EXAMPLES = '''
    old_name: ansible_2
    ownershipgroup: ownershipgroup0
    state: present
+- name: Restore volumes of a volumegroup from a snapshot
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{clustername}}'
+   username: '{{username}}'
+   password: '{{password}}'
+   name: ansible_1
+   src_volumegroup_name: volumegroup1
+   snapshot_pool: Pool0Childpool0
+   state: restore
+- name: Create transient snapshot
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{clustername}}'
+   username: '{{username}}'
+   password: '{{password}}'
+   name: ansible_2
+   src_volume_names: vdisk0:vdisk1
+   safeguarded: true
+   retentionminutes: 5
+   snapshot_pool: Pool0Childpool0
+   state: present
 - name: Delete volumegroup snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
    clustername: '{{clustername}}'
@@ -189,6 +218,9 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
 )
 from ansible.module_utils._text import to_native
 
+MIN_SNAPSHOT_RETENTION_MINUTES = 1
+MAX_SNAPSHOT_RETENTION_MINUTES = 1440
+
 
 class IBMSVSnapshot:
 
@@ -199,7 +231,7 @@ class IBMSVSnapshot:
                 state=dict(
                     type='str',
                     required=True,
-                    choices=['present', 'absent']
+                    choices=['present', 'restore', 'absent']
                 ),
                 name=dict(
                     type='str',
@@ -228,6 +260,9 @@ class IBMSVSnapshot:
                 ),
                 retentiondays=dict(
                     type='int',
+                ),
+                retentionminutes=dict(
+                    type='int'
                 )
             )
         )
@@ -250,6 +285,7 @@ class IBMSVSnapshot:
         self.volumes = self.module.params.get('src_volume_names', '')
         self.safeguarded = self.module.params.get('safeguarded', False)
         self.retentiondays = self.module.params.get('retentiondays')
+        self.retentionminutes = self.module.params.get('retentionminutes')
 
         self.basic_checks()
 
@@ -280,13 +316,38 @@ class IBMSVSnapshot:
         if not self.name:
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
+        if not self.state:
+            self.module.fail_json(msg='Missing mandatory parameter: state')
+
         if self.state == 'present':
             if self.volumegroup and self.volumes:
                 self.module.fail_json(
                     msg='Mutually exclusive parameters: src_volumegroup_name, src_volume_names'
                 )
+            if self.retentionminutes is not None:
+                if (self.retentionminutes < MIN_SNAPSHOT_RETENTION_MINUTES or
+                        self.retentionminutes > MAX_SNAPSHOT_RETENTION_MINUTES):
+                    self.module.fail_json(
+                        msg='Invalid value for retentionminutes parameter. Valid range 1-1440.'
+                    )
+
+        elif self.state == 'restore':
+            # Check mandatory parameter src_volumegroup_name
+            if not self.volumegroup:
+                self.module.fail_json(
+                    msg='Missing mandatory parameter src_volumegroup_name'
+                )
+            invalids = ('snapshot_pool', 'ignorelegacy', 'ownershipgroup',
+                        'old_name', 'safeguarded', 'retentiondays', 'retentionminutes')
+            invalid_exists = ', '.join((var for var in invalids if getattr(self, var)))
+            if invalid_exists:
+                self.module.fail_json(
+                    msg='Invalid parameters for state=restore: {0}'.format(invalid_exists)
+                )
+
         elif self.state == 'absent':
-            invalids = ('snapshot_pool', 'ignorelegacy', 'ownershipgroup', 'old_name', 'safeguarded', 'retentiondays')
+            invalids = ('snapshot_pool', 'ignorelegacy', 'ownershipgroup',
+                        'old_name', 'safeguarded', 'retentiondays', 'retentionminutes')
             invalid_exists = ', '.join((var for var in invalids if getattr(self, var)))
 
             if self.volumes:
@@ -294,8 +355,10 @@ class IBMSVSnapshot:
 
             if invalid_exists:
                 self.module.fail_json(
-                    msg='state=absent but following paramters have been passed: {0}'.format(invalid_exists)
+                    msg='Invalid parameters for state=absent: {0}'.format(invalid_exists)
                 )
+        else:
+            self.module.fail_json(msg='State should be one of present,restore or absent')
 
     def create_validation(self):
         if self.old_name:
@@ -415,6 +478,8 @@ class IBMSVSnapshot:
             cmdopts['ignorelegacy'] = self.ignorelegacy
         if self.retentiondays:
             cmdopts['retentiondays'] = self.retentiondays
+        if self.retentionminutes:
+            cmdopts['retentionminutes'] = self.retentionminutes
         if self.safeguarded:
             cmdopts['safeguarded'] = self.safeguarded
 
@@ -425,6 +490,22 @@ class IBMSVSnapshot:
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('Snapshot (%s) created', self.name)
+        self.changed = True
+
+    def restore_from_snapshot(self):
+        if self.module.check_mode:
+            self.changed = True
+            return
+
+        cmd = 'restorefromsnapshot'
+        cmdopts = {
+            'snapshot': self.name
+        }
+        if self.volumegroup:
+            cmdopts['volumegroup'] = self.volumegroup
+
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        self.log('Volumegroup restored from Snapshot (%s)', self.name)
         self.changed = True
 
     def snapshot_probe(self):
@@ -492,15 +573,22 @@ class IBMSVSnapshot:
             if self.state == 'present':
                 modifications = self.snapshot_probe()
                 if any(modifications):
+                    if self.retentionminutes is not None:
+                        self.module.fail_json(msg='Invalid parameter retentionminutes for update operation')
                     self.update_snapshot(modifications)
                     self.msg = 'Snapshot ({0}) updated.'.format(self.name)
                 else:
                     self.msg = 'Snapshot ({0}) already exists. No modifications done.'.format(self.name)
+            elif self.state == 'restore':
+                self.restore_from_snapshot()
+                self.msg = 'Volumegroup ({0}) restored from Snapshot ({1}).'.format(self.volumegroup, self.name)
             else:
                 self.delete_snapshot()
         else:
             if self.state == 'absent':
-                self.msg = 'Snapshot ({0}) does not exists.'.format(self.name)
+                self.msg = 'Snapshot ({0}) does not exist.'.format(self.name)
+            elif self.state == 'restore':
+                self.module.fail_json(msg='Snapshot ({0}) does not exist.'.format(self.name))
             else:
                 self.create_snapshot()
                 self.msg = 'Snapshot ({0}) created.'.format(self.name)

@@ -650,6 +650,33 @@ class TestIBMSVChost(unittest.TestCase):
             obj.apply()
         self.assertEqual(True, exc.value.args[0]['changed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.host_create')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_tcpnvmehost_successfully(self, svc_authorize_mock,
+                                             host_create_mock,
+                                             get_existing_host_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'protocol': 'tcpnvme',
+            'nqn': 'nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397'
+        })
+        host = {u'message': u'Host, id [0], '
+                            u'successfully created', u'id': u'0'}
+        host_create_mock.return_value = host
+        get_existing_host_mock.return_value = []
+        tcpnvme_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            tcpnvme_host_obj.apply()
+
 
 if __name__ == '__main__':
     unittest.main()

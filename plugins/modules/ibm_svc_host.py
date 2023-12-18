@@ -77,7 +77,7 @@ options:
     nqn:
         description:
            - List of initiator NQNs to be added to the host. Each NQN is separated by a comma. The complete list of NQNs must be provided.
-           - Required when I(protocol=rdmanvme), to create.
+           - Required when I(protocol=rdmanvme or tcpnvme), to create.
            - Valid when I(state=present), to create or modify a host.
         type: str
         version_added: '1.12.0'
@@ -85,7 +85,7 @@ options:
         description:
             - Specifies the protocol used by the host to communicate with the storage system. Only 'scsi' protocol is supported.
             - Valid when I(state=present), to create a host.
-        choices: [scsi, rdmanvme ]
+        choices: [scsi, rdmanvme, tcpnvme]
         type: str
     type:
         description:
@@ -214,6 +214,17 @@ EXAMPLES = '''
     name: host_name
     iscsiname: iqn.1994-05.com.redhat:2e358e438b8a,iqn.localhost.hostid.7f000001
     state: present
+- name: Create a tcpnvme host
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/playbook.debug
+    name: host_name
+    protocol: tcpnvme
+    nqn: nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397
+    state: present
 - name: Delete a host
   ibm.storage_virtualize.ibm_svc_host:
     clustername: "{{clustername}}"
@@ -246,7 +257,7 @@ class IBMSVChost(object):
                 iscsiname=dict(type='str', required=False),
                 iogrp=dict(type='str', required=False),
                 protocol=dict(type='str', required=False, choices=['scsi',
-                                                                   'rdmanvme']),
+                                                                   'rdmanvme', 'tcpnvme']),
                 type=dict(type='str'),
                 site=dict(type='str'),
                 hostcluster=dict(type='str'),
@@ -316,9 +327,9 @@ class IBMSVChost(object):
             self.module.fail_json(msg='Missing mandatory parameter: name')
         # Handling for parameter protocol
         if self.protocol:
-            if self.protocol not in ('scsi', 'rdmanvme'):
-                self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi' and 'rdmanvme' "
-                                          "protocol is supported.".format(self.protocol))
+            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme'):
+                self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi', 'rdmanvme' and 'tcpnvme' "
+                                          "protocols are supported.".format(self.protocol))
 
         self.restapi = IBMSVCRestApi(
             module=self.module,

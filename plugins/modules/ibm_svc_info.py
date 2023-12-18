@@ -22,7 +22,8 @@ description:
   vdiskcopy, I/O groups, FC map, FC connectivity, NVMe fabric,
   array, and system.
 author:
-- Peng Wang (@wangpww)
+    - Peng Wang (@wangpww)
+    - Sumit Kumar Gupta (@sumitguptaibm)
 options:
   clustername:
     description:
@@ -110,6 +111,8 @@ options:
     - snapshotpolicy - lists all the snapshot policies on the system.
     - snapshotpolicyschedule - lists all snapshot schedules on the system.
     - volumegroup - lists all volume groups on the system.
+    - volumepopulation - list the population information about volumes of type clone or thinclone.
+    - volumegrouppopulation - list the information about volume groups of type clone or thinclone.
     - volumegroupsnapshotpolicy - lists the snapshot policy attributes associated with a volume group on the system.
     - volumesnapshot - lists all volume snapshots.
     - dnsserver - lists the information for any Domain Name System (DNS) servers in the system.
@@ -141,7 +144,7 @@ options:
                'ldapserver', 'drive', 'user', 'usergroup', 'ownershipgroup',
                'partnership', 'replicationpolicy', 'cloudbackup', 'enclosurestats',
                'cloudbackupgeneration', 'snapshotpolicy', 'snapshotpolicyschedule',
-               'volumegroup', 'volumegroupsnapshotpolicy', 'volumesnapshot',
+               'volumegroup', 'volumepopulation', 'volumegrouppopulation', 'volumegroupsnapshotpolicy', 'volumesnapshot',
                'dnsserver', 'systemcertificate', 'sra', 'syslogserver', 'enclosurestatshistory',
                'emailserver', 'emailuser', 'provisioningpolicy', 'volumegroupsnapshot',
                'truststore', 'callhome', 'ip', 'portset', 'safeguardedpolicy',
@@ -177,6 +180,14 @@ EXAMPLES = '''
     password: "{{password}}"
     log_path: /tmp/ansible.log
     gather_subset: pool
+- name: Get population information about volumes and volumegroups of type clone or thinclone
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/ansible.log
+    gather_subset: ['volumepopulation','volumegrouppopulation']
 '''
 
 RETURN = '''
@@ -558,6 +569,22 @@ VolumeGroup:
     type: list
     elements: dict
     sample: [{...}]
+VolumePopulation:
+    description:
+        - Data will be populated when I(gather_subset=volumepopulation) or I(gather_subset=all)
+        - Lists information about volumes of type clone or thinclone
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+VolumeGroupPopulation:
+    description:
+        - Data will be populated when I(gather_subset=volumegrouppopulation) or I(gather_subset=all)
+        - Lists information about volume groups of type clone or thinclone including source and in-progress restore
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
 VolumeGroupSnapshot:
     description:
         - Data will be populated when I(gather_subset=volumegroupsnapshot) or I(gather_subset=all)
@@ -682,6 +709,8 @@ class IBMSVCGatherInfo(object):
                                             'snapshotpolicy',
                                             'snapshotpolicyschedule',
                                             'volumegroup',
+                                            'volumepopulation',
+                                            'volumegrouppopulation',
                                             'volumegroupsnapshotpolicy',
                                             'volumesnapshot',
                                             'dnsserver',
@@ -810,6 +839,8 @@ class IBMSVCGatherInfo(object):
             'ReplicationPolicy': [],
             'SnapshotPolicy': [],
             'VolumeGroup': [],
+            'VolumePopulation': [],
+            'VolumeGroupPopulation': [],
             'SnapshotSchedule': [],
             'VolumeGroupSnapshotPolicy': [],
             'VolumeSnapshot': [],
@@ -872,6 +903,8 @@ class IBMSVCGatherInfo(object):
             'snapshotpolicy': ('SnapshotPolicy', 'lssnapshotpolicy', False),
             'snapshotpolicyschedule': ('SnapshotSchedule', 'lssnapshotschedule', False),
             'volumegroup': ('VolumeGroup', 'lsvolumegroup', False),
+            'volumepopulation': ('VolumePopulation', 'lsvolumepopulation', False),
+            'volumegrouppopulation': ('VolumeGroupPopulation', 'lsvolumegrouppopulation', False),
             'volumegroupsnapshotpolicy': ('VolumeGroupSnapshotPolicy', 'lsvolumegroupsnapshotpolicy', False),
             'volumesnapshot': ('VolumeSnapshot', 'lsvolumesnapshot', False),
             'dnsserver': ('DnsServer', 'lsdnsserver', False),

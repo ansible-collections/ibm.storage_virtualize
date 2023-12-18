@@ -4,6 +4,7 @@
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -204,9 +205,17 @@ options:
             - Supported from Storage Virtualize family systems 8.6.1.0 or later.
         type: bool
         version_added: 2.1.0
+    evictvolumes:
+        description:
+            - If specified `True`, delete the volume group but does not remove volumes.
+            - Applies when I(state=absent) to delete the volume group, keeping associated volumes.
+            - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+        type: bool
+        version_added: 2.3.0
 author:
     - Shilpi Jain(@Shilpi-J)
     - Sanjaikumaar M (@sanjaikumaar)
+    - Sumit Kumar Gupta (@sumitguptaibm)
 notes:
     - This module supports C(check_mode).
     - Safeguarded policy and snapshot policy cannot be used at the same time.
@@ -289,6 +298,16 @@ EXAMPLES = '''
     fromsourcegroup: vg0
     pool: Pool0
     state: present
+- name: Delete a volume group, keeping volumes which were associated with volumegroup
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    state: absent
+    evictvolumes: true
 '''
 
 RETURN = '''#'''
@@ -328,7 +347,8 @@ class IBMSVCVG(object):
                 noreplicationpolicy=dict(type='bool'),
                 old_name=dict(type='str', required=False),
                 partition=dict(type='str'),
-                nopartition=dict(type='bool')
+                nopartition=dict(type='bool'),
+                evictvolumes=dict(type='bool')
             )
         )
 
@@ -365,6 +385,7 @@ class IBMSVCVG(object):
         self.old_name = self.module.params.get('old_name', '')
         self.partition = self.module.params.get('partition', '')
         self.nopartition = self.module.params.get('nopartition', False)
+        self.evictvolumes = self.module.params.get('evictvolumes', False)
 
         # Dynamic variable
         self.parentuid = None
@@ -399,7 +420,11 @@ class IBMSVCVG(object):
                     self.module.fail_json(
                         msg='Parameter `safeguarded` should be passed along with `snapshotpolicy`'
                     )
-        else:
+            if self.evictvolumes is not None:
+                self.module.fail_json(
+                    msg='Parameter `evictvolumes` should be passed only while removing volumegroup'
+                )
+        elif self.state == 'absent':
             unwanted = ('ownershipgroup', 'noownershipgroup', 'safeguardpolicyname',
                         'nosafeguardpolicy', 'snapshotpolicy', 'nosnapshotpolicy',
                         'policystarttime', 'type', 'fromsourcegroup', 'pool', 'iogrp',
@@ -412,6 +437,8 @@ class IBMSVCVG(object):
                 self.module.fail_json(
                     msg='State=absent but following parameters exists: {0}'.format(param_exists)
                 )
+        else:
+            self.module.fail_json(msg='State should be either present or absent')
 
     def parameter_handling_while_renaming(self):
         parameters = {
@@ -694,8 +721,10 @@ class IBMSVCVG(object):
         self.log("deleting volume group '%s'", self.name)
 
         cmd = 'rmvolumegroup'
-        cmdopts = None
+        cmdopts = {}
         cmdargs = [self.name]
+        if self.evictvolumes is not None:
+            cmdopts['evictvolumes'] = self.evictvolumes
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
         # Any error will have been raised in svc_run_command
