@@ -139,6 +139,13 @@ options:
     type: bool
     default: false
     version_added: '2.0.0'
+  format_disk:
+    description:
+      - If set to `False`, will create a volume using 'mkvdisk' instead of 'mkvolume' and set `nofmtdisk` to true
+      - Valid only when volume groups are not used (only available in mkvolume)
+    type: bool
+    default: true
+    version_added: 'tbd'
   validate_certs:
     description:
       - Validates certification.
@@ -291,7 +298,8 @@ class IBMSVCvolume(object):
                 old_name=dict(type='str', required=False),
                 enable_cloud_snapshot=dict(type='bool'),
                 cloud_account_name=dict(type='str'),
-                allow_hs=dict(type='bool', default=False)
+                allow_hs=dict(type='bool', default=False),
+                format_disk=dict(type='bool', default=True)
             )
         )
 
@@ -321,6 +329,7 @@ class IBMSVCvolume(object):
         self.enable_cloud_snapshot = self.module.params['enable_cloud_snapshot']
         self.cloud_account_name = self.module.params['cloud_account_name']
         self.allow_hs = self.module.params['allow_hs']
+        self.format_disk = self.module.params['format_disk']
 
         # internal variable
         self.changed = False
@@ -366,6 +375,9 @@ class IBMSVCvolume(object):
             self.module.fail_json(msg='Missing mandatory parameter: [{0}]'.format(', '.join(missing)))
         if self.volumegroup and self.novolumegroup:
             self.module.fail_json(msg='Mutually exclusive parameters detected: [volumegroup] and [novolumegroup]')
+        elif self.volumegroup and self.format_disk:
+            # volumegroup is only available in mkvolume, so cannot be used with format_disk
+            self.module.fail_json(msg='Mutually exclusive parameters detected: [volumegroup] and [format_disk]')
 
     # for validating parameter while removing an existing volume
     def volume_deletion_parameter_validation(self):
@@ -445,35 +457,72 @@ class IBMSVCvolume(object):
         if self.module.check_mode:
             self.changed = True
             return
-        cmd = 'mkvolume'
-        cmdopts = {}
-        if self.pool:
-            cmdopts['pool'] = self.pool
-        if self.size:
-            cmdopts['size'] = self.size
-        if self.unit:
-            cmdopts['unit'] = self.unit
-        if self.iogrp:
-            cmdopts['iogrp'] = self.iogrp[0]
-        if self.volumegroup:
-            cmdopts['volumegroup'] = self.volumegroup
-        if self.thin:
-            cmdopts['thin'] = self.thin
-        if self.compressed:
-            cmdopts['compressed'] = self.compressed
-        if self.deduplicated:
-            cmdopts['deduplicated'] = self.deduplicated
-        if self.buffersize:
-            cmdopts['buffersize'] = self.buffersize
-        if self.name:
-            cmdopts['name'] = self.name
-        result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        if result and 'message' in result:
-            self.changed = True
-            self.log("create volume result message %s", result['message'])
+        if self.format_disk != False:
+        # if the format_disk parameter isn't false then it's fine to use addvolume as normal
+        
+          cmd = 'mkvolume'
+          cmdopts = {}
+          if self.pool:
+              cmdopts['pool'] = self.pool
+          if self.size:
+              cmdopts['size'] = self.size
+          if self.unit:
+              cmdopts['unit'] = self.unit
+          if self.iogrp:
+              cmdopts['iogrp'] = self.iogrp[0]
+          if self.volumegroup:
+              cmdopts['volumegroup'] = self.volumegroup
+          if self.thin:
+              cmdopts['thin'] = self.thin
+          if self.compressed:
+              cmdopts['compressed'] = self.compressed
+          if self.deduplicated:
+              cmdopts['deduplicated'] = self.deduplicated
+          if self.buffersize:
+              cmdopts['buffersize'] = self.buffersize
+          if self.name:
+              cmdopts['name'] = self.name
+          result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+          if result and 'message' in result:
+              self.changed = True
+              self.log("create volume result message %s", result['message'])
+          else:
+              self.module.fail_json(
+                  msg="Failed to create volume [%s]" % self.name)
         else:
-            self.module.fail_json(
-                msg="Failed to create volume [%s]" % self.name)
+        # if format_disk is false, then mkvdisk is used and the volume will be created without formatting
+            cmd = 'mkvdisk'
+            cmdopts = {}
+            if self.pool:
+                cmdopts['mdiskgrp'] = self.pool
+            if self.size:
+                cmdopts['size'] = self.size
+            if self.unit:
+                cmdopts['unit'] = self.unit
+            if self.iogrp:
+                cmdopts['iogrp'] = self.iogrp[0]
+            # volume group not supported with mkvdisk
+            # if self.volumegroup:
+            #     cmdopts['volumegroup'] = self.volumegroup
+            if self.thin:
+                cmdopts['thin'] = self.thin
+            if self.compressed:
+                cmdopts['compressed'] = self.compressed
+            if self.deduplicated:
+                cmdopts['deduplicated'] = self.deduplicated
+            if self.buffersize:
+                cmdopts['rsize'] = self.buffersize
+            if self.name:
+                cmdopts['name'] = self.name
+            cmdopts['nofmtdisk'] = True
+            # nofmtdisk can be set without any prior test because it's already been tested
+            result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+            if result and 'message' in result:
+                self.changed = True
+                self.log("create volume result message %s", result['message'])
+            else:
+                self.module.fail_json(
+                    msg="Failed to create volume [%s]" % self.name)
 
     # function to remove an existing volume
     def remove_volume(self):
