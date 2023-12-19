@@ -122,14 +122,17 @@ jobs:
         python:
           - '3.9'
           - '3.10'
+          - '3.11'
         exclude:
-          # and Python 3.10 is supported in 2.12 or later.
+          # Python 3.10 is supported in 2.12 or later.
           - ansible: stable-2.14
             python: '2.6'
           - ansible: stable-2.14
             python: '3.6'
           - ansible: stable-2.14
             python: '3.7'
+          - ansible: stable-2.14
+            python: '3.8'
 #          - ansible: devel
 #            python: '2.6'
 
@@ -193,14 +196,15 @@ jobs:
         python:
           - '3.9'
           - '3.10'
+          - '3.11'
         exclude:
           # Because ansible-test doesn't support Python 3.9 for Ansible 2.9
           # and Python 3.10 is supported in 2.12 or later.
           # Python 2.6 is not supported with ansible-core >= 2.13
           - ansible: stable-2.14
             python: '2.6'
-          - ansible: devel
-            python: '2.6'
+          # - ansible: devel
+          #   python: '2.6'
             
 
     steps:
