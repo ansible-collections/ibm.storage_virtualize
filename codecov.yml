@@ -3,3 +3,4 @@ fixes:
    - "/ansible_collections/NAMESPACE/COLLECTION/::"
 ignore:
   - "**/test_*.py"
+  - "**/playbooks"
