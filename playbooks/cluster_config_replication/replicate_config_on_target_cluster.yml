@@ -17,31 +17,31 @@
         password: "{{ cluster_password }}"
  
     - name: Initial cluster configuration on FlashSystem
-      ibm.spectrum_virtualize.ibm_svc_initial_setup:
+      ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
 
     - name: Setup NTP server
-      ibm.spectrum_virtualize.ibm_svc_initial_setup:
+      ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
         ntpip: "{{ System.cluster_ntp_IP_address if System.cluster_ntp_IP_address is defined }}"
 
     - name: Setup time zone
-      ibm.spectrum_virtualize.ibm_svc_initial_setup:
+      ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
         timezone: "{{ System.time_zone | regex_search('^[^\\s]+') if System.time_zone is defined }}"
 
     - name: Setup DNS server
-      ibm.spectrum_virtualize.ibm_svc_initial_setup:
+      ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
         dnsname: "{{ DnsServer | map (attribute='name') | list }}"
         dnsip: "{{ DnsServer | map (attribute='IP_address') | list }}"
 
     - name: Create Ownership group
-      ibm.spectrum_virtualize.ibm_svc_manage_ownershipgroup:
+      ibm.storage_virtualize.ibm_svc_manage_ownershipgroup:
         name: "{{ item.name }}"
         state: present
         clustername: "{{ cluster_ip }}"
@@ -49,7 +49,7 @@
       loop: "{{OwnershipGroup | default([], true) }}"
 
     - name: Create Usergroups
-      ibm.spectrum_virtualize.ibm_svc_manage_usergroup:
+      ibm.storage_virtualize.ibm_svc_manage_usergroup:
         name: "{{ item.name }}"
         state: present
         clustername: "{{ cluster_ip }}"
@@ -59,7 +59,7 @@
       loop: "{{ UserGrp | default([], true) }}"
 
     - name: Create Users with password
-      ibm.spectrum_virtualize.ibm_svc_manage_user:
+      ibm.storage_virtualize.ibm_svc_manage_user:
         name: "{{ item.name }}"
         state: present
         clustername: "{{ cluster_ip }}"

@@ -17,7 +17,7 @@
 
     - name: Fetch authorization token for source
       register: specv_token
-      ibm_svc_auth:
+      ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ cluster_ip }}"
         username:  "{{ cluster_username }}"
         password: "{{ cluster_password }}"
@@ -42,7 +42,7 @@
       loop: "{{ (specv_wwpn)|map('batch', 2)|map('list')|list|lower }}"
 
     - name: get all zoning information from switch
-      brocade_facts:
+      brocade.fos.brocade_facts:
         credential: "{{brocade_credentials}}"
         vfid: -1
         gather_subset:
@@ -69,7 +69,7 @@
           - name: "{{ active_switch_config }}"
             members:
               - "{{ application_host_zone_name }}"
-      brocade_zoning_cfg:
+      brocade.fos.brocade_zoning_cfg:
         credential: "{{ brocade_credentials }}"
         vfid: -1
         members_add_only: True
@@ -90,7 +90,7 @@
         application_host_wwpns_specvformat: "{{ application_host_wwpns_specvformat[:-1]}}"
 
     - name: Creating Host on specv
-      ibm_svc_host:
+      ibm.storage_virtualize.ibm_svc_host:
         clustername: "{{ cluster_ip }}"
         token: "{{ specv_token.token }}"
         name: "{{ host_name }}"
@@ -117,7 +117,7 @@
 
     - name: Create vdisk
       register: results_cvdisk
-      ibm_svc_manage_volume:
+      ibm.storage_virtualize.ibm_svc_manage_volume:
         clustername: "{{cluster_ip}}"
         token: "{{ specv_token.token }}"
         domain: 
@@ -129,7 +129,7 @@
       loop: "{{ volume_details }}"
 
     - name: map Host to Vdisk
-      ibm_svc_vol_map:
+      ibm.storage_virtualize.ibm_svc_vol_map:
         clustername: "{{cluster_ip}}"
         token: "{{ specv_token.token }}"
         domain: 
