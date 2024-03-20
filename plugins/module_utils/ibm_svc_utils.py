@@ -14,11 +14,11 @@ import json
 import logging
 import uuid
 import inspect
-import os
-
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
+
+COLLECTION_VERSION = "2.3.0"
 
 
 def svc_argument_spec():
@@ -348,13 +348,6 @@ class IBMSVCRestApi(object):
         cmdopts = {}
         name = "Ansible"
         unique_key = self.username + "_" + str(uuid.getnode())
-
-        usrs_directory = os.path.expanduser('~')
-        galaxy_info_file_path = os.path.join(usrs_directory, '.ansible/collections/ansible_collections/ibm/storage_virtualize/MANIFEST.json')
-        with open(galaxy_info_file_path, 'r') as f:
-            data = json.load(f)
-        version = data["collection_info"]["version"]
-
         caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
         caller_class_name = caller_class.__class__.__name__
         module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
@@ -362,6 +355,6 @@ class IBMSVCRestApi(object):
 
         cmdopts['name'] = name
         cmdopts['uniquekey'] = unique_key
-        cmdopts['version'] = version
+        cmdopts['version'] = COLLECTION_VERSION
         cmdopts['metadata'] = metadata
         return cmdopts
