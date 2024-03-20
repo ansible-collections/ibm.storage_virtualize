@@ -12,7 +12,6 @@ __metaclass__ = type
 
 import inspect
 import uuid
-
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
@@ -112,7 +111,6 @@ class IBMSVCssh(object):
             cmdopts = {}
             name = "Ansible"
             unique_key = self.username + "_" + str(uuid.getnode())
-
             caller_class = inspect.stack()[2].frame.f_locals.get('self', None)
             caller_class_name = caller_class.__class__.__name__
             module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]

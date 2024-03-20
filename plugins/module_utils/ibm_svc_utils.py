@@ -14,7 +14,6 @@ import json
 import logging
 import uuid
 import inspect
-
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
@@ -349,7 +348,6 @@ class IBMSVCRestApi(object):
         cmdopts = {}
         name = "Ansible"
         unique_key = self.username + "_" + str(uuid.getnode())
-
         caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
         caller_class_name = caller_class.__class__.__name__
         module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
