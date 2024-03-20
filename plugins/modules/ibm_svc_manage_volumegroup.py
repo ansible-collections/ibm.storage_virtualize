@@ -8,7 +8,6 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
-
 __metaclass__ = type
 
 DOCUMENTATION = '''
@@ -211,6 +210,15 @@ options:
             - Applies when I(state=absent) to delete the volume group, keeping associated volumes.
             - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
         type: bool
+        version_added: 2.2.0
+    fromsourcevolumes:
+        description:
+            - Specifies colon-separated list of the parent volumes.
+            - When combined with the type parameter and a snapshot, this allows the user to create a volumegroup with a
+              subset of those volumes whose image is present in a snapshot.
+            - Applies when I(state=present) to create volumegroup clone or thinclone, from subset of volumes of snapshot.
+            - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+        type: str
         version_added: 2.3.0
 author:
     - Shilpi Jain(@Shilpi-J)
@@ -298,6 +306,30 @@ EXAMPLES = '''
     fromsourcegroup: vg0
     pool: Pool0
     state: present
+- name: Create a volumegroup thinclone from a list of volumes
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    type: thinclone
+    fromsourcevolumes: vol1:vol2
+    pool: Pool0
+    state: present
+- name: Create a volumegroup clone from a list of volumes
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    type: clone
+    fromsourcevolumes: vol1:vol2
+    pool: Pool0
+    state: present
 - name: Delete a volume group, keeping volumes which were associated with volumegroup
   ibm.storage_virtualize.ibm_svc_manage_volumegroup:
     clustername: "{{ clustername }}"
@@ -317,6 +349,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import \
     IBMSVCRestApi, svc_argument_spec, get_logger, strtobool
 from ansible.module_utils._text import to_native
+import random
 
 
 class IBMSVCVG(object):
@@ -339,6 +372,7 @@ class IBMSVCVG(object):
                 type=dict(type='str', choices=['clone', 'thinclone']),
                 snapshot=dict(type='str'),
                 fromsourcegroup=dict(type='str'),
+                fromsourcevolumes=dict(type='str', required=False),
                 pool=dict(type='str'),
                 iogrp=dict(type='str'),
                 safeguarded=dict(type='bool', default=False),
@@ -374,6 +408,7 @@ class IBMSVCVG(object):
         self.type = self.module.params.get('type', '')
         self.snapshot = self.module.params.get('snapshot', '')
         self.fromsourcegroup = self.module.params.get('fromsourcegroup', '')
+        self.fromsourcevolumes = self.module.params.get('fromsourcevolumes', '')
         self.pool = self.module.params.get('pool', '')
         self.iogrp = self.module.params.get('iogrp', '')
         self.safeguardpolicyname = self.module.params.get('safeguardpolicyname', '')
@@ -406,6 +441,7 @@ class IBMSVCVG(object):
         )
 
     def basic_checks(self):
+        changed = False
         if not self.name:
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
@@ -429,13 +465,14 @@ class IBMSVCVG(object):
                         'nosafeguardpolicy', 'snapshotpolicy', 'nosnapshotpolicy',
                         'policystarttime', 'type', 'fromsourcegroup', 'pool', 'iogrp',
                         'safeguarded', 'ignoreuserfcmaps', 'replicationpolicy',
-                        'noreplicationpolicy', 'old_name')
+                        'noreplicationpolicy', 'old_name', 'fromsourcevolumes')
 
             param_exists = ', '.join((param for param in unwanted if getattr(self, param)))
 
             if param_exists:
                 self.module.fail_json(
-                    msg='State=absent but following parameters exists: {0}'.format(param_exists)
+                    msg='State=absent but following parameter(s) exist: {0}'.format(param_exists),
+                    changed=changed
                 )
         else:
             self.module.fail_json(msg='State should be either present or absent')
@@ -451,7 +488,8 @@ class IBMSVCVG(object):
             "snapshotpolicy": self.snapshotpolicy,
             "nosnapshotpolicy": self.nosnapshotpolicy,
             "partition": self.partition,
-            "nopartition": self.nopartition
+            "nopartition": self.nopartition,
+            "fromsourcevolumes": self.fromsourcevolumes
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -482,9 +520,9 @@ class IBMSVCVG(object):
                 msg='Following paramters not supported during creation scenario: {0}'.format(unsupported_exists)
             )
 
-        if self.type and not self.snapshot:
+        if self.type and not self.snapshot and not self.fromsourcevolumes:
             self.module.fail_json(
-                msg='type={0} but following parameter is missing: snapshot'.format(self.type)
+                msg='type={0} requires either snapshot or fromsourcevolumes parameter'.format(self.type)
             )
 
     def update_validation(self, data):
@@ -510,6 +548,7 @@ class IBMSVCVG(object):
         unsupported_maps = (
             ('type', data.get('volume_group_type', '')),
             ('snapshot', data.get('source_snapshot', '')),
+            ('fromsourcevolumes', data.get('source_volumes_set', '')),
             ('fromsourcegroup', data.get('source_volume_group_name', ''))
         )
         unsupported = (
@@ -543,6 +582,64 @@ class IBMSVCVG(object):
             )
             merged_result['snapshot_policy_start_time'] = SP_data['snapshot_policy_start_time']
             merged_result['snapshot_policy_suspended'] = SP_data['snapshot_policy_suspended']
+
+        # Make new call as volume list is not present in lsvolumegroup CLI
+        # If existing volumegroup is a thinclone but command params don't contain
+        #  [type], that is also considered as an attempt to create/change an already
+        #  existing volume. So, it should be recorded to throw error later.
+        is_existing_vg_thinclone = False
+        if merged_result and 'volume_group_type' in merged_result and merged_result['volume_group_type'] == 'thinclone':
+            is_existing_vg_thinclone = True
+        if merged_result and (self.type and self.fromsourcevolumes) or\
+           is_existing_vg_thinclone is True:
+            volumes_data = []
+            if self.type == "thinclone" or is_existing_vg_thinclone is True:
+                cmd = 'lsvolumepopulation'
+                cmdopts = {"filtervalue": "volume_group_name={0}".format(self.name)}
+                volumes_data = self.restapi.svc_obj_info(cmd, cmdopts, cmdargs=None)
+            else:
+                # Source volumes for clone volumes needs to be fetched for verification
+                # 1. First get the volumes associated with volumegroup provided
+                associated_volumes_data = []
+                cmd = 'lsvdisk'
+                cmdopts = {"filtervalue": "volume_group_name={0}".format(self.name)}
+                associated_volumes_data = self.restapi.svc_obj_info(cmd, cmdopts, cmdargs=None)
+                vol_names = set()
+                for vol in associated_volumes_data:
+                    vol_names.add(vol['name'])
+
+                # 2. Run lsvdisk for each volume provided in command to get source_volume_name
+                for volname in vol_names:
+                    cmd = 'lsvdisk' + "/" + volname
+                    cmdopts = None
+                    cmdargs = None
+                    single_vol_data = self.restapi.svc_obj_info(cmd, cmdopts, cmdargs=None)
+                    if single_vol_data:
+                        volumes_data.append(single_vol_data[0])
+
+            # Make a set from source volumes of all volumes
+            if volumes_data:
+                source_volumes_set = set()
+                source_volumes_pool_set = set()
+                for volume_data in volumes_data:
+                    # Add the value of 'source_volume_name' to the merged_result
+                    source_volumes_set.add(volume_data['source_volume_name'])
+                merged_result['source_volumes_set'] = source_volumes_set
+                # If pool is provided, verify that pool matches with the one provided in command
+                if self.pool:
+                    cmd = 'lsvdisk'
+                    cmdopts = {"filtervalue": "parent_mdisk_grp_name={0}".format(self.pool)}
+
+                    vdisks_data = self.restapi.svc_obj_info(cmd, cmdopts, cmdargs=None)
+                    remaining_vdisks = len(source_volumes_set)
+                    for vdisk_data in vdisks_data:
+                        if vdisk_data['name'] in source_volumes_set:
+                            source_volumes_pool_set.add(vdisk_data['parent_mdisk_grp_name'])
+                            remaining_vdisks = remaining_vdisks - 1
+                            if remaining_vdisks == 0:
+                                break
+
+                merged_result['source_volumes_pool_set'] = source_volumes_pool_set
 
         return merged_result
 
@@ -617,6 +714,22 @@ class IBMSVCVG(object):
 
         return props
 
+    def create_transient_snapshot(self):
+        # Required parameters
+        snapshot_cmd = 'addsnapshot'
+        snapshot_opts = {}
+        random_number = ''.join(random.choices('0123456789', k=10))
+        snapshot_name = f"snapshot_{random_number}"
+        snapshot_opts['name'] = snapshot_name
+
+        # Optional parameters
+        snapshot_opts['pool'] = self.module.params.get('pool', '')
+        snapshot_opts['volumes'] = self.module.params.get('fromsourcevolumes', '')
+        snapshot_opts['retentionminutes'] = 5
+
+        self.restapi.svc_run_command(snapshot_cmd, snapshot_opts, cmdargs=None, timeout=10)
+        return snapshot_name
+
     def vg_create(self):
         self.create_validation()
         if self.module.check_mode:
@@ -642,10 +755,23 @@ class IBMSVCVG(object):
             if self.iogrp:
                 cmdopts['iogroup'] = self.iogrp
 
+            if self.fromsourcevolumes:
+                cmdopts['fromsourcevolumes'] = self.fromsourcevolumes
+                if not self.snapshot:
+                    # If thinclone or clone is to be created from volumes, do following:
+                    # 1. Create transient snapshot with 5-min retentionminutes
+                    # 2. Create a thinclone volumegroup from this snapshot
+                    # 3. There is no need to delete snapshot, as it is auto-managed due to retentionminutes
+                    try:
+                        self.snapshot = self.create_transient_snapshot()
+                        cmdopts['snapshot'] = self.snapshot
+                    except Exception as e:
+                        self.log('Exception in creating transient snapshot: %s', format_exc())
+                        self.module.fail_json(msg='Module failed. Error [%s].' % to_native(e))
             self.set_parentuid()
             if self.parentuid:
                 cmdopts['fromsourceuid'] = self.parentuid
-            else:
+            elif self.fromsourcegroup:
                 cmdopts['fromsourcegroup'] = self.fromsourcegroup
 
         if self.ignoreuserfcmaps:
@@ -761,12 +887,43 @@ class IBMSVCVG(object):
         else:
             if vg_data:
                 if self.state == 'present':
-                    modify = self.vg_probe(vg_data)
-                    if modify:
-                        self.vg_update(modify)
-                        self.msg = "volume group [%s] has been modified." % self.name
+                    is_existing_vg_thinclone = False
+                    if vg_data.get('volume_group_type') == 'thinclone':
+                        is_existing_vg_thinclone = True
+                    if (self.type and self.fromsourcevolumes) or is_existing_vg_thinclone is True:
+                        # Check whether provided source volumes are same as in existing volumegroup
+                        volumes_with_existing_vg = None
+                        if 'source_volumes_set' in vg_data:
+                            volumes_with_existing_vg = vg_data['source_volumes_set']
+                        provided_volumes_set = set()
+                        if self.fromsourcevolumes:
+                            provided_volumes_set = set(self.fromsourcevolumes.split(":"))
+                        if volumes_with_existing_vg or provided_volumes_set:
+                            self.changed = False
+                            if not provided_volumes_set and volumes_with_existing_vg:
+                                self.module.fail_json(
+                                    msg="Existing thinclone volumegroup found.",
+                                    changed=self.changed
+                                )
+                            if volumes_with_existing_vg != provided_volumes_set:
+                                self.module.fail_json(
+                                    msg="Parameter [fromsourcevolumes] is invalid for modifying volumegroup.",
+                                    changed=self.changed
+                                )
+                            elif self.pool and vg_data['source_volumes_pool_set'] and (list(vg_data['source_volumes_pool_set'])[0] != self.pool):
+                                self.module.fail_json(
+                                    msg="Parameter [pool] is invalid for modifying volumegroup.",
+                                    changed=self.changed
+                                )
+                            else:
+                                self.msg = "A volumegroup with name [%s] already exists." % self.name
                     else:
-                        self.msg = "No Modifications detected, Volume group already exists."
+                        modify = self.vg_probe(vg_data)
+                        if modify:
+                            self.vg_update(modify)
+                            self.msg = "volume group [%s] has been modified." % self.name
+                        else:
+                            self.msg = "No Modifications detected, Volume group already exists."
                 else:
                     self.vg_delete()
                     self.msg = "volume group [%s] has been deleted." % self.name

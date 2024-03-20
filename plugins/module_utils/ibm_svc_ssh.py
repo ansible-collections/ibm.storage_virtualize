@@ -1,5 +1,6 @@
-# Copyright (C) 2020 IBM CORPORATION
+# Copyright (C) 2024 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
+#            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -9,6 +10,10 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import json
+import inspect
+import os
+import uuid
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
@@ -72,6 +77,7 @@ class IBMSVCssh(object):
                 password=self.password,
                 look_for_keys=self.look_for_keys,
                 key_filename=self.key_filename)
+            self.register_plugin()
             return True
         except paramiko.BadHostKeyException as e:
             self.log("BadHostKeyException %s", e)
@@ -97,4 +103,34 @@ class IBMSVCssh(object):
             return True
         except Exception as e:
             self.log("SSH Disconnection failed %s", e)
+            return False
+
+    def register_plugin(self):
+        try:
+            cmd = 'svctask registerplugin'
+            cmdopts = {}
+            name = "Ansible"
+            unique_key = self.username + "_" + str(uuid.getnode())
+
+            usrs_directory = os.path.expanduser('~')
+            galaxy_info_file_path = os.path.join(usrs_directory, '.ansible/collections/ansible_collections/ibm/storage_virtualize/MANIFEST.json')
+            with open(galaxy_info_file_path, 'r') as f:
+                data = json.load(f)
+            version = data["collection_info"]["version"]
+
+            caller_class = inspect.stack()[2].frame.f_locals.get('self', None)
+            caller_class_name = caller_class.__class__.__name__
+            module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
+            metadata = module_name[:-3] + " module with class " + str(caller_class_name) + " has been executed by " + self.username
+
+            cmdopts['name'] = name
+            cmdopts['uniquekey'] = unique_key
+            cmdopts['version'] = version
+            cmdopts['metadata'] = metadata
+
+            for cmdoptions in cmdopts:
+                cmd = cmd + " -" + cmdoptions + " '" + cmdopts[cmdoptions] + "'"
+            self.client.exec_command(cmd)
+            return True
+        except Exception as e:
             return False

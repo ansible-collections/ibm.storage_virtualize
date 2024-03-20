@@ -1,9 +1,10 @@
 #!/usr/bin/python
-# Copyright (C) 2020 IBM CORPORATION
+# Copyright (C) 2024 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -24,6 +25,7 @@ description:
 author:
     - Peng Wang (@wangpww)
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 options:
   clustername:
     description:
@@ -138,6 +140,13 @@ options:
     - driveclass - lists all drive classes in the system
     - security - display the current system Secure Sockets Layer (SSL) or Transport Layer Security (TLS) security and
       password rules settings
+    - partition - display all the storage partitions information related to storage.
+    - volumegroupreplication - displays all the replication information for the volume group.
+    - plugin - display the information of registered plugins.
+    - quorum - display all the quorum devices that the system uses to store quorum data.
+    - enclosure - displays a summary of the enclosures.
+    - snmpserver -  display a concise list or a detailed view of SNMP servers that are configured on the system
+    - testldapserver - tests a Lightweight Directory Access Protocol (LDAP) server.
     choices: [vol, pool, node, iog, host, hostvdiskmap, vdiskhostmap, hc, fcport
               , iscsiport, fc, fcmap, fcconsistgrp, rcrelationship, rcconsistgrp
               , vdiskcopy, targetportfc, array, system, 'cloudaccount', 'cloudaccountusage',
@@ -148,7 +157,8 @@ options:
                'dnsserver', 'systemcertificate', 'sra', 'syslogserver', 'enclosurestatshistory',
                'emailserver', 'emailuser', 'provisioningpolicy', 'volumegroupsnapshot',
                'truststore', 'callhome', 'ip', 'portset', 'safeguardedpolicy',
-               'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', 'security', all]
+               'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', 'security', 'partition',
+               'volumegroupreplication', 'plugin', 'quorum', 'enclosure', 'snmpserver', 'testldapserver', all]
     default: "all"
 notes:
     - This module supports C(check_mode).
@@ -188,6 +198,15 @@ EXAMPLES = '''
     password: "{{password}}"
     log_path: /tmp/ansible.log
     gather_subset: ['volumepopulation','volumegrouppopulation']
+- name: Get all info related to volume 'Volume1'
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/ansible.log
+    gather_subset: vol
+    objectname: Volume1
 '''
 
 RETURN = '''
@@ -658,6 +677,62 @@ Security:
     type: list
     elements: dict
     sample: [{...}]
+Partition:
+    description:
+        - Data will be populated when I(gather_subset=partition) or I(gather_subset=all)
+        - Displays all storage partitions
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Plugin:
+    description:
+        - Data will be populated when I(gather_subset=plugin) or I(gather_subset=all)
+        - Displays all registered plugins
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Volumegroupreplication:
+    description:
+        - Data will be populated when I(gather_subset=volumegroupreplication) or I(gather_subset=all)
+        - Displays all replication for the volumegroup
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Quorum :
+    description:
+        - Data will be populated when I(gather_subset=quorum) or I(gather_subset=all)
+        - list the quorum devices that the system uses to store quorum data.
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Enclosure :
+    description:
+        - Data will be populated when I(gather_subset=enclosure) or I(gather_subset=all)
+        - Displays a summary of the enclosures.
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Snmpserver :
+    description:
+        - Data will be populated when I(gather_subset=snmpserver) or I(gather_subset=all)
+        - Display a concise list or a detailed view of SNMP servers that are configured on the system
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Testldapserver :
+    description:
+        - Data will be populated when I(gather_subset=testldapserver)
+        - Tests a Lightweight Directory Access Protocol (LDAP) server.
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
 '''
 
 from traceback import format_exc
@@ -733,6 +808,13 @@ class IBMSVCGatherInfo(object):
                                             'enclosurestatshistory',
                                             'driveclass',
                                             'security',
+                                            'partition',
+                                            'plugin',
+                                            'volumegroupreplication',
+                                            'quorum',
+                                            'enclosure',
+                                            'snmpserver',
+                                            'testldapserver',
                                             'all'
                                             ]),
             )
@@ -865,81 +947,111 @@ class IBMSVCGatherInfo(object):
             'SafeguardedSchedule': [],
             'EventLog': [],
             'DriveClass': [],
-            'Security': []
+            'Security': [],
+            'Partition': [],
+            'Plugin': [],
+            'Volumegroupreplication': [],
+            'Quorum': [],
+            'Enclosure': [],
+            'Snmpserver': [],
+            'Testldapserver': []
         }
 
         cmd_mappings = {
-            'vol': ('Volume', 'lsvdisk', False),
-            'pool': ('Pool', 'lsmdiskgrp', False),
-            'node': ('Node', 'lsnode', False),
-            'iog': ('IOGroup', 'lsiogrp', False),
-            'host': ('Host', 'lshost', False),
-            'hostvdiskmap': ('HostVdiskMap', 'lshostvdiskmap', False),
-            'vdiskhostmap': ('VdiskHostMap', 'lsvdiskhostmap', False),
-            'hc': ('HostCluster', 'lshostcluster', False),
-            'fc': ('FCConnectivitie', 'lsfabric', False),
-            'fcport': ('FCPort', 'lsportfc', False),
-            'iscsiport': ('iSCSIPort', 'lsportip', False),
-            'fcmap': ('FCMap', 'lsfcmap', False),
-            'rcrelationship': ('RemoteCopy', 'lsrcrelationship', False),
-            'fcconsistgrp': ('FCConsistgrp', 'lsfcconsistgrp', False),
-            'rcconsistgrp': ('RCConsistgrp', 'lsrcconsistgrp', False),
-            'vdiskcopy': ('VdiskCopy', 'lsvdiskcopy', False),
-            'targetportfc': ('TargetPortFC', 'lstargetportfc', False),
-            'array': ('Array', 'lsarray', False),
-            'system': ('System', 'lssystem', False),
-            'cloudaccount': ('CloudAccount', 'lscloudaccount', False),
-            'cloudaccountusage': ('CloudAccountUsage', 'lscloudaccountusage', False),
-            'cloudimportcandidate': ('CloudImportCandidate', 'lscloudaccountimportcandidate', False),
-            'ldapserver': ('LdapServer', 'lsldapserver', False),
-            'drive': ('Drive', 'lsdrive', False),
-            'user': ('User', 'lsuser', False),
-            'usergroup': ('UserGrp', 'lsusergrp', False),
-            'ownershipgroup': ('Ownershipgroup', 'lsownershipgroup', False),
-            'partnership': ('Partnership', 'lspartnership', False),
-            'replicationpolicy': ('ReplicationPolicy', 'lsreplicationpolicy', False),
-            'cloudbackup': ('CloudBackup', 'lsvolumebackup', False),
-            'cloudbackupgeneration': ('CloudBackupGeneration', 'lsvolumebackupgeneration', True),
-            'snapshotpolicy': ('SnapshotPolicy', 'lssnapshotpolicy', False),
-            'snapshotpolicyschedule': ('SnapshotSchedule', 'lssnapshotschedule', False),
-            'volumegroup': ('VolumeGroup', 'lsvolumegroup', False),
-            'volumepopulation': ('VolumePopulation', 'lsvolumepopulation', False),
-            'volumegrouppopulation': ('VolumeGroupPopulation', 'lsvolumegrouppopulation', False),
-            'volumegroupsnapshotpolicy': ('VolumeGroupSnapshotPolicy', 'lsvolumegroupsnapshotpolicy', False),
-            'volumesnapshot': ('VolumeSnapshot', 'lsvolumesnapshot', False),
-            'dnsserver': ('DnsServer', 'lsdnsserver', False),
-            'systemcertificate': ('SystemCert', 'lssystemcert', False),
-            'truststore': ('TrustStore', 'lstruststore', False),
-            'sra': ('Sra', 'lssra', False),
-            'syslogserver': ('SysLogServer', 'lssyslogserver', False),
-            'emailserver': ('EmailServer', 'lsemailserver', False),
-            'emailuser': ('EmailUser', 'lsemailuser', False),
-            'provisioningpolicy': ('ProvisioningPolicy', 'lsprovisioningpolicy', False),
-            'volumegroupsnapshot': ('VolumeGroupSnapshot', 'lsvolumegroupsnapshot', False),
-            'callhome': ('CallHome', 'lscloudcallhome', False),
-            'ip': ('IP', 'lsip', False),
-            'portset': ('Portset', 'lsportset', False),
-            'safeguardedpolicy': ('SafeguardedPolicy', 'lssafeguardedpolicy', False),
-            'mdisk': ('Mdisk', 'lsmdisk', False),
-            'safeguardedpolicyschedule': ('SafeguardedSchedule', 'lssafeguardedschedule', False),
-            'eventlog': ('EventLog', 'lseventlog', False),
-            'enclosurestats': ('EnclosureStats', 'lsenclosurestats', False),
-            'enclosurestatshistory': ('EnclosureStatsHistory', 'lsenclosurestats -history power_w:temp_c:temp_f', True),
-            'driveclass': ('DriveClass', 'lsdriveclass', False),
-            'security': ('Security', 'lssecurity', False)
+            'vol' : ('Volume', 'lsvdisk', False, None),
+            'pool' : ('Pool', 'lsmdiskgrp', False, None),
+            'node' : ('Node', 'lsnode', False, None),
+            'iog' : ('IOGroup', 'lsiogrp', False, None),
+            'host' : ('Host', 'lshost', False, None),
+            'hostvdiskmap' : ('HostVdiskMap', 'lshostvdiskmap', False, None),
+            'vdiskhostmap' : ('VdiskHostMap', 'lsvdiskhostmap', True, None),
+            'hc' : ('HostCluster', 'lshostcluster', False, '7.7.1.0'),
+            'fc' : ('FCConnectivitie', 'lsfabric', False, None),
+            'fcport' : ('FCPort', 'lsportfc', False, None),
+            'iscsiport' : ('iSCSIPort', 'lsportip', False, None),
+            'fcmap' : ('FCMap', 'lsfcmap', False, None),
+            'rcrelationship' : ('RemoteCopy', 'lsrcrelationship', False, None),
+            'fcconsistgrp' : ('FCConsistgrp', 'lsfcconsistgrp', False, None),
+            'rcconsistgrp' : ('RCConsistgrp', 'lsrcconsistgrp', False, None),
+            'vdiskcopy' : ('VdiskCopy', 'lsvdiskcopy', False, None),
+            'targetportfc' : ('TargetPortFC', 'lstargetportfc', False, '7.7.0.0'),
+            'array' : ('Array', 'lsarray', False, None),
+            'system' : ('System', 'lssystem', False, '6.3.0.0'),
+            'cloudaccount' : ('CloudAccount', 'lscloudaccount', False, '7.8.0.0'),
+            'cloudaccountusage' : ('CloudAccountUsage', 'lscloudaccountusage', False, '7.8.0.0'),
+            'cloudimportcandidate' : ('CloudImportCandidate', 'lscloudaccountimportcandidate', False, '7.8.0.0'),
+            'ldapserver' : ('LdapServer', 'lsldapserver', False, '6.3.0.0'),
+            'drive' : ('Drive', 'lsdrive', False, None),
+            'user' : ('User', 'lsuser', False, None),
+            'usergroup' : ('UserGrp', 'lsusergrp', False, None),
+            'ownershipgroup' : ('Ownershipgroup', 'lsownershipgroup', False, '8.3.0.0'),
+            'partnership' : ('Partnership', 'lspartnership', False, '6.3.0.0'),
+            'replicationpolicy' : ('ReplicationPolicy', 'lsreplicationpolicy', False, '8.5.2.0'),
+            'cloudbackup' : ('CloudBackup', 'lsvolumebackup', False, '7.8.0.0'),
+            'cloudbackupgeneration' : ('CloudBackupGeneration', 'lsvolumebackupgeneration', True, '7.8.0.0'),
+            'snapshotpolicy' : ('SnapshotPolicy', 'lssnapshotpolicy', False, '8.5.1.0'),
+            'snapshotpolicyschedule' : ('SnapshotSchedule', 'lssnapshotschedule', False, '8.5.1.0'),
+            'volumegroup' : ('VolumeGroup', 'lsvolumegroup', False, '7.8.0.0'),
+            'volumepopulation' : ('VolumePopulation', 'lsvolumepopulation', False, '8.5.1.0'),
+            'volumegrouppopulation' : ('VolumeGroupPopulation', 'lsvolumegrouppopulation', False, '8.5.1.0'),
+            'volumegroupsnapshotpolicy' : ('VolumeGroupSnapshotPolicy', 'lsvolumegroupsnapshotpolicy', False, '8.5.1.0'),
+            'volumesnapshot' : ('VolumeSnapshot', 'lsvolumesnapshot', False, '8.5.1.0'),
+            'dnsserver' : ('DnsServer', 'lsdnsserver', False, '7.8.0.0'),
+            'systemcertificate' : ('SystemCert', 'lssystemcert', False, '7.6.0.0'),
+            'truststore' : ('TrustStore', 'lstruststore', False, '8.5.1.0'),
+            'sra' : ('Sra', 'lssra', False, '7.7.0.0'),
+            'syslogserver' : ('SysLogServer', 'lssyslogserver', False, None),
+            'emailserver' : ('EmailServer', 'lsemailserver', False, None),
+            'emailuser' : ('EmailUser', 'lsemailuser', False, None),
+            'provisioningpolicy' : ('ProvisioningPolicy', 'lsprovisioningpolicy', False, '8.4.1.0'),
+            'volumegroupsnapshot' : ('VolumeGroupSnapshot', 'lsvolumegroupsnapshot', False, '8.5.1.0'),
+            'callhome' : ('CallHome', 'lscloudcallhome', False, '8.2.1.0'),
+            'ip' : ('IP', 'lsip', False, '8.4.2.0'),
+            'portset' : ('Portset', 'lsportset', False, '8.4.2.0'),
+            'safeguardedpolicy' : ('SafeguardedPolicy', 'lssafeguardedpolicy', False, '8.4.2.0'),
+            'mdisk' : ('Mdisk', 'lsmdisk', False, None),
+            'safeguardedpolicyschedule' : ('SafeguardedSchedule', 'lssafeguardedschedule', False, '8.4.2.0'),
+            'eventlog' : ('EventLog', 'lseventlog', False, None),
+            'enclosurestats' : ('EnclosureStats', 'lsenclosurestats', False, None),
+            'enclosurestatshistory' : ('EnclosureStatsHistory', 'lsenclosurestats -history power_w:temp_c:temp_f', True, None),
+            'driveclass' : ('DriveClass', 'lsdriveclass', False, '7.6.0.0'),
+            'security' : ('Security', 'lssecurity', False, '7.4.0.0'),
+            'partition' : ('Partition', 'lspartition', False, '8.6.1.0'),
+            'plugin' : ('Plugin', 'lsplugin', False, '8.6.0.0'),
+            'volumegroupreplication' : ('Volumegroupreplication', 'lsvolumegroupreplication', False, '8.5.2.0'),
+            'quorum' : ('Quorum', 'lsquorum', False, None),
+            'enclosure' : ('Enclosure', 'lsenclosure', False, None),
+            'snmpserver' : ('Snmpserver', 'lssnmpserver', False, None),
+            'testldapserver' : ('Testldapserver', 'testldapserver', False, '6.3.0.0')
         }
 
         if subset == ['all']:
             current_set = cmd_mappings.keys()
         else:
             current_set = subset
-
+        build_version = ''
         for key in current_set:
             value_tuple = cmd_mappings[key]
-            if subset == ['all'] and value_tuple[2]:
-                continue
-
-            op = self.get_list(key, *value_tuple)
+            if subset == ['all']:
+                version = value_tuple[3]
+                if value_tuple[2]:
+                    continue
+                elif not version:
+                    pass
+                else:
+                    if build_version == '':
+                        system_info = self.restapi.svc_obj_info(cmd='lssystem', cmdargs=[], cmdopts=None)
+                        build_version = (system_info['code_level'].split(" ")[0]).split(".")
+                    version = value_tuple[3].split('.')
+                    flag = True
+                    for idx in range(4):
+                        if int(version[idx]) > int(build_version[idx]):
+                            flag = False
+                        elif int(version[idx]) < int(build_version[idx]):
+                            break
+                    if not flag:
+                        continue
+            op = self.get_list(key, *value_tuple[:3])
             result.update(op)
 
         self.module.exit_json(**result)

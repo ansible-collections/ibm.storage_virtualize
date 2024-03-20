@@ -22,7 +22,7 @@
         username:  "{{ cluster_username }}"
         password: "{{ cluster_password }}"
 
-    - name: Get deatils of the targetportfc
+    - name: Get details of the targetportfc
       register: fcdetails
       ibm.storage_virtualize.ibm_svc_info:
         clustername: "{{ cluster_ip }}"

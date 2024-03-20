@@ -419,6 +419,8 @@ class IBMSVCManageReplication(object):
         if self.copytype:
             if self.copytype == 'global' or self.copytype == 'GMCV':
                 cmdopts['global'] = True
+                if self.copytype == 'GMCV':
+                    cmdopts['cyclingmode'] = 'multi'
             elif self.copytype == 'metro' or self.copytype == 'blank':
                 pass
             else:
