@@ -488,16 +488,32 @@ class TestIBMSVCvolume(unittest.TestCase):
             'state': 'absent',
             'username': 'username',
             'password': 'password',
+            'name': 'test_volume'
+        })
+        svc_run_command_mock.return_value = None
+        v = IBMSVCvolume()
+        v.remove_volume()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_remove_volume_with_invalid_params(self, svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
             'name': 'test_volume',
             'pool': 'test_pool',
             'size': '1',
             'unit': 'gb',
             'iogrp': 'io_grp0, io_grp1',
-            'volumegroup': 'test_volumegroup'
+            'volumegroup': 'test_volumegroup',
+            'state': 'absent'
         })
-        svc_run_command_mock.return_value = None
-        v = IBMSVCvolume()
-        v.remove_volume()
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -873,10 +889,7 @@ class TestIBMSVCvolume(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'test_volume',
-            'state': 'absent',
-            'size': '1',
-            'unit': 'gb',
-            'pool': 'test_pool',
+            'state': 'absent'
         })
         c3.return_value = [
             {
@@ -1540,6 +1553,178 @@ class TestIBMSVCvolume(unittest.TestCase):
             v = IBMSVCvolume()
             v.apply()
         self.assertFalse(exc.value.args[0]['changed'])
+
+    # Create thinclone from volume
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_thinclone(self, svc_authorize_mock, svc_run_command_mock, create_transient_snapshot_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'type': 'thinclone',
+            'fromsourcevolume': 'vol1'
+        })
+
+        svc_run_command_mock.return_value = {
+            'id': '25',
+            'message': 'Volume, id [25], successfully created'
+        }
+        create_transient_snapshot_mock.return_value = 10
+        v = IBMSVCvolume()
+        v.create_volume()
+
+    # Create clone from volume
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_clone(self, svc_authorize_mock, svc_run_command_mock, create_transient_snapshot_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'type': 'clone',
+            'fromsourcevolume': 'vol1'
+        })
+
+        svc_run_command_mock.return_value = {
+            'id': '25',
+            'message': 'Volume, id [25], successfully created'
+        }
+        create_transient_snapshot_mock.return_value = 10
+        v = IBMSVCvolume()
+        v.create_volume()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_when_thinclone_creation_parameter_type_missing(self, svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'fromsourcevolume': 'src_volume1',
+            'pool': 'pool1'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.volume_creation_parameter_validation()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_when_thinclone_creation_parameter_fromsourcevolume_missing(self, svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'type': 'thinclone',
+            'pool': 'pool1'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.volume_creation_parameter_validation()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_when_thinclone_creation_parameter_pool_missing(self, svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'type': 'thinclone',
+            'fromsourcevolume': 'src_volume1',
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.volume_creation_parameter_validation()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_when_size_provided_in_thinclone_creation(self, svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'type': 'thinclone',
+            'fromsourcevolume': 'src_volume1',
+            'size': '2048',
+            'pool': 'pool1'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.volume_creation_parameter_validation()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_volume_rename_failure_for_unsupported_param_type(self, am):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'old_name': 'name',
+            'name': 'new_name',
+            'state': 'present',
+            'type': 'thinclone'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    # Test create_transient_snapshot
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_transient_snapshot(self, svc_authorize_mock, svc_run_cmd_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'new_name',
+            'state': 'present',
+            'type': 'thinclone',
+            'fromsourcevolume': 'vol1'
+        })
+        svc_run_cmd_mock.return_value = {
+            "id": "3",
+            "message": "Snapshot, id [3], successfully created or triggered"
+        }
+        v = IBMSVCvolume()
+        snapshot_id = v.create_transient_snapshot()
+        self.assertEqual(snapshot_id, '3')
 
 
 if __name__ == '__main__':

@@ -553,6 +553,24 @@ class TestIBMSVCvdisk(unittest.TestCase):
         vg.vg_delete()
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_vg_delete_with_invalid_params(self, mock_svc_authorize):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volumegroup',
+            'type': 'thinclone',
+            'pool': 'pool0',
+            'state': 'absent'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.vg_delete()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -1092,6 +1110,528 @@ class TestIBMSVCvdisk(unittest.TestCase):
         vg = IBMSVCVG()
         probe_data = vg.vg_probe(data)
         self.assertTrue('partition' in probe_data)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.set_parentuid')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_vg_thinclone_from_source_volumes(self, svc_authorize_mock,
+                                                     svc_run_cmd_mock,
+                                                     svc_get_existing_vg_mock,
+                                                     svc_parentuid_mock,
+                                                     create_transient_snapshot_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg_thinclone2',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'thinclone',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {}
+        create_transient_snapshot_mock.return_value = 'snapshot_3335105753'
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_vg_thinclone_from_source_volumes_idempotency(self, svc_authorize_mock,
+                                                                 svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1thclone',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'thinclone',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1thclone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': 'thinclone',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    # Test when existing clone/thinclone with same name but different source volumes
+    # and user tries to create a normal volumegroup, it should fail
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_normal_vg_with_existing_thinclone_vg_name(self, svc_authorize_mock,
+                                                              svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1thclone',
+            'state': 'present',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1thclone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': 'thinclone',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Existing thinclone volumegroup found.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_modify_vg_source_volumes(self,
+                                             svc_authorize_mock,
+                                             svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1thclone',
+            'state': 'present',
+            'fromsourcevolumes': 'v3:d1',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1thclone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': 'thinclone',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Parameter [fromsourcevolumes] is invalid for modifying volumegroup.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_update_thinclone_vg_pool(self,
+                                              svc_authorize_mock,
+                                              svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1thclone',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'thinclone',
+            'pool': 'pool1'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1thclone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': 'thinclone',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Parameter [pool] is invalid for modifying volumegroup.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_transient_snapshot(self,
+                                       svc_authorize_mock,
+                                       svc_run_cmd_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg_thinclone2',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'thinclone',
+            'pool': 'pool0'
+        })
+
+        vg = IBMSVCVG()
+        snapshot_name = vg.create_transient_snapshot()
+        self.assertTrue('snapshot_' in snapshot_name)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.set_parentuid')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_vg_clone_from_source_volumes(self,
+                                                 svc_authorize_mock,
+                                                 svc_run_cmd_mock,
+                                                 svc_get_existing_vg_mock,
+                                                 svc_parentuid_mock,
+                                                 create_transient_snapshot_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg_clone',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'clone',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {}
+        create_transient_snapshot_mock.return_value = 'snapshot_3335105753'
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_vg_clone_from_source_volumes_idempotency(self,
+                                                             svc_authorize_mock,
+                                                             svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1clone',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'clone',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1clone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': '',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    # Test create clone with different source volumes but a cloned VG already exists
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_modify_vg_source_volumes(self,
+                                             svc_authorize_mock,
+                                             svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1clone',
+            'state': 'present',
+            'type': 'clone',
+            'fromsourcevolumes': 'v3:d1',
+            'pool': 'pool0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1clone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': '',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Parameter [fromsourcevolumes] is invalid for modifying volumegroup.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_update_cloned_vg_pool(self,
+                                           svc_authorize_mock,
+                                           svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'v1d1thclone',
+            'state': 'present',
+            'fromsourcevolumes': 'v1:d1',
+            'type': 'clone',
+            'pool': 'pool1'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            'id': '0',
+            'name': 'v1d1thclone',
+            'volume_count': '2',
+            'backup_status': 'off',
+            'last_backup_time': '',
+            'owner_id': '',
+            'owner_name': '',
+            'safeguarded_policy_id': '',
+            'safeguarded_policy_name': '',
+            'safeguarded_policy_start_time': '',
+            'replication_policy_id': '',
+            'replication_policy_name': '',
+            'volume_group_type': '',
+            'uid': '77',
+            'source_volume_group_id': '',
+            'source_volume_group_name': '',
+            'parent_uid': '76',
+            'source_snapshot_id': '0',
+            'source_snapshot': 'snapshot_3335105753',
+            'snapshot_count': '0',
+            'protection_provisioned_capacity': '0.00MB',
+            'protection_written_capacity': '0.00MB',
+            'snapshot_policy_id': '',
+            'snapshot_policy_name': '',
+            'safeguarded_snapshot_count': '0',
+            'ignore_user_flash_copy_maps': 'no',
+            'partition_id': '',
+            'partition_name': '',
+            'restore_in_progress': 'no',
+            'owner_type': 'none',
+            'draft_partition_id': '',
+            'draft_partition_name': '',
+            'last_restore_time': '',
+            'source_volumes_set': {'v1', 'd1'},
+            'source_volumes_pool_set': {'pool0'}
+        }
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Parameter [pool] is invalid for modifying volumegroup.')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
-# Copyright (C) 2020 IBM CORPORATION
+# Copyright (C) 2024 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
+#            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -11,6 +12,9 @@ __metaclass__ = type
 
 import json
 import logging
+import uuid
+import inspect
+import os
 
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
@@ -228,12 +232,23 @@ class IBMSVCRestApi(object):
         rest = self._svc_rest(method='POST', headers=headers, cmd='auth',
                               cmdopts=None, cmdargs=None)
 
+        rp_cmdopts = self.register_plugin_cmdopts()
+
         if rest['err']:
             return None
 
         out = rest['out']
         if out:
             if 'token' in out:
+                try:
+                    rp_headers = {
+                        'Content-Type': 'application/json',
+                        'X-Auth-Token': out['token']
+                    }
+                    self._svc_rest(method='POST', headers=rp_headers, cmd="registerplugin",
+                                   cmdopts=rp_cmdopts, cmdargs=None)
+                except Exception as e:
+                    pass
                 return out['token']
 
         return None
@@ -328,3 +343,25 @@ class IBMSVCRestApi(object):
             self.module.exit_json(msg='Failed to obtain access token', unreachable=True)
 
         return self.token
+
+    def register_plugin_cmdopts(self):
+        cmdopts = {}
+        name = "Ansible"
+        unique_key = self.username + "_" + str(uuid.getnode())
+
+        usrs_directory = os.path.expanduser('~')
+        galaxy_info_file_path = os.path.join(usrs_directory, '.ansible/collections/ansible_collections/ibm/storage_virtualize/MANIFEST.json')
+        with open(galaxy_info_file_path, 'r') as f:
+            data = json.load(f)
+        version = data["collection_info"]["version"]
+
+        caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
+        caller_class_name = caller_class.__class__.__name__
+        module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
+        metadata = module_name[:-3] + " module with class " + str(caller_class_name) + " has been executed by " + self.username
+
+        cmdopts['name'] = name
+        cmdopts['uniquekey'] = unique_key
+        cmdopts['version'] = version
+        cmdopts['metadata'] = metadata
+        return cmdopts

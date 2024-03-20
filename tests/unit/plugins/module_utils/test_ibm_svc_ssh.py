@@ -1,5 +1,6 @@
-# Copyright (C) 2020 IBM CORPORATION
+# Copyright (C) 2024 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
+#            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -83,6 +84,18 @@ class TestIBMSVModuleUtilsSsh(unittest.TestCase):
         patch.object(paramiko.SSHClient, 'close')
         ret = self.sshclient._svc_disconnect()
         self.assertTrue(ret)
+
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    def test_register_plugin(self, ssh_mock):
+        if paramiko is None:
+            print("paramiko is not installed")
+
+        self.sshclient = IBMSVCssh(self.mock_module_helper, '1.2.3.4',
+                                   'username', 'password',
+                                   False, '', 'test.log')
+        ssh_mock.exec_command.return_value = None
+        result = self.sshclient.register_plugin()
+        self.assertTrue(result)
 
 
 if __name__ == '__main__':

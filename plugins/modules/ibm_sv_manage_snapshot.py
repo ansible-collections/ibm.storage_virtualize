@@ -68,7 +68,7 @@ options:
     src_volumegroup_name:
         description:
             - Specifies the name of the source volume group for which the snapshot is being created.
-            - I(src_volumegroup_name) and I(src_volume_names) are mutually exclusive.
+            - I(src_volumegroup_name) and I(src_volume_names) are mutually exclusive for creating snapshot.
             - Required one of I(src_volumegroup_name) or I(src_volume_names) for creation of snapshot.
         type: str
     src_volume_names:
@@ -169,13 +169,23 @@ EXAMPLES = '''
    old_name: ansible_2
    ownershipgroup: ownershipgroup0
    state: present
-- name: Restore volumes of a volumegroup from a snapshot
+- name: Restore all volumes of a volumegroup from a snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
    clustername: '{{clustername}}'
    username: '{{username}}'
    password: '{{password}}'
-   name: ansible_1
+   name: snapshot0
    src_volumegroup_name: volumegroup1
+   snapshot_pool: Pool0Childpool0
+   state: restore
+- name: Restore subset of volumes of a volumegroup from snapshot
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{clustername}}'
+   username: '{{username}}'
+   password: '{{password}}'
+   name: snapshot0
+   src_volumegroup_name: volumegroup1
+   src_volume_names: vdisk0:vdisk1
    snapshot_pool: Pool0Childpool0
    state: restore
 - name: Create transient snapshot
@@ -183,7 +193,7 @@ EXAMPLES = '''
    clustername: '{{clustername}}'
    username: '{{username}}'
    password: '{{password}}'
-   name: ansible_2
+   name: snapshot0
    src_volume_names: vdisk0:vdisk1
    safeguarded: true
    retentionminutes: 5
@@ -503,9 +513,10 @@ class IBMSVSnapshot:
         }
         if self.volumegroup:
             cmdopts['volumegroup'] = self.volumegroup
+        if self.volumes:
+            cmdopts['volumes'] = self.volumes
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        self.log('Volumegroup restored from Snapshot (%s)', self.name)
         self.changed = True
 
     def snapshot_probe(self):
@@ -581,7 +592,11 @@ class IBMSVSnapshot:
                     self.msg = 'Snapshot ({0}) already exists. No modifications done.'.format(self.name)
             elif self.state == 'restore':
                 self.restore_from_snapshot()
-                self.msg = 'Volumegroup ({0}) restored from Snapshot ({1}).'.format(self.volumegroup, self.name)
+                if self.volumes:
+                    self.msg = 'Volumes ({0}) of Volumegroup ({1}) restored from Snapshot ({2}).'.\
+                        format(self.volumes, self.volumegroup, self.name)
+                else:
+                    self.msg = 'Volumegroup ({0}) restored from Snapshot ({1}).'.format(self.volumegroup, self.name)
             else:
                 self.delete_snapshot()
         else:

@@ -83,6 +83,19 @@ options:
       - Parameters 'thin' and 'compressed' are mutually exclusive.
       - Valid when I(state=present), to create a thin-provisioned volume.
     type: bool
+  type:
+    description:
+      - Specifies the type of volume to create. Volume can be thinclone or clone type.
+      - Valid when I(state=present), to create a thinclone or clone volume.
+      - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+    choices: [thinclone, clone]
+    type: str
+  fromsourcevolume:
+    description:
+      - Specifies the volume name in the snapshot used to pre-populate clone or thinclone volume.
+      - Valid when I(state=present), to create a thinclone or clone volume.
+      - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+    type: str
   compressed:
     description:
       - Specifies that a compressed volume is to be created.
@@ -212,6 +225,26 @@ EXAMPLES = '''
     size: "1"
     unit: "gb"
     iogrp: "io_grp0"
+- name: Create thinclone volume from volume vol1
+  ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "vol1_thinclone"
+    fromsourcevolume: "vol1"
+    state: "present"
+    pool: "pool0"
+- name: Create clone volume from volume vol1
+  ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "vol1_clone"
+    fromsourcevolume: "vol1"
+    state: "present"
+    pool: "pool0"
 - name: Adding a new iogrp- io_grp1
   ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
@@ -266,6 +299,7 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     strtobool
 )
 from ansible.module_utils._text import to_native
+import random
 
 
 class IBMSVCvolume(object):
@@ -291,6 +325,8 @@ class IBMSVCvolume(object):
                 old_name=dict(type='str', required=False),
                 enable_cloud_snapshot=dict(type='bool'),
                 cloud_account_name=dict(type='str'),
+                type=dict(type='str', required=False, choices=['clone', 'thinclone']),
+                fromsourcevolume=dict(type='str', required=False),
                 allow_hs=dict(type='bool', default=False)
             )
         )
@@ -321,6 +357,8 @@ class IBMSVCvolume(object):
         self.enable_cloud_snapshot = self.module.params['enable_cloud_snapshot']
         self.cloud_account_name = self.module.params['cloud_account_name']
         self.allow_hs = self.module.params['allow_hs']
+        self.type = self.module.params['type']
+        self.fromsourcevolume = self.module.params['fromsourcevolume']
 
         # internal variable
         self.changed = False
@@ -369,8 +407,16 @@ class IBMSVCvolume(object):
 
     # for validating parameter while removing an existing volume
     def volume_deletion_parameter_validation(self):
-        if self.old_name:
-            self.module.fail_json(msg='Parameter [old_name] is not supported during volume deletion.')
+        invalids = ('pool', 'size', 'iogrp', 'buffersize', 'volumegroup', 'novolumegroup',
+                    'thin', 'compressed', 'deduplicated', 'old_name', 'enable_cloud_snapshot',
+                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume')
+
+        invalid_params = ', '.join((param for param in invalids if getattr(self, param)))
+
+        if invalid_params:
+            self.module.fail_json(
+                msg='Following parameter(s) are invalid while deletion of volume: {0}'.format(invalid_params)
+            )
 
     # for validating parameter while creating a volume
     def volume_creation_parameter_validation(self):
@@ -383,9 +429,20 @@ class IBMSVCvolume(object):
         if self.old_name:
             self.module.fail_json(msg='Parameter [old_name] is not supported during volume creation.')
 
-        missing = [item[0] for item in [('pool', self.pool), ('size', self.size)] if not item[1]]
+        if (self.type and not self.fromsourcevolume) or (self.fromsourcevolume and not self.type):
+            self.module.fail_json(msg='Parameters [type] and [fromsourcevolume] parameters must be used together')
+
+        missing = []
+        if self.type and self.fromsourcevolume:
+            if not self.pool:
+                missing = ['pool']
+            if self.size:
+                self.module.fail_json(msg='Parameter [size] is invalid while creating clone or thinclone')
+        else:
+            missing = [item[0] for item in [('pool', self.pool), ('size', self.size)] if not item[1]]
+
         if missing:
-            self.module.fail_json(msg='Missing required parameter while creating: [{0}]'.format(', '.join(missing)))
+            self.module.fail_json(msg='Missing required parameter(s) while creating: [{0}]'.format(', '.join(missing)))
 
     # for validating parameter while renaming a volume
     def parameter_handling_while_renaming(self):
@@ -400,7 +457,9 @@ class IBMSVCvolume(object):
             "novolumegroup": self.novolumegroup,
             "thin": self.thin,
             "compressed": self.compressed,
-            "deduplicated": self.deduplicated
+            "deduplicated": self.deduplicated,
+            "type": self.type,
+            "fromsourcevolume": self.fromsourcevolume
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -439,6 +498,26 @@ class IBMSVCvolume(object):
                 response.append(item['IO_group_name'])
         return response
 
+    # function to create a transient (short-lived) snapshot
+    # return value: snapshot_id
+    def create_transient_snapshot(self):
+        # Required parameters
+        snapshot_cmd = 'addsnapshot'
+        snapshot_opts = {}
+        snapshot_name = 'snapshot_' + ''.join(random.choices('0123456789', k=10))
+
+        snapshot_opts['name'] = snapshot_name
+
+        # Optional parameters
+        snapshot_opts['pool'] = self.module.params.get('pool', '')
+        snapshot_opts['volumes'] = self.module.params.get('fromsourcevolume', '')
+        snapshot_opts['retentionminutes'] = 5
+
+        addsnapshot_output = self.restapi.svc_run_command(snapshot_cmd, snapshot_opts, cmdargs=None, timeout=10)
+        snapshot_id = addsnapshot_output['id']
+
+        return snapshot_id
+
     # function to create a new volume
     def create_volume(self):
         self.volume_creation_parameter_validation()
@@ -467,6 +546,13 @@ class IBMSVCvolume(object):
             cmdopts['buffersize'] = self.buffersize
         if self.name:
             cmdopts['name'] = self.name
+        if self.type:
+            cmdopts['type'] = self.type
+            snapshot_id = self.create_transient_snapshot()
+            cmdopts['fromsnapshotid'] = snapshot_id
+        if self.fromsourcevolume:
+            cmdopts['fromsourcevolume'] = self.fromsourcevolume
+
         result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         if result and 'message' in result:
             self.changed = True
@@ -578,6 +664,16 @@ class IBMSVCvolume(object):
             if self.cloud_account_name != data[0].get('cloud_account_name'):
                 props['cloud_backup'] = {'status': True}
 
+        # Check for change in fromsourcevolume
+        if self.fromsourcevolume:
+            if self.fromsourcevolume != data[0].get('source_volume_name'):
+                props['fromsourcevolume'] = {'status': True}
+
+        # Check for change in type
+        if self.type:
+            if self.type != data[0].get('volume_type'):
+                props['type'] = {'status': True}
+
         return props
 
     # function to expand an existing volume size
@@ -640,7 +736,7 @@ class IBMSVCvolume(object):
     # function to update an existing volume
     def update_volume(self, modify):
         # raise error for unsupported parameter
-        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated']
+        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'type', 'fromsourcevolume']
         unsupported_exists = []
         for parameter in unsupported_parameters:
             if parameter in modify:
@@ -718,6 +814,13 @@ class IBMSVCvolume(object):
                 if self.state == 'absent':
                     changed = True
                 elif self.state == 'present':
+                    if self.type or self.fromsourcevolume:
+                        # Both type and fromsourcevolume needed together
+                        self.volume_creation_parameter_validation()
+                        if ((volume_data[0].get('source_volume_name') and not self.fromsourcevolume) or
+                                (volume_data[0].get('volume_type') and not self.type)):
+                            changed = True
+
                     modify = self.probe_volume(volume_data)
                     if modify:
                         changed = True

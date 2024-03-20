@@ -255,6 +255,50 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
         self.assertDictEqual(exc.value.args[0]['VolumeGroupPopulation'][0], volgrp_population_ret[0])
         self.assertDictEqual(exc.value.args[0]['VolumeGroupSnapshot'][0], volgrp_snapshot_ret[0])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_the_volumehostmap_result_by_gather_info(self, svc_authorize_mock,
+                                                     svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'gather_subset': 'vdiskhostmap',
+            'objectname': 'volume_Ansible_collections'
+        })
+        vol_ret = [{"id": "0", "name": "volume_Ansible_collections",
+                    "SCSI_id": "0", "host_id": "0", "host_name": "ansible_host",
+                    "IO_group_id": "0", "IO_group_name": "io_grp0", "vdisk_UID": "600507681295018A3000000000000000",
+                    "mapping_type": "private", "host_cluster_id": "",
+                    "host_cluster_name": "", "protocol": "scsi"
+                    }]
+
+        svc_obj_info_mock.return_value = vol_ret
+        with pytest.raises(AnsibleExitJson) as exc:
+            IBMSVCGatherInfo().apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertDictEqual(exc.value.args[0]['VdiskHostMap'][0], vol_ret[0])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_the_volumehostmap_result_without_objectname_by_gather_info(self, svc_authorize_mock,
+                                                                        svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'gather_subset': 'vdiskhostmap',
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            IBMSVCGatherInfo().apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
 
 if __name__ == '__main__':
     unittest.main()

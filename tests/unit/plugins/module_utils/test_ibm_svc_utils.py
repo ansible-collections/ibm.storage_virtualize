@@ -1,5 +1,6 @@
-# Copyright (C) 2020 IBM CORPORATION
+# Copyright (C) 2024 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
+#            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -148,6 +149,13 @@ class TestIBMSVModuleUtils(unittest.TestCase):
         mock_svc_authorize.return_value = test_var
         ret = self.restapi.get_auth_token()
         self.assertEqual(test_var, ret)
+
+    def test_register_plugin_cmdopts(self):
+        self.sshclient = IBMSVCRestApi(self.mock_module_helper, '1.2.3.4',
+                                       'username', 'password',
+                                       False, '', 'test.log', True)
+        cmdops = self.sshclient.register_plugin_cmdopts()
+        self.assertEqual(cmdops["name"], "Ansible")
 
 
 if __name__ == '__main__':
