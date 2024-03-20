@@ -701,7 +701,7 @@ Volumegroupreplication:
     type: list
     elements: dict
     sample: [{...}]
-Quorum :
+Quorum:
     description:
         - Data will be populated when I(gather_subset=quorum) or I(gather_subset=all)
         - list the quorum devices that the system uses to store quorum data.
@@ -709,7 +709,7 @@ Quorum :
     type: list
     elements: dict
     sample: [{...}]
-Enclosure :
+Enclosure:
     description:
         - Data will be populated when I(gather_subset=enclosure) or I(gather_subset=all)
         - Displays a summary of the enclosures.
@@ -717,7 +717,7 @@ Enclosure :
     type: list
     elements: dict
     sample: [{...}]
-Snmpserver :
+Snmpserver:
     description:
         - Data will be populated when I(gather_subset=snmpserver) or I(gather_subset=all)
         - Display a concise list or a detailed view of SNMP servers that are configured on the system
@@ -725,7 +725,7 @@ Snmpserver :
     type: list
     elements: dict
     sample: [{...}]
-Testldapserver :
+Testldapserver:
     description:
         - Data will be populated when I(gather_subset=testldapserver)
         - Tests a Lightweight Directory Access Protocol (LDAP) server.
@@ -958,71 +958,71 @@ class IBMSVCGatherInfo(object):
         }
 
         cmd_mappings = {
-            'vol' : ('Volume', 'lsvdisk', False, None),
-            'pool' : ('Pool', 'lsmdiskgrp', False, None),
-            'node' : ('Node', 'lsnode', False, None),
-            'iog' : ('IOGroup', 'lsiogrp', False, None),
-            'host' : ('Host', 'lshost', False, None),
-            'hostvdiskmap' : ('HostVdiskMap', 'lshostvdiskmap', False, None),
-            'vdiskhostmap' : ('VdiskHostMap', 'lsvdiskhostmap', True, None),
-            'hc' : ('HostCluster', 'lshostcluster', False, '7.7.1.0'),
-            'fc' : ('FCConnectivitie', 'lsfabric', False, None),
-            'fcport' : ('FCPort', 'lsportfc', False, None),
-            'iscsiport' : ('iSCSIPort', 'lsportip', False, None),
-            'fcmap' : ('FCMap', 'lsfcmap', False, None),
-            'rcrelationship' : ('RemoteCopy', 'lsrcrelationship', False, None),
-            'fcconsistgrp' : ('FCConsistgrp', 'lsfcconsistgrp', False, None),
-            'rcconsistgrp' : ('RCConsistgrp', 'lsrcconsistgrp', False, None),
-            'vdiskcopy' : ('VdiskCopy', 'lsvdiskcopy', False, None),
-            'targetportfc' : ('TargetPortFC', 'lstargetportfc', False, '7.7.0.0'),
-            'array' : ('Array', 'lsarray', False, None),
-            'system' : ('System', 'lssystem', False, '6.3.0.0'),
-            'cloudaccount' : ('CloudAccount', 'lscloudaccount', False, '7.8.0.0'),
-            'cloudaccountusage' : ('CloudAccountUsage', 'lscloudaccountusage', False, '7.8.0.0'),
-            'cloudimportcandidate' : ('CloudImportCandidate', 'lscloudaccountimportcandidate', False, '7.8.0.0'),
-            'ldapserver' : ('LdapServer', 'lsldapserver', False, '6.3.0.0'),
-            'drive' : ('Drive', 'lsdrive', False, None),
-            'user' : ('User', 'lsuser', False, None),
-            'usergroup' : ('UserGrp', 'lsusergrp', False, None),
-            'ownershipgroup' : ('Ownershipgroup', 'lsownershipgroup', False, '8.3.0.0'),
-            'partnership' : ('Partnership', 'lspartnership', False, '6.3.0.0'),
-            'replicationpolicy' : ('ReplicationPolicy', 'lsreplicationpolicy', False, '8.5.2.0'),
-            'cloudbackup' : ('CloudBackup', 'lsvolumebackup', False, '7.8.0.0'),
-            'cloudbackupgeneration' : ('CloudBackupGeneration', 'lsvolumebackupgeneration', True, '7.8.0.0'),
-            'snapshotpolicy' : ('SnapshotPolicy', 'lssnapshotpolicy', False, '8.5.1.0'),
-            'snapshotpolicyschedule' : ('SnapshotSchedule', 'lssnapshotschedule', False, '8.5.1.0'),
-            'volumegroup' : ('VolumeGroup', 'lsvolumegroup', False, '7.8.0.0'),
-            'volumepopulation' : ('VolumePopulation', 'lsvolumepopulation', False, '8.5.1.0'),
-            'volumegrouppopulation' : ('VolumeGroupPopulation', 'lsvolumegrouppopulation', False, '8.5.1.0'),
-            'volumegroupsnapshotpolicy' : ('VolumeGroupSnapshotPolicy', 'lsvolumegroupsnapshotpolicy', False, '8.5.1.0'),
-            'volumesnapshot' : ('VolumeSnapshot', 'lsvolumesnapshot', False, '8.5.1.0'),
-            'dnsserver' : ('DnsServer', 'lsdnsserver', False, '7.8.0.0'),
-            'systemcertificate' : ('SystemCert', 'lssystemcert', False, '7.6.0.0'),
-            'truststore' : ('TrustStore', 'lstruststore', False, '8.5.1.0'),
-            'sra' : ('Sra', 'lssra', False, '7.7.0.0'),
-            'syslogserver' : ('SysLogServer', 'lssyslogserver', False, None),
-            'emailserver' : ('EmailServer', 'lsemailserver', False, None),
-            'emailuser' : ('EmailUser', 'lsemailuser', False, None),
-            'provisioningpolicy' : ('ProvisioningPolicy', 'lsprovisioningpolicy', False, '8.4.1.0'),
-            'volumegroupsnapshot' : ('VolumeGroupSnapshot', 'lsvolumegroupsnapshot', False, '8.5.1.0'),
-            'callhome' : ('CallHome', 'lscloudcallhome', False, '8.2.1.0'),
-            'ip' : ('IP', 'lsip', False, '8.4.2.0'),
-            'portset' : ('Portset', 'lsportset', False, '8.4.2.0'),
-            'safeguardedpolicy' : ('SafeguardedPolicy', 'lssafeguardedpolicy', False, '8.4.2.0'),
-            'mdisk' : ('Mdisk', 'lsmdisk', False, None),
-            'safeguardedpolicyschedule' : ('SafeguardedSchedule', 'lssafeguardedschedule', False, '8.4.2.0'),
-            'eventlog' : ('EventLog', 'lseventlog', False, None),
-            'enclosurestats' : ('EnclosureStats', 'lsenclosurestats', False, None),
-            'enclosurestatshistory' : ('EnclosureStatsHistory', 'lsenclosurestats -history power_w:temp_c:temp_f', True, None),
-            'driveclass' : ('DriveClass', 'lsdriveclass', False, '7.6.0.0'),
-            'security' : ('Security', 'lssecurity', False, '7.4.0.0'),
-            'partition' : ('Partition', 'lspartition', False, '8.6.1.0'),
-            'plugin' : ('Plugin', 'lsplugin', False, '8.6.0.0'),
-            'volumegroupreplication' : ('Volumegroupreplication', 'lsvolumegroupreplication', False, '8.5.2.0'),
-            'quorum' : ('Quorum', 'lsquorum', False, None),
-            'enclosure' : ('Enclosure', 'lsenclosure', False, None),
-            'snmpserver' : ('Snmpserver', 'lssnmpserver', False, None),
-            'testldapserver' : ('Testldapserver', 'testldapserver', False, '6.3.0.0')
+            'vol': ('Volume', 'lsvdisk', False, None),
+            'pool': ('Pool', 'lsmdiskgrp', False, None),
+            'node': ('Node', 'lsnode', False, None),
+            'iog': ('IOGroup', 'lsiogrp', False, None),
+            'host': ('Host', 'lshost', False, None),
+            'hostvdiskmap': ('HostVdiskMap', 'lshostvdiskmap', False, None),
+            'vdiskhostmap': ('VdiskHostMap', 'lsvdiskhostmap', True, None),
+            'hc': ('HostCluster', 'lshostcluster', False, '7.7.1.0'),
+            'fc': ('FCConnectivitie', 'lsfabric', False, None),
+            'fcport': ('FCPort', 'lsportfc', False, None),
+            'iscsiport': ('iSCSIPort', 'lsportip', False, None),
+            'fcmap': ('FCMap', 'lsfcmap', False, None),
+            'rcrelationship': ('RemoteCopy', 'lsrcrelationship', False, None),
+            'fcconsistgrp': ('FCConsistgrp', 'lsfcconsistgrp', False, None),
+            'rcconsistgrp': ('RCConsistgrp', 'lsrcconsistgrp', False, None),
+            'vdiskcopy': ('VdiskCopy', 'lsvdiskcopy', False, None),
+            'targetportfc': ('TargetPortFC', 'lstargetportfc', False, '7.7.0.0'),
+            'array': ('Array', 'lsarray', False, None),
+            'system': ('System', 'lssystem', False, '6.3.0.0'),
+            'cloudaccount': ('CloudAccount', 'lscloudaccount', False, '7.8.0.0'),
+            'cloudaccountusage': ('CloudAccountUsage', 'lscloudaccountusage', False, '7.8.0.0'),
+            'cloudimportcandidate': ('CloudImportCandidate', 'lscloudaccountimportcandidate', False, '7.8.0.0'),
+            'ldapserver': ('LdapServer', 'lsldapserver', False, '6.3.0.0'),
+            'drive': ('Drive', 'lsdrive', False, None),
+            'user': ('User', 'lsuser', False, None),
+            'usergroup': ('UserGrp', 'lsusergrp', False, None),
+            'ownershipgroup': ('Ownershipgroup', 'lsownershipgroup', False, '8.3.0.0'),
+            'partnership': ('Partnership', 'lspartnership', False, '6.3.0.0'),
+            'replicationpolicy': ('ReplicationPolicy', 'lsreplicationpolicy', False, '8.5.2.0'),
+            'cloudbackup': ('CloudBackup', 'lsvolumebackup', False, '7.8.0.0'),
+            'cloudbackupgeneration': ('CloudBackupGeneration', 'lsvolumebackupgeneration', True, '7.8.0.0'),
+            'snapshotpolicy': ('SnapshotPolicy', 'lssnapshotpolicy', False, '8.5.1.0'),
+            'snapshotpolicyschedule': ('SnapshotSchedule', 'lssnapshotschedule', False, '8.5.1.0'),
+            'volumegroup': ('VolumeGroup', 'lsvolumegroup', False, '7.8.0.0'),
+            'volumepopulation': ('VolumePopulation', 'lsvolumepopulation', False, '8.5.1.0'),
+            'volumegrouppopulation': ('VolumeGroupPopulation', 'lsvolumegrouppopulation', False, '8.5.1.0'),
+            'volumegroupsnapshotpolicy': ('VolumeGroupSnapshotPolicy', 'lsvolumegroupsnapshotpolicy', False, '8.5.1.0'),
+            'volumesnapshot': ('VolumeSnapshot', 'lsvolumesnapshot', False, '8.5.1.0'),
+            'dnsserver': ('DnsServer', 'lsdnsserver', False, '7.8.0.0'),
+            'systemcertificate': ('SystemCert', 'lssystemcert', False, '7.6.0.0'),
+            'truststore': ('TrustStore', 'lstruststore', False, '8.5.1.0'),
+            'sra': ('Sra', 'lssra', False, '7.7.0.0'),
+            'syslogserver': ('SysLogServer', 'lssyslogserver', False, None),
+            'emailserver': ('EmailServer', 'lsemailserver', False, None),
+            'emailuser': ('EmailUser', 'lsemailuser', False, None),
+            'provisioningpolicy': ('ProvisioningPolicy', 'lsprovisioningpolicy', False, '8.4.1.0'),
+            'volumegroupsnapshot': ('VolumeGroupSnapshot', 'lsvolumegroupsnapshot', False, '8.5.1.0'),
+            'callhome': ('CallHome', 'lscloudcallhome', False, '8.2.1.0'),
+            'ip': ('IP', 'lsip', False, '8.4.2.0'),
+            'portset': ('Portset', 'lsportset', False, '8.4.2.0'),
+            'safeguardedpolicy': ('SafeguardedPolicy', 'lssafeguardedpolicy', False, '8.4.2.0'),
+            'mdisk': ('Mdisk', 'lsmdisk', False, None),
+            'safeguardedpolicyschedule': ('SafeguardedSchedule', 'lssafeguardedschedule', False, '8.4.2.0'),
+            'eventlog': ('EventLog', 'lseventlog', False, None),
+            'enclosurestats': ('EnclosureStats', 'lsenclosurestats', False, None),
+            'enclosurestatshistory': ('EnclosureStatsHistory', 'lsenclosurestats -history power_w:temp_c:temp_f', True, None),
+            'driveclass': ('DriveClass', 'lsdriveclass', False, '7.6.0.0'),
+            'security': ('Security', 'lssecurity', False, '7.4.0.0'),
+            'partition': ('Partition', 'lspartition', False, '8.6.1.0'),
+            'plugin': ('Plugin', 'lsplugin', False, '8.6.0.0'),
+            'volumegroupreplication': ('Volumegroupreplication', 'lsvolumegroupreplication', False, '8.5.2.0'),
+            'quorum': ('Quorum', 'lsquorum', False, None),
+            'enclosure': ('Enclosure', 'lsenclosure', False, None),
+            'snmpserver': ('Snmpserver', 'lssnmpserver', False, None),
+            'testldapserver': ('Testldapserver', 'testldapserver', False, '6.3.0.0')
         }
 
         if subset == ['all']:
