@@ -59,6 +59,7 @@ jobs:
           # do you really need your collection to support them if it still does?
           - stable-2.14
           - stable-2.15
+          - stable-2.16
             #- devel
         # - milestone
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
@@ -117,6 +118,7 @@ jobs:
           # do you really need your collection to support them if it still does?
           - stable-2.14
           - stable-2.15
+          - stable-2.16
         python:
           - '3.9'
           - '3.10'
@@ -131,6 +133,8 @@ jobs:
             python: '3.7'
           - ansible: stable-2.14
             python: '3.8'
+          - ansible: stable-2.16
+            python: '3.9'
 
     steps:
       - name: >-
@@ -187,6 +191,7 @@ jobs:
           # do you really need your collection to support them if it still does?
           - stable-2.14
           - stable-2.15
+          - stable-2.16
             #- devel
         # - milestone
         python:
@@ -199,6 +204,8 @@ jobs:
           # Python 2.6 is not supported with ansible-core >= 2.13
           - ansible: stable-2.14
             python: '2.6'
+          - ansible: stable-2.16
+            python: '3.9'
 
     steps:
       - name: >-

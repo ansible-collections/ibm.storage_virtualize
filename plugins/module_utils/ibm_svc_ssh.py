@@ -10,12 +10,13 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-import json
 import inspect
-import os
 import uuid
+
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
+
+COLLECTION_VERSION = "2.3.0"
 
 
 class IBMSVCssh(object):
@@ -112,12 +113,6 @@ class IBMSVCssh(object):
             name = "Ansible"
             unique_key = self.username + "_" + str(uuid.getnode())
 
-            usrs_directory = os.path.expanduser('~')
-            galaxy_info_file_path = os.path.join(usrs_directory, '.ansible/collections/ansible_collections/ibm/storage_virtualize/MANIFEST.json')
-            with open(galaxy_info_file_path, 'r') as f:
-                data = json.load(f)
-            version = data["collection_info"]["version"]
-
             caller_class = inspect.stack()[2].frame.f_locals.get('self', None)
             caller_class_name = caller_class.__class__.__name__
             module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
@@ -125,7 +120,7 @@ class IBMSVCssh(object):
 
             cmdopts['name'] = name
             cmdopts['uniquekey'] = unique_key
-            cmdopts['version'] = version
+            cmdopts['version'] = COLLECTION_VERSION
             cmdopts['metadata'] = metadata
 
             for cmdoptions in cmdopts:

@@ -111,7 +111,7 @@ options:
             - I(retentionminutes) and I(retentiondays) are mutually exclusive.
             - Applies, when I(state=present) to create a transient snapshot.
         type: int
-        version_added: 2.3.0
+        version_added: 2.2.0
     validate_certs:
         description:
             - Validates certification.
