@@ -1,0 +1,148 @@
+- name: Using the IBM Storage Virtualize collection For GMCV creation
+  hosts: localhost
+  collections:
+    - ibm.storage_virtualize
+  gather_facts: no
+  connection: local
+  vars_files:
+    - ip_partnership_vars.txt
+  tasks:
+    - name: Get partnesrhip info
+      register: results
+      ibm_svcinfo_command:
+        command: "svcinfo lspartnership"
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    - name: show parnership status
+      set_fact:
+        info: "{{ (results['stdout']) }}"
+    - name: print partnserhip status
+      ansible.builtin.debug:
+        msg: PartnershipStatus {{item['partnership']}}
+      loop: "{{info}}"  
+    - name: Create a List of variable and print it
+      set_fact:
+        list: []
+    - name: Print the list
+      debug: var=list
+    - name: create list
+      set_fact:
+        list: "{{ query('sequence', user_range) }}"
+      vars:
+        start: 1
+        end: "{{ number_of_GMCVrel | default(2) }}"
+        user_range: "start={{ start }} end={{ end }} format=%d"
+    - name: print  list
+      debug: var=list
+    - name: set default prefix
+      set_fact:
+        GMCVRC_: GMCVRC_
+    - name: print default prefix
+      debug: var=GMCVRC_
+    - name: Create a Prefix list variable and print it
+      set_fact:
+        prefix_list: []
+    - name: Print the prefix list
+      debug: var=prefix_list
+    - name: create prefix list
+      set_fact:
+        prefix_list: "{{ [vdisk_prefix | default(GMCVRC_)]  | product(list) | map('join') }}"
+    - name: print prefix list
+      debug: var=prefix_list 
+    - name: Create vdisks on master
+      ibm_svc_manage_volume:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: "{{item}}"
+        state: present
+        pool: "{{pool_name}}"
+        pool_name: Pool0
+        size: "{{vdisk_size}}"
+        unit: gb
+      with_items: "{{prefix_list}}"
+    - name: masterVdisks-host mapping 
+      register: results 
+      ibm_svc_vol_map:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        state: present
+        volname: "{{item}}"
+        host: "{{host_name}}"
+      with_items: "{{prefix_list}}"
+    - name: Create vdisks on aux
+      ibm_svc_manage_volume:
+        clustername: "{{ secondary_cluster_ip }}"
+        username: "{{ secondary_cluster_username }}"
+        password: "{{ secondary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: "{{item}}"
+        state: present
+        pool: "{{pool_name}}"
+        pool_name: Pool0
+        size: "{{vdisk_size}}"
+        unit: gb
+      with_items: "{{prefix_list}}"
+    - name: Create GMCV relationships
+      register: result
+      ibm_svc_manage_replication:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: "{{item}}"
+        state: present
+        master: "{{item}}"
+        aux: "{{item}}"
+        copytype: GMCV
+        remotecluster: "{{ secondary_cluster_name }}"
+      with_items: "{{prefix_list}}"
+    - name: Create a change volume list and print 
+      set_fact:
+        change_list: []
+    - name: Print the change volume list
+      debug: var=change_list
+    - name: set default chnage volume prefix
+      set_fact:
+        CV_: CV_
+    - name: print default chnage volume prefix
+      debug: var=CV_
+    - name: create change volume list and print 
+      set_fact:
+        change_list: "{{ [changeVolprefix | default(CV_)] | product(list) | map('join') }}"
+    - name: print change volume list 
+      debug: var=change_list
+    - name: Attach master change volumes
+      register: results 
+      ibm_svc_manage_cv:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        rname: "{{item.0}}"
+        state: present
+        basevolume: "{{item.0}}"
+        cvname: "{{item.1}}"
+      with_together: 
+        - "{{prefix_list}}"
+        - "{{change_list}}"
+    - name: Attach aux change volumes
+      register: results 
+      ibm_svc_manage_cv:
+        clustername: "{{ secondary_cluster_ip }}"
+        username: "{{ secondary_cluster_username }}"
+        password: "{{ secondary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        rname: "{{item.0}}"
+        state: present
+        basevolume: "{{item.0}}"
+        cvname: "{{item.1}}"
+        ismaster: false
+      with_together: 
+        - "{{prefix_list}}"
+        - "{{change_list}}"
