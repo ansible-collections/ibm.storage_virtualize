@@ -1,12 +1,14 @@
-primary_cluster_name: <<primary_cluster_name>>
-primary_cluster_ip: <<primary_cluster_ip>>
-primary_cluster_username: <<primary_cluster_username>>
-primary_cluster_password: <<primary_cluster_password>>
-secondary_cluster_name: <<secondary_cluster_name>>
-secondary_cluster_ip: <<econdary_cluster_ip>>
-secondary_cluster_username: <<secondary_cluster_username>>
-secondary_cluster_password: <<secondary_cluster_password>>
-host_name: <<host_name>>
-volume_size: <<volume_size>>
-volume_prefix: <<volume_prefix>>
-number_of_volumes: <<number_of_volumes>>
+primary_cluster_name: < primary_cluster_name>
+primary_cluster_ip: <primary_cluster_ip>
+primary_cluster_username: <primary_cluster_username>
+primary_cluster_password: <primary_cluster_password>
+secondary_cluster_name: <secondary_cluster_name>
+secondary_cluster_ip: <secondary_cluster_ip>
+secondary_cluster_username: <secondary_cluster_username>
+secondary_cluster_password: <secondary_cluster_password>
+host_name: <host_name>
+volume_size: <volume_size>
+volume_prefix: <volume_prefix>
+volume_group_name: <volume_group_name>
+number_of_volumes: <number_of_volumes>
+log_path: <log_path>
