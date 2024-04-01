@@ -7,56 +7,6 @@
   vars_files:
     - PBR_variable.txt
   tasks:
-    - name: Generate certificate on primary
-      ibm_svctask_command:
-        command: [ "svctask chsystemcert -mkselfsigned" ]
-        clustername: "{{primary_cluster_ip}}"
-        username: "{{primary_cluster_username}}"
-        password: "{{primary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-    - name: Generate certificate on secondary
-      ibm_svctask_command:
-        command: [ "svctask chsystemcert -mkselfsigned" ]
-        clustername: "{{secondary_cluster_ip}}"
-        username: "{{secondary_cluster_username}}"
-        password: "{{secondary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-    - name: Export SSL certificate internally on primary
-      ibm_sv_manage_ssl_certificate:
-        clustername: "{{primary_cluster_ip}}"
-        username: "{{primary_cluster_username}}"
-        password: "{{primary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        certificate_type: "system"
-    - name: Export SSL certificate internally on secondary
-      ibm_sv_manage_ssl_certificate:
-        clustername: "{{secondary_cluster_ip}}"
-        username: "{{secondary_cluster_username}}"
-        password: "{{secondary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        certificate_type: "system"
-    - name: Create truststore on primary
-      ibm_sv_manage_truststore_for_replication: 
-        clustername: "{{primary_cluster_ip}}"
-        username: "{{primary_cluster_username}}"
-        password: "{{primary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        name: trust
-        remote_clustername: "{{secondary_cluster_ip}}"
-        remote_username: "{{secondary_cluster_username}}"
-        remote_password: "{{secondary_cluster_password}}"
-        state: "present"
-    - name: Create truststore on secondary
-      ibm_sv_manage_truststore_for_replication: 
-        clustername: "{{secondary_cluster_ip}}"
-        username: "{{secondary_cluster_username}}"
-        password: "{{secondary_cluster_password}}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        name: trust
-        remote_clustername: "{{primary_cluster_ip}}"
-        remote_username: "{{primary_cluster_username}}"
-        remote_password: "{{primary_cluster_password}}"
-        state: "present"
     - name: create mdiskgrp on primary
       ibm_svc_mdiskgrp:
         clustername: "{{primary_cluster_ip}}"
@@ -77,6 +27,82 @@
         state: present
         datareduction: yes
         ext: 1024
+    - name: Get drive info
+      register: results
+      ibm_svcinfo_command:
+        command: "svcinfo lsdrive"
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"   
+    - name: show drive 
+      set_fact:
+        id: "{{ (results['stdout']) }}"
+    - name: set variable
+      set_fact:
+        kid: kid
+    - name: set variable
+      set_fact:
+        useD: useD
+    - name: show drive 
+      set_fact:
+        kid: "{{item['id']}}"
+      loop: "{{id}}"
+    - name: show drive 
+      set_fact:
+        useD: "{{item['use']}}"
+      loop: "{{id}}"
+    - name: Print variable
+      debug: var=kid
+    - name: Print variable
+      debug: var=useD
+    - name: Print variable
+      set_fact:
+        TotalDrive: TotalDrive
+    - name: Drive count
+      set_fact:
+        TotalDrive: "{{ kid|int  + 1|int}}"
+    - name: Print Drive count
+      debug: var=TotalDrive
+    - name: set level
+      set_fact:
+        Level:  
+    - name: Decide Level
+      set_fact:
+        Level: raid1
+      when: (TotalDrive|int <= 3 )
+    - name: Decide Level
+      set_fact:
+        Level: raid6
+      when: (TotalDrive|int > 3 )
+    - name: Print the Level
+      debug: var=Level
+    - name: Create a List of variable and print it
+      set_fact:
+        list1: []
+    - name: Print the list
+      debug: var=list1
+    - name: create list
+      set_fact:
+        list1: "{{ query('sequence', user_range) }}"
+      vars:
+        start: 0
+        end: "{{ kid|int }}"
+        user_range: "start={{ start }} end={{ end }} format=%d"
+    - name: print  list
+      debug: var=list1
+    - name: set variable
+      set_fact:
+        member: member
+    - name: Make drive in candidate state
+      ibm_svctask_command:
+        command: [ "svctask chdrive -use candidate {{item}}" ]
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+      with_items: "{{list1}}"
+      when: useD != member
     - name: create distribute array on primary
       ibm_svc_mdisk:
         clustername: "{{primary_cluster_ip}}"
@@ -85,11 +111,87 @@
         log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
         name: mdisk0
         state: present
-        level: raid6
-        drivecount: 6 
+        level: "{{Level}}"
+        drivecount: "{{TotalDrive|int}}" 
         driveclass: 0 
         encrypt: no
         mdiskgrp: mdg0
+    - name: Get drive info
+      register: results
+      ibm_svcinfo_command:
+        command: "svcinfo lsdrive"
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"     
+    - name: show drive 
+      set_fact:
+        id: "{{ (results['stdout']) }}"
+    - name: set variable
+      set_fact:
+        kid: kid
+    - name: set variable
+      set_fact:
+        useD1: useD1
+    - name: show drive 
+      set_fact:
+        kid: "{{item['id']}}"
+      loop: "{{id}}"
+    - name: show drive 
+      set_fact:
+        useD1: "{{item['use']}}"
+      loop: "{{id}}" 
+    - name: Print variable
+      debug: var=kid
+    - name: Print variable
+      debug: var=useD1
+    - name: Print variable
+      set_fact:
+        TotalDrive2: TotalDrive2
+    - name: Drive count
+      set_fact:
+        TotalDrive2: "{{ kid|int  + 1|int}}"
+    - name: Print Drive count
+      debug: var=TotalDrive2
+    - name: set level
+      set_fact:
+        Level2: 
+    - name: Decide Level
+      set_fact:
+        Level2: raid1
+      when: (TotalDrive2|int <= 3 )
+    - name: Decide Level
+      set_fact:
+        Level2: raid6
+      when: (TotalDrive2|int > 3 )
+    - name: Print the Level
+      debug: var=Level2
+    - name: Create a List of variable and print it
+      set_fact:
+        list2: []
+    - name: Print the list
+      debug: var=list2
+    - name: create list
+      set_fact:
+        list2: "{{ query('sequence', user_range) }}"
+      vars:
+        start: 0
+        end: "{{ kid|int }}"
+        user_range: "start={{ start }} end={{ end }} format=%d"
+    - name: print  list
+      debug: var=list2
+    - name: set variable
+      set_fact:
+        member: member
+    - name: Make drive in candidate state
+      ibm_svctask_command:
+        command: [ "svctask chdrive -use candidate {{item}}" ]
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+      with_items: "{{list2}}"   
+      when: useD1 != member   
     - name: create distribute array on secondary
       ibm_svc_mdisk:
         clustername: "{{secondary_cluster_ip}}"
@@ -98,8 +200,8 @@
         log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
         name: mdisk0
         state: present
-        level: raid6
-        drivecount: 6 
+        level: "{{Level2}}"
+        drivecount: "{{TotalDrive2|int}}" 
         driveclass: 0 
         encrypt: no
         mdiskgrp: mdg0
@@ -209,11 +311,11 @@
         username: "{{primary_cluster_username}}"
         password: "{{primary_cluster_password}}"
         log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        name: replicationpolicy0
+        name: reppoli
         topology: 2-site-async-dr
-        location1system: "{{primary_cluster_name}}"
+        location1system: "{{uid1}}"
         location1iogrp: 0
-        location2system: "{{secondary_cluster_name}}"
+        location2system: "{{uid2}}"
         location2iogrp: 0
         rpoalert: 300
         state: present
@@ -223,8 +325,8 @@
         username: "{{primary_cluster_username}}"
         password: "{{primary_cluster_password}}"
         log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
-        name: perf_vol_group
-        replicationpolicy: replicationpolicy0
+        name: "{{volume_group_name}}"
+        replicationpolicy: reppoli
         state: present
     - name: Create a List of variable and print it
       set_fact:
@@ -274,7 +376,7 @@
         log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
         name: vo1
         state: present
-        volumegroup: "perf_vol_group"
+        volumegroup: "{{volume_group_name}}"
     - name: Create volumes
       ibm_svc_manage_volume:
         clustername: "{{primary_cluster_ip}}"
@@ -286,7 +388,7 @@
         pool: "mdg0"
         size: "{{volume_size}}"
         unit: "gb"
-        volumegroup: "perf_vol_group"
+        volumegroup: "{{volume_group_name}}"
       with_items: "{{prefix_list}}"
     - name: Delete volume
       ibm_svc_manage_volume:
