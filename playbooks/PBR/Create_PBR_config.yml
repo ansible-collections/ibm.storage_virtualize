@@ -53,17 +53,11 @@
         useD: "{{item['use']}}"
       loop: "{{id}}"
     - name: Print variable
-      debug: var=kid
-    - name: Print variable
-      debug: var=useD
-    - name: Print variable
       set_fact:
         TotalDrive: TotalDrive
     - name: Drive count
       set_fact:
         TotalDrive: "{{ kid|int  + 1|int}}"
-    - name: Print Drive count
-      debug: var=TotalDrive
     - name: set level
       set_fact:
         Level:  
@@ -75,13 +69,9 @@
       set_fact:
         Level: raid6
       when: (TotalDrive|int > 3 )
-    - name: Print the Level
-      debug: var=Level
     - name: Create a List of variable and print it
       set_fact:
         list1: []
-    - name: Print the list
-      debug: var=list1
     - name: create list
       set_fact:
         list1: "{{ query('sequence', user_range) }}"
@@ -89,8 +79,6 @@
         start: 0
         end: "{{ kid|int }}"
         user_range: "start={{ start }} end={{ end }} format=%d"
-    - name: print  list
-      debug: var=list1
     - name: set variable
       set_fact:
         member: member
@@ -142,17 +130,11 @@
         useD1: "{{item['use']}}"
       loop: "{{id}}" 
     - name: Print variable
-      debug: var=kid
-    - name: Print variable
-      debug: var=useD1
-    - name: Print variable
       set_fact:
         TotalDrive2: TotalDrive2
     - name: Drive count
       set_fact:
         TotalDrive2: "{{ kid|int  + 1|int}}"
-    - name: Print Drive count
-      debug: var=TotalDrive2
     - name: set level
       set_fact:
         Level2: 
@@ -164,13 +146,9 @@
       set_fact:
         Level2: raid6
       when: (TotalDrive2|int > 3 )
-    - name: Print the Level
-      debug: var=Level2
     - name: Create a List of variable and print it
       set_fact:
         list2: []
-    - name: Print the list
-      debug: var=list2
     - name: create list
       set_fact:
         list2: "{{ query('sequence', user_range) }}"
@@ -178,8 +156,6 @@
         start: 0
         end: "{{ kid|int }}"
         user_range: "start={{ start }} end={{ end }} format=%d"
-    - name: print  list
-      debug: var=list2
     - name: set variable
       set_fact:
         member: member
@@ -241,8 +217,6 @@
       set_fact:
         uid: "{{item['replication_pool_link_uid']}}"
       loop: "{{id}}"
-    - name: Print the pool link id
-      debug: var=uid
     - name: Get primary cluster id info 
       register: results
       ibm_svcinfo_command:
@@ -261,8 +235,6 @@
       set_fact:
         uid1: "{{item['id']}}"
       loop: "{{id1}}"
-    - name: Print the cluster id 
-      debug: var=uid1
     - name: Get secondary cluster id info
       register: results
       ibm_svcinfo_command:
@@ -281,8 +253,6 @@
       set_fact:
         uid2: "{{item['id']}}"
       loop: "{{id2}}"
-    - name: Print the cluster id 
-      debug: var=uid2
     - name: set provisionpolicy and replicationpoollinkuid on primary site
       ibm_svc_mdiskgrp:
         clustername: "{{primary_cluster_ip}}"
@@ -331,8 +301,6 @@
     - name: Create a List of variable and print it
       set_fact:
         list: []
-    - name: Print the list
-      debug: var=list
     - name: create list
       set_fact:
         list: "{{ query('sequence', user_range) }}"
@@ -340,23 +308,15 @@
         start: 1
         end: "{{ number_of_volumes | default(10) }}"
         user_range: "start={{ start }} end={{ end }} format=%d"
-    - name: print  list
-      debug: var=list
     - name: set default prefix
       set_fact:
         vol_: vol_
-    - name: print default prefix
-      debug: var=vol_
     - name: Create a Prefix list variable and print it
       set_fact:
         prefix_list: []
-    - name: Print the prefix list
-      debug: var=prefix_list
     - name: create prefix list
       set_fact:
         prefix_list: "{{ [volume_prefix | default(vol_)]  | product(list) | map('join') }}"
-    - name: print prefix list
-      debug: var=prefix_list 
     - name: Create master volume
       ibm_svc_manage_volume:
         clustername: "{{ primary_cluster_ip }}"
