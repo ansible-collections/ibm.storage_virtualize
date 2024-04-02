@@ -1,0 +1,175 @@
+  tasks:
+    - name: create mdiskgrp on primary
+      ibm_svc_mdiskgrp:
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: mdg0
+        state: present
+        datareduction: yes
+        ext: 1024
+    - name: Generate mdiskgrp on secondary
+      ibm_svc_mdiskgrp:
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: mdg0
+        state: present
+        datareduction: yes
+        ext: 1024
+    - name: Get drive info
+      register: results
+      ibm_svcinfo_command:
+        command: "svcinfo lsdrive"
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"   
+    - name: show drive 
+      set_fact:
+        id: "{{ (results['stdout']) }}"
+    - name: set variable
+      set_fact:
+        kid: kid
+    - name: set variable
+      set_fact:
+        useD: useD
+    - name: show drive 
+      set_fact:
+        kid: "{{item['id']}}"
+      loop: "{{id}}"
+    - name: show drive 
+      set_fact:
+        useD: "{{item['use']}}"
+      loop: "{{id}}"
+    - name: Print variable
+      set_fact:
+        TotalDrive: TotalDrive
+    - name: Drive count
+      set_fact:
+        TotalDrive: "{{ kid|int  + 1|int}}"
+    - name: set level
+      set_fact:
+        Level:  
+    - name: Decide Level
+      set_fact:
+        Level: raid1
+      when: (TotalDrive|int <= 3 )
+    - name: Decide Level
+      set_fact:
+        Level: raid6
+      when: (TotalDrive|int > 3 )
+    - name: Create a List of variable and print it
+      set_fact:
+        list1: []
+    - name: create list
+      set_fact:
+        list1: "{{ query('sequence', user_range) }}"
+      vars:
+        start: 0
+        end: "{{ kid|int }}"
+        user_range: "start={{ start }} end={{ end }} format=%d"
+    - name: set variable
+      set_fact:
+        member: member
+    - name: Make drive in candidate state
+      ibm_svctask_command:
+        command: [ "svctask chdrive -use candidate {{item}}" ]
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+      with_items: "{{list1}}"
+      when: useD != member
+    - name: create distribute array on primary
+      ibm_svc_mdisk:
+        clustername: "{{primary_cluster_ip}}"
+        username: "{{primary_cluster_username}}"
+        password: "{{primary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: mdisk0
+        state: present
+        level: "{{Level}}"
+        drivecount: "{{TotalDrive|int}}" 
+        driveclass: 0 
+        encrypt: no
+        mdiskgrp: mdg0
+    - name: Get drive info
+      register: results
+      ibm_svcinfo_command:
+        command: "svcinfo lsdrive"
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"     
+    - name: show drive 
+      set_fact:
+        id: "{{ (results['stdout']) }}"
+    - name: set variable
+      set_fact:
+        kid: kid
+    - name: set variable
+      set_fact:
+        useD1: useD1
+    - name: show drive 
+      set_fact:
+        kid: "{{item['id']}}"
+      loop: "{{id}}"
+    - name: show drive 
+      set_fact:
+        useD1: "{{item['use']}}"
+      loop: "{{id}}" 
+    - name: Print variable
+      set_fact:
+        TotalDrive2: TotalDrive2
+    - name: Drive count
+      set_fact:
+        TotalDrive2: "{{ kid|int  + 1|int}}"
+    - name: set level
+      set_fact:
+        Level2: 
+    - name: Decide Level
+      set_fact:
+        Level2: raid1
+      when: (TotalDrive2|int <= 3 )
+    - name: Decide Level
+      set_fact:
+        Level2: raid6
+      when: (TotalDrive2|int > 3 )
+    - name: Create a List of variable and print it
+      set_fact:
+        list2: []
+    - name: create list
+      set_fact:
+        list2: "{{ query('sequence', user_range) }}"
+      vars:
+        start: 0
+        end: "{{ kid|int }}"
+        user_range: "start={{ start }} end={{ end }} format=%d"
+    - name: set variable
+      set_fact:
+        member: member
+    - name: Make drive in candidate state
+      ibm_svctask_command:
+        command: [ "svctask chdrive -use candidate {{item}}" ]
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+      with_items: "{{list2}}"   
+      when: useD1 != member   
+    - name: create distribute array on secondary
+      ibm_svc_mdisk:
+        clustername: "{{secondary_cluster_ip}}"
+        username: "{{secondary_cluster_username}}"
+        password: "{{secondary_cluster_password}}"
+        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        name: mdisk0
+        state: present
+        level: "{{Level2}}"
+        drivecount: "{{TotalDrive2|int}}" 
+        driveclass: 0 
+        encrypt: no
+        mdiskgrp: mdg0
