@@ -5,7 +5,7 @@
   gather_facts: no
   connection: local
   vars_files:
-    - PBR_variable.txt
+    - PBR_variable.yml
   tasks:
     - name: Create mTLS on both the clusters
       include_tasks: Create_mTLS.yml
