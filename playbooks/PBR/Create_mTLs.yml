@@ -1,10 +1,10 @@
 - name: Generate certificate 
   ibm_svctask_command:
-    command: [ "svctask chsystemcert -mkselfsigned" ]
+    command: "svctask chsystemcert -mkselfsigned" 
     clustername: "{{item.cluster_ip}}"
     username: "{{item.cluster_username}}"
     password: "{{item.cluster_password}}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{log_path | default('/tmp/ansiblePB.debug')}}"
   loop: "{{users_data}}"
 
 - name: Export SSL certificate internally 
@@ -12,7 +12,7 @@
     clustername: "{{item.cluster_ip}}"
     username: "{{item.cluster_username}}"
     password: "{{item.cluster_password}}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{log_path | default('/tmp/ansiblePB.debug')}}"
     certificate_type: "system"
   loop: "{{users_data}}"
 
@@ -33,7 +33,7 @@
     clustername: "{{users_data[1].cluster_ip}}"
     username: "{{users_data[1].cluster_username}}"
     password: "{{users_data[1].cluster_password}}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{log_path | default('/tmp/ansiblePB.debug')}}"
     name: trust
     remote_clustername: "{{users_data[0].cluster_ip}}"
     remote_username: "{{users_data[0].cluster_username}}"
