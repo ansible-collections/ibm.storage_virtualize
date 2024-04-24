@@ -23,11 +23,10 @@ There are total 4 files used for this use-case.
   	     - number_of_volumes	: It is the number of volumes to be created between clusters.
          -  log_path            : It specifies the log path of playbook. If not specified then logs will generate at default path ‘/tmp/ansiblePB.debug’
 
-
   3. Create_mTLS.yml:
      This playbook sets mTLS (Mutual Transport Layer Security) which includes ceritficate generation on individual cluster, export it to remote location, creates certificate truststore which contains the certificate bundle. This operation performed on primary as well as secondary site. This playbook is called under  'Create_PBR_config.yml'.
 
   4. Create_mdiskgrp_drp_proviPolicy.yml:
       This playbook check the drive status, drive count based on that it creates mdiskgrp, Data reduction Pool with specified level. It links pool of both the site. It creates provision policy, replication policy.This playbook is called under  'Create_PBR_config.yml'.
 
- Authors: Akshada Thorat  (akshada.thorat@ibm.com)
+ Authors: Akshada Thorat  (akshada.thorat@ibm.com) , Sandip Rajbanshi (Sandip.Rajbanshi@ibm.com)
