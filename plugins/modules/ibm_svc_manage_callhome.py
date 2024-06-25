@@ -388,7 +388,7 @@ class IBMSVCCallhome(object):
             if self.enhancedcallhome != data['enhanced_callhome']:
                 modify['enhancedcallhome'] = self.enhancedcallhome
         if self.censorcallhome:
-            if self.censorcallhome != data['enhanced_callhome']:
+            if self.censorcallhome != data['censor_callhome']:
                 modify['censorcallhome'] = self.censorcallhome
         return modify
 

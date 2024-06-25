@@ -199,6 +199,11 @@ options:
             - Resets the SSH protocol security level to the default value 3 and configures the system to automatically
               follow the suggested level.
         type: bool
+    patchautoupdate:
+        description:
+            - Enables or disables the patch auto updater service.
+        choices: ['yes', 'no']
+        type: str
     log_path:
         description:
             - Path of debug log file.
@@ -211,6 +216,7 @@ options:
 
 author:
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Lavanya C R (@lavanyacr)
 notes:
     - This module supports C(check_mode).
 '''
@@ -231,6 +237,14 @@ EXAMPLES = r'''
    password: "{{password}}"
    log_path: /tmp/playbook.debug
    sshprotocol: 2
+
+- name: Enables the patch auto updater service
+  ibm.storage_virtualize.ibm_sv_manage_security:
+   clustername: "{{cluster}}"
+   username: "{{username}}"
+   password: "{{password}}"
+   log_path: /tmp/playbook.debug
+   patchautoupdate: yes
 '''
 
 RETURN = r'''#'''
@@ -272,7 +286,8 @@ class IBMSVSecurityMgmt(object):
                 disablesuperusergui=dict(type='str', choices=['yes', 'no']),
                 disablesuperuserrest=dict(type='str', choices=['yes', 'no']),
                 disablesuperusercim=dict(type='str', choices=['yes', 'no']),
-                resetsshprotocol=dict(type='bool')
+                resetsshprotocol=dict(type='bool'),
+                patchautoupdate=dict(type='str', choices=['yes', 'no'])
             )
         )
 

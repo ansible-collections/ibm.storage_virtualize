@@ -14,11 +14,13 @@ import json
 import logging
 import uuid
 import inspect
+
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.3.0"
+COLLECTION_VERSION = "2.4.0"
+TIMEOUT = 600
 
 
 def svc_argument_spec():
@@ -156,7 +158,7 @@ class IBMSVCRestApi(object):
     def token(self, value):
         return setattr(self, '_token', value)
 
-    def _svc_rest(self, method, headers, cmd, cmdopts, cmdargs, timeout=10):
+    def _svc_rest(self, method, headers, cmd, cmdopts, cmdargs, timeout=TIMEOUT):
         """ Run SVC command with token info added into header
         :param method: http method, POST or GET
         :type method: string
@@ -253,7 +255,7 @@ class IBMSVCRestApi(object):
 
         return None
 
-    def _svc_token_wrap(self, cmd, cmdopts, cmdargs, timeout=10):
+    def _svc_token_wrap(self, cmd, cmdopts, cmdargs, timeout=TIMEOUT):
         """ Run SVC command with token info added into header
         :param cmd: svc command to run
         :type cmd: string
@@ -278,7 +280,7 @@ class IBMSVCRestApi(object):
         return self._svc_rest(method='POST', headers=headers, cmd=cmd,
                               cmdopts=cmdopts, cmdargs=cmdargs, timeout=timeout)
 
-    def svc_run_command(self, cmd, cmdopts, cmdargs, timeout=10):
+    def svc_run_command(self, cmd, cmdopts, cmdargs, timeout=TIMEOUT):
         """ Generic execute a SVC command
         :param cmd: svc command to run
         :type cmd: string
@@ -290,7 +292,6 @@ class IBMSVCRestApi(object):
         :type timeout: int
         :returns: command output
         """
-
         rest = self._svc_token_wrap(cmd, cmdopts, cmdargs, timeout)
         self.log("svc_run_command rest=%s", rest)
 
@@ -302,7 +303,7 @@ class IBMSVCRestApi(object):
         # Might be None
         return rest['out']
 
-    def svc_obj_info(self, cmd, cmdopts, cmdargs, timeout=10):
+    def svc_obj_info(self, cmd, cmdopts, cmdargs, timeout=TIMEOUT):
         """ Obtain information about an SVC object through the ls command
         :param cmd: svc command to run
         :type cmd: string
@@ -318,11 +319,17 @@ class IBMSVCRestApi(object):
 
         rest = self._svc_token_wrap(cmd, cmdopts, cmdargs, timeout)
         self.log("svc_obj_info rest=%s", rest)
-
         if rest['code']:
             if rest['code'] == 500:
                 # Object did not exist, which is quite valid.
+                error_text = rest['out'].decode('utf8').split(":")[-1].strip()
+                error_code = error_text.split(" ")[0]
+                self.log(error_code)
+                if error_code == "CMMVC5707E" or error_code == "CMMVC5767E" or error_code == "CMMVC7205E":
+                    return error_text
                 return None
+            if rest['code'] == 404:
+                return rest['code']
 
         # Fail for anything else
         if rest['err']:
@@ -348,6 +355,7 @@ class IBMSVCRestApi(object):
         cmdopts = {}
         name = "Ansible"
         unique_key = self.username + "_" + str(uuid.getnode())
+
         caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
         caller_class_name = caller_class.__class__.__name__
         module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
