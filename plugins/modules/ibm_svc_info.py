@@ -5,6 +5,8 @@
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
+#            Lavanya C R <lavanya.c.r1@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -26,6 +28,7 @@ author:
     - Peng Wang (@wangpww)
     - Sumit Kumar Gupta (@sumitguptaibm)
     - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
+    - Lavanya C R (@Lavanya-C-R1)
 options:
   clustername:
     description:
@@ -66,6 +69,13 @@ options:
   objectname:
     description:
     - If specified, only the instance with the I(objectname) is returned. If not specified, all the instances are returned.
+    - If I(objectname:"all") is specified, display detailed output of all instances of all objects that are specified
+      in gather_subset and command_list.
+    - For entities that require objectname as a mandatory parameter, I(objectname:"all") will throw error.
+    type: str
+  filtervalue:
+    description:
+    - Specifies (key=value) combination to get subset of objects satisfying the condition.
     type: str
   gather_subset:
     type: list
@@ -147,6 +157,9 @@ options:
     - enclosure - displays a summary of the enclosures.
     - snmpserver -  display a concise list or a detailed view of SNMP servers that are configured on the system
     - testldapserver - tests a Lightweight Directory Access Protocol (LDAP) server.
+    - availablepatch - display the patches that are compatible with the SVC version.
+    - patch - displays a list of all the patches on a specific node.
+    - systempatches - displays patches installed on all the nodes in the system.
     choices: [vol, pool, node, iog, host, hostvdiskmap, vdiskhostmap, hc, fcport
               , iscsiport, fc, fcmap, fcconsistgrp, rcrelationship, rcconsistgrp
               , vdiskcopy, targetportfc, array, system, 'cloudaccount', 'cloudaccountusage',
@@ -158,10 +171,19 @@ options:
                'emailserver', 'emailuser', 'provisioningpolicy', 'volumegroupsnapshot',
                'truststore', 'callhome', 'ip', 'portset', 'safeguardedpolicy',
                'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', 'security', 'partition',
-               'volumegroupreplication', 'plugin', 'quorum', 'enclosure', 'snmpserver', 'testldapserver', all]
-    default: "all"
+               'volumegroupreplication', 'plugin', 'quorum', 'enclosure', 'snmpserver', 'testldapserver', 'availablepatch',
+               'patch', 'systempatches', all]
+  command_list:
+    type: list
+    elements: str
+    description:
+    - Specify to get information regarding any Storage Virtualize entities other than choices of gather_subset.
+    - Exact command has to be specified to use command_list (i.e. lssystemcert, lstimezones, lsportset etc.).
+    - Output will be stored in this way (i.e. lssystemcert -> Systemcert, lstimezones -> Timezones etc.).
 notes:
     - This module supports C(check_mode).
+    - If both I(gather_subset) and I(command_list) are not specified, ibm_svc_info will list information about I(default) objects.
+    - I(lsroute) and I(lsarraylba) commands are not covered.
 '''
 
 EXAMPLES = '''
@@ -207,6 +229,34 @@ EXAMPLES = '''
     log_path: /tmp/ansible.log
     gather_subset: vol
     objectname: Volume1
+- name: Get detailed info of all volumes
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/ansible.log
+    gather_subset: vol
+    objectname: all
+- name: Get detailed info for objects returned by lsvdiskcopy using command_list
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/ansible.log
+    command_list: lsvdiskcopy
+    objectname: all
+- name: Get detailed info of multiple objects using gather_subset and command_list
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/ansible.log
+    gather_subset: [vol, host]
+    command_list: [lsvdiskcopy, lssite]
+    objectname: all
 '''
 
 RETURN = '''
@@ -733,6 +783,30 @@ Testldapserver:
     type: list
     elements: dict
     sample: [{...}]
+Availablepatch:
+    description:
+        - Data will be populated when I(gather_subset=availablepatch) or I(gather_subset=all)
+        - Displays the patches that are compatible with the SVC version on the users system.
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Patch:
+    description:
+        - Data will be populated when I(gather_subset=patch) or I(gather_subset=all)
+        - Displays a list of all the patches on a specific node in the system.
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+Systempatches:
+    description:
+        - Data will be populated when I(gather_subset=systempatches) or I(gather_subset=all)
+        - Displays patches installed on all the nodes in the system
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
 '''
 
 from traceback import format_exc
@@ -748,8 +822,8 @@ class IBMSVCGatherInfo(object):
         argument_spec.update(
             dict(
                 objectname=dict(type='str'),
+                filtervalue=dict(type='str'),
                 gather_subset=dict(type='list', elements='str', required=False,
-                                   default=['all'],
                                    choices=['vol',
                                             'pool',
                                             'node',
@@ -815,8 +889,12 @@ class IBMSVCGatherInfo(object):
                                             'enclosure',
                                             'snmpserver',
                                             'testldapserver',
+                                            'availablepatch',
+                                            'patch',
+                                            'systempatches',
                                             'all'
                                             ]),
+                command_list=dict(type='list', elements='str', required=False)
             )
         )
 
@@ -826,7 +904,12 @@ class IBMSVCGatherInfo(object):
         # logging setup
         log_path = self.module.params['log_path']
         self.log = get_logger(self.__class__.__name__, log_path)
+        self.subset = self.module.params['gather_subset']
         self.objectname = self.module.params['objectname']
+        self.filtervalue = self.module.params['filtervalue']
+        self.command_list = self.module.params['command_list']
+
+        self.basic_checks()
 
         self.restapi = IBMSVCRestApi(
             module=self.module,
@@ -839,9 +922,31 @@ class IBMSVCGatherInfo(object):
             token=self.module.params['token']
         )
 
+    def basic_checks(self):
+        if self.command_list == ["all"]:
+            self.module.fail_json(msg="command_list parameter cannot be specified as 'all'")
+        if self.subset == ["all"] and self.objectname == "all":
+            self.module.fail_json(msg="gather_subset and objectname both cannot be specified as 'all' at the same time.")
+        if not self.subset and not self.command_list and self.objectname:
+            self.module.fail_json(msg="objectname(%s) is specified while gather_subset or command_list is not "
+                                  "specified" % (self.objectname))
+        if self.filtervalue:
+            if (self.subset and self.command_list) or (not self.subset and not self.command_list):
+                self.module.fail_json(msg="filtervalue must be accompanied with a single object either in gather_subset or command_list")
+            elif self.subset:
+                if len(self.subset) != 1:
+                    self.module.fail_json(msg="filtervalue must be accompanied with a single object either in gather_subset or command_list")
+                elif self.subset[0] == "all":
+                    self.module.fail_json(msg="filtervalue is not supported when gather_subset is specified as 'all'")
+            elif self.command_list:
+                if len(self.command_list) != 1:
+                    self.module.fail_json(msg="filtervalue must be accompanied with a single object either in gather_subset or command_list")
+
     def validate(self, subset):
         if not self.objectname:
             self.module.fail_json(msg='Following paramter is mandatory to execute {0}: objectname'.format(subset))
+        if self.objectname == "all":
+            self.module.fail_json(msg="Objectname specified as 'all' which is invalid for the gather_subset [%s]" % subset)
 
     @property
     def cloudbackupgeneration(self):
@@ -859,35 +964,165 @@ class IBMSVCGatherInfo(object):
             cmdargs=[self.objectname]
         )
 
+    def filter_value_out(self, cmd, cmdargs):
+        op_key = self.restapi.svc_obj_info(
+            cmd=cmd,
+            cmdopts={'filtervalue': self.filtervalue},
+            cmdargs=cmdargs
+        )
+        return op_key
+
     def get_list(self, subset, op_key, cmd, validate):
         try:
-            if validate:
-                self.validate(subset)
+            svc_obj_out = None
             output = {}
+            if validate is True:
+                self.validate(subset)
+            elif validate == "check":
+                svc_obj_out = self.restapi.svc_obj_info(cmd=cmd,
+                                                        cmdopts=None,
+                                                        cmdargs=None)
+                if not svc_obj_out:
+                    output[op_key] = None
+                    return output
+                if "CMMVC5707E" in str(svc_obj_out):
+                    self.module.fail_json(msg="CMMVC5707E Required parameters for command [%s] are missing or "
+                                          "specified parameters are invalid" % cmd)
+                elif "CMMVC5767E" in str(svc_obj_out):
+                    self.module.fail_json(msg="CMMVC5767E One or more of the parameters specified are invalid or "
+                                          "a parameter is missing for commamd [%s]." % cmd)
+                elif svc_obj_out == 404 or "CMMVC7205E" in str(svc_obj_out):
+                    self.module.fail_json(msg="Command [%s] not found or "
+                                          "CMMVC7205E command [%s] is not supported on current svc version." % cmd)
+
             exceptions = {'cloudbackupgeneration', 'enclosurestatshistory'}
             if subset in exceptions:
                 output[op_key] = getattr(self, subset)
             else:
-                cmdargs = [self.objectname] if self.objectname else None
-                output[op_key] = self.restapi.svc_obj_info(cmd=cmd,
-                                                           cmdopts=None,
-                                                           cmdargs=cmdargs)
+                cmdargs = None
+                op_key_list = []
+                if self.objectname:
+                    if self.filtervalue:
+                        output[op_key] = self.filter_value_out(cmd, [self.objectname])
+                        return output
+                    if self.objectname == "all":
+                        if cmd == "lsdumps":
+                            all_node_info = self.restapi.svc_obj_info(cmd="lsnodecanister",
+                                                                      cmdopts=None,
+                                                                      cmdargs=None)
+                            for node in all_node_info:
+                                op_key_list.append(self.restapi.svc_obj_info(cmd=cmd,
+                                                                             cmdopts=None,
+                                                                             cmdargs=[node["id"]]))
+                            output[op_key] = op_key_list
+                            return output
+                        elif cmd == "lscurrentuser":
+                            output[op_key] = svc_obj_out
+                            return output
+                        else:
+                            if svc_obj_out:
+                                get_all_objects = svc_obj_out
+                            else:
+                                get_all_objects = self.restapi.svc_obj_info(cmd=cmd,
+                                                                            cmdopts=None,
+                                                                            cmdargs=None)
+                            try:
+                                id_name = str(list(get_all_objects[0])[0])
+                                '''
+                                To get name of 1st column of svc_obj_info output which contain objectname i.e. id/name,
+                                generally 1st column is id
+                                '''
+                            except Exception as e:
+                                id_name = None
+                            if id_name:
+                                list_object = []  # Getting all ID's in list_object
+                                for obj in get_all_objects:
+                                    list_object.append(obj[id_name])
+                                if len(list_object) == len(set(list_object)):  # Those commands in which all ids are unique (ex. lsmdisk, lsvdisk etc)
+                                    cnt = 0
+                                    for object_id in list_object:
+                                        op_key_list.append(self.restapi.svc_obj_info(cmd=cmd,
+                                                                                     cmdopts=None,
+                                                                                     cmdargs=[object_id]))
+                                        if cnt == 0:
+                                            cnt += 1
+                                            '''
+                                            Checking in first iteration only,
+                                            whether id can be specifed with command or not (lscommand <id>)
+                                            '''
+                                            first_object = op_key_list[0]
+                                            if not first_object:
+                                                output[op_key] = get_all_objects
+                                                '''
+                                                If output is None (i.e. lscommand <id> is invalid), return concise output,
+                                                No need to iterate over loop (ex. lscompatibilitymode, lscopystatus,
+                                                lsfcmapcandidate, lsfcportcandidate, lsfeature, lsiogrpcandidate,
+                                                lsrcrelationshipcandidate, lssite, lssystemlimits,  lstimezones,
+                                                lsvdiskanalysisprogress etc.)
+                                                '''
+                                                return output
+                                            elif len(get_all_objects[0]) == len(first_object):
+                                                output[op_key] = get_all_objects
+                                                '''
+                                                If output is equal to concise output, then break the loop and return concise output,
+                                                further iteration not required (ex. lsfcportsetmember, lsportset,
+                                                lsprovisioningpolicy, lsquorum, lssystemsupportcenter, lstargetportfc,
+                                                lstruststore, lsusergrp, lsvolumegrouppopulation, lsvolumegroupsnapshotpolicy,
+                                                lsvolumegroupsnapshotschedule etc.)
+                                                '''
+                                                return output
+                                    output[op_key] = op_key_list
+                                else:
+                                    output[op_key] = get_all_objects
+                                    '''
+                                    When multiple objects have same id, return concise output.
+                                    (ex. lsarraymember, lsarraymembergoals, lsenclosurecanister, lsenclosurefanmodule,
+                                    lsenclosurepsu, lsenclosureslot, lsenclosurestats, lsfabric, lsnodestats, lsportethernet,
+                                    lsportip, lssnapshotschedule, lsvdiskaccess, lsvolumesnapshot etc.)
+                                    '''
+                                    return output
+                            else:
+                                output[op_key] = get_all_objects
+                                '''
+                                In few cases id is not mentioned or id is invalid with command lscommand <id>.
+                                (ex. lsauthmultifactorduo, lsauthmultifactorverify, lsauthsinglesignon, lscloudcallhome,
+                                lsencryption, lskeyserverisklm, lsldap, lslicense, lsnodestatus, lsproxy, lssecurity, lssra,
+                                lssystem, lssystemcert, lssystemethernet etc.)
+                                '''
+                                return output
+                    else:
+                        output[op_key] = self.restapi.svc_obj_info(cmd=cmd,
+                                                                   cmdopts=None,
+                                                                   cmdargs=[self.objectname])
+                        return output
+                else:
+                    if self.filtervalue:
+                        output[op_key] = self.filter_value_out(cmd, None)
+                        return output
+                    output[op_key] = self.restapi.svc_obj_info(cmd=cmd,
+                                                               cmdopts=None,
+                                                               cmdargs=cmdargs)
+                    return output
             self.log.info('Successfully listed %d %s info '
                           'from cluster %s', len(subset), subset,
                           self.module.params['clustername'])
             return output
         except Exception as e:
-            msg = 'Get %s info from cluster %s failed with error %s ' % \
+            msg = 'Getting %s info from cluster %s failed with error %s ' % \
                   (subset, self.module.params['clustername'], str(e))
             self.log.error(msg)
             self.module.fail_json(msg=msg)
 
     def apply(self):
-        subset = self.module.params['gather_subset']
-        if self.objectname and len(subset) != 1:
-            msg = ("objectname(%s) is specified while gather_subset(%s) is not "
-                   "one of %s" % (self.objectname, self.subset, all))
-            self.module.fail_json(msg=msg)
+        subset = self.subset
+        command_list = self.command_list
+        if command_list:
+            if subset:
+                subset += command_list
+            else:
+                subset = command_list
+        if not subset:
+            subset = ['all']
         if len(subset) == 0 or 'all' in subset:
             self.log.info("The default value for gather_subset is all")
 
@@ -954,7 +1189,10 @@ class IBMSVCGatherInfo(object):
             'Quorum': [],
             'Enclosure': [],
             'Snmpserver': [],
-            'Testldapserver': []
+            'Testldapserver': [],
+            'Availablepatch': [],
+            'Patch': [],
+            'Systempatches': []
         }
 
         cmd_mappings = {
@@ -1022,8 +1260,18 @@ class IBMSVCGatherInfo(object):
             'quorum': ('Quorum', 'lsquorum', False, None),
             'enclosure': ('Enclosure', 'lsenclosure', False, None),
             'snmpserver': ('Snmpserver', 'lssnmpserver', False, None),
-            'testldapserver': ('Testldapserver', 'testldapserver', False, '6.3.0.0')
+            'testldapserver': ('Testldapserver', 'testldapserver', False, '6.3.0.0'),
+            'availablepatch': ('Availablepatch', 'lsavailablepatch', False, '8.7.0.0'),
+            'patch': ('Patch', 'lspatch', False, '8.5.4.0'),
+            'systempatches': ('Systempatches', 'lssystempatches', False, '8.5.4.0')
         }
+        if command_list:
+            for cmd in command_list:
+                if cmd[:2] == "ls":
+                    op_key = cmd[2:].capitalize()
+                else:
+                    op_key = cmd.capitalize()
+                cmd_mappings[cmd] = (op_key, cmd, "check")
 
         if subset == ['all']:
             current_set = cmd_mappings.keys()

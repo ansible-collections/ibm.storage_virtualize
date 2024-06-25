@@ -117,13 +117,13 @@ class TestIBMSVModuleUtils(unittest.TestCase):
                      "owner_name": ""}]
         mock_svc_token_wrap.return_value = {'err': '', 'out': host_ret}
         ret = self.restapi.svc_run_command('lshost', {}, [])
-        mock_svc_token_wrap.assert_called_with('lshost', {}, [], 10)
+        mock_svc_token_wrap.assert_called_with('lshost', {}, [], 600)
         self.assertDictEqual(ret[0], host_ret[0])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_token_wrap')
     def test_svc_obj_info_return_none(self, mock_svc_token_wrap):
-        mock_svc_token_wrap.return_value = {'code': 500}
+        mock_svc_token_wrap.return_value = {'code': 500, 'out': b'"error code: 1, error text: None'}
         self.assertEqual(None, self.restapi.svc_obj_info('lshost', {}, []))
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -156,6 +156,17 @@ class TestIBMSVModuleUtils(unittest.TestCase):
                                        False, '', 'test.log', True)
         cmdops = self.sshclient.register_plugin_cmdopts()
         self.assertEqual(cmdops["name"], "Ansible")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_token_wrap')
+    def test_failed_error_CMMVC5707E(self, mock_svc_token_wrap):
+        mock_svc_token_wrap.return_value = {'code': 500,
+                                            'out': b'"error code: 1, error text: CMMVC5707E An invalid or duplicated'
+                                            b' parameter, unaccompanied argument, or incorrect argument sequence has'
+                                            b' been detected. Ensure that the input is as per the help.'}
+        ret = self.restapi.svc_obj_info('lssite', {}, [])
+        self.assertEqual(ret, "CMMVC5707E An invalid or duplicated parameter, unaccompanied argument, or "
+                         "incorrect argument sequence has been detected. Ensure that the input is as per the help.")
 
 
 if __name__ == '__main__':

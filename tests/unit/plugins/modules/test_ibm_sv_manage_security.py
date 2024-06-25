@@ -104,6 +104,29 @@ class TestIBMSVSecurityMgmt(unittest.TestCase):
             print(exc.value.args[0])
         self.assertTrue(exc.value.args[0]['changed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    def test_change_patch_autoupdate_settings(self,
+                                              svc_run_command_mock,
+                                              svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'patchautoupdate': 'yes'
+        })
+
+        patch = IBMSVSecurityMgmt()
+        svc_run_command_mock.return_value = ""
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            patch.apply()
+            print(exc.value.args[0])
+        self.assertTrue(exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()
