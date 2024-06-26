@@ -15,7 +15,7 @@ import uuid
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
-COLLECTION_VERSION = "2.3.0"
+COLLECTION_VERSION = "2.4.0"
 
 
 class IBMSVCssh(object):
