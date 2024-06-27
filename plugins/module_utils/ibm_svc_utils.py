@@ -1,6 +1,7 @@
 # Copyright (C) 2024 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -19,7 +20,7 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.4.0"
+COLLECTION_VERSION = "2.4.1"
 TIMEOUT = 600
 
 
@@ -355,11 +356,15 @@ class IBMSVCRestApi(object):
         cmdopts = {}
         name = "Ansible"
         unique_key = self.username + "_" + str(uuid.getnode())
+        metadata = ""
 
-        caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
-        caller_class_name = caller_class.__class__.__name__
-        module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
-        metadata = module_name[:-3] + " module with class " + str(caller_class_name) + " has been executed by " + self.username
+        try:
+            caller_class = inspect.stack()[3].frame.f_locals.get('self', None)
+            caller_class_name = caller_class.__class__.__name__
+            module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]
+            metadata = module_name[:-3] + " module with class " + str(caller_class_name) + " has been executed by " + self.username
+        except Exception as e:
+            metadata = ""
 
         cmdopts['name'] = name
         cmdopts['uniquekey'] = unique_key

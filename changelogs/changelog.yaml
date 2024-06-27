@@ -59,7 +59,7 @@ releases:
       release_summary: Added support for restoring set of volumes from snapshot, clone and thinclone management,
        and feature to release mapping for SVC entities.
 
-  2.4.0:
+  2.4.1:
     release_date: '2024-06-28'
     changes:
       minor_changes:
