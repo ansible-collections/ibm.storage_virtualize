@@ -1,0 +1,120 @@
+- name: Using the IBM Storage Virtualize collection to Create MM Relations, map to host.
+  hosts: localhost
+  collections:
+    - ibm.storage_virtualize
+  gather_facts: no
+  connection: local
+  vars_files:
+    - ip_partnership_vars.txt
+
+  tasks:
+    - name: Master vdisk list 
+      set_fact:
+        Master_vdisk_list: []
+    - name: Aux vdisk list 
+      set_fact:
+        Aux_vdisk_list: []
+  #  - debug:
+  #      msg: "The 'var2' variable contains a {{ num_of_MMrel | type_debug }}"
+    - name: Define prefix_list
+      set_fact:
+        prefix_list: "{{ prefix_list | default([]) + [ '%s' | format(item)] }}"
+      loop: "{{ range(start, end) | list }}"
+      vars:
+        start: 0
+        end: "{{ num_of_MMrel}}"
+    - name: print users
+      debug: var=prefix_list
+    - name: preparation for vdisk_list
+      vars:
+        prefix: '{{ vdisk_prefix }}'
+      set_fact:
+        Master_vdisk_list: "{{ [prefix |default('Vdisk_')]|product(prefix_list)|map('join') }}"
+        Aux_vdisk_list: "{{ [prefix |default('Vdisk_')]|product(prefix_list)|map('join') }}"
+
+    - name: Define rcrelationship_lsist
+      set_fact:
+        relationship_list: []
+    - name: Create rc_relation list
+      vars:
+        RC_prefix: copy
+      set_fact:
+        relationship_list: "{{ [RC_prefix |default('rccopy_')]|product(Master_vdisk_list)|map('join') }}"
+
+    - name: print users
+      debug: var=Aux_vdisk_list
+
+    - name: Create master volume
+      ibm_svc_manage_volume:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
+        name: "{{ item }}"
+        state: present
+        pool: "{{pool_name}}"
+        pool_name: Pool0
+        size: "{{vdisk_size| default(10)}}"
+        unit: gb
+      loop: "{{Master_vdisk_list}}"
+
+    - name: print users
+      debug: var=Aux_vdisk_list
+    - name: Create aux volume
+      ibm_svc_manage_volume:
+        clustername: "{{ secondary_cluster_ip }}"
+        username: "{{ secondary_cluster_username }}"
+        password: "{{ secondary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
+        name: '{{ item }}'
+        state: present
+        pool: "{{pool_name}}"
+        pool_name: Pool0
+        size: "{{vdisk_size| default(10)}}"
+        unit: gb
+      loop: "{{ Aux_vdisk_list }}"
+    
+    - name: Map volume to host
+      ibm_svc_vol_map:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: "{{ log_path | default('/tmp/playbook1.debug') }}"
+        volname: '{{ item }}'
+        host: "{{ host_name }}"
+        state: present
+      loop: "{{ Master_vdisk_list }}" 
+
+    - name: Define a new MM rc consistency group
+      ibm_svc_manage_replicationgroup:
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: /tmp/playbook1.debug
+        name: rccg_mm
+        remotecluster: "{{ secondary_cluster_name }}"
+        state: present
+
+    - name: Create remote copy
+      ibm.storage_virtualize.ibm_svc_manage_replication:
+        name: '{{item.0}}'
+        clustername: "{{ primary_cluster_ip }}"
+        username: "{{ primary_cluster_username }}"
+        password: "{{ primary_cluster_password }}"
+        log_path: /tmp/ansible.log
+        state: present
+        remotecluster: "{{ secondary_cluster_name }}"
+        master: '{{item.1}}'
+        aux: '{{item.2}}'
+        copytype: metro
+        sync: true
+        consistgrp: rccg_mm
+      register: result
+      with_together:
+        - "{{ relationship_list }}"
+        - "{{ Master_vdisk_list }}"
+        - "{{ Aux_vdisk_list}}"
+
+    - name: Print message
+      debug:
+        msg: Remote Copy completed!!
