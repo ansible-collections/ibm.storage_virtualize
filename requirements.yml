@@ -2,3 +2,6 @@
 ---
 collections:
   - ibm.storage_virtualize
+    type: git
+    version: develop
+    
