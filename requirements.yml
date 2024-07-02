@@ -1,7 +1,8 @@
 # requirements.yml
 ---
 collections:
-  - ibm.storage_virtualize
+  #- ibm.storage_virtualize
+  - name: https://github.com/fabianbluemel/ibm.storage_virtualize
     type: git
     version: develop
     
