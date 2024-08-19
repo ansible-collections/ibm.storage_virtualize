@@ -4,6 +4,17 @@
 
 This collection provides a series of Ansible modules and plugins for interacting with the IBM Storage Virtualize family products. These products include the IBM SAN Volume Controller, IBM FlashSystem family members built with IBM Storage Virtualize (FlashSystem 5xxx, 7xxx, 9xxx), IBM Storwize family, and IBM Storage Virtualize for Public Cloud. For more information regarding these products, see [IBM Documentation](https://www.ibm.com/docs/).
 
+## Communication
+
+* Join the Ansible forum:
+  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please use appropriate tags.
+  * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
+  * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events.
+
+* The Ansible [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn): used to announce releases and important changes.
+
+For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
+
 ## Requirements
 
 - Ansible version 2.15 or higher
