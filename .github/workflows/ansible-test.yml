@@ -55,10 +55,9 @@ jobs:
           # around creation of a new stable branch, this might cause a problem
           # that two different versions of ansible-test use the same sanity test
           # ignore.txt file.
-          # The commented branches below are EOL,
-          # do you really need your collection to support them if it still does?
           - stable-2.15
           - stable-2.16
+          - stable-2.17
             #- devel
         # - milestone
     # Ansible-test on various stable branches does not yet work well with cgroups v2.
@@ -117,13 +116,19 @@ jobs:
           # do you really need your collection to support them if it still does?
           - stable-2.15
           - stable-2.16
+          - stable-2.17
         python:
           - '3.9'
           - '3.10'
           - '3.11'
+          - '3.12'
         exclude:
           # Python 3.10 is supported in 2.12 or later.
+          - ansible: stable-2.15
+            python: '3.12'
           - ansible: stable-2.16
+            python: '3.9'
+          - ansible: stable-2.17
             python: '3.9'
 
     steps:
@@ -181,17 +186,22 @@ jobs:
           # do you really need your collection to support them if it still does?
           - stable-2.15
           - stable-2.16
+          - stable-2.17
             #- devel
         # - milestone
         python:
           - '3.9'
           - '3.10'
           - '3.11'
+          - '3.12'
         exclude:
           # Because ansible-test doesn't support Python 3.9 for Ansible 2.9
           # and Python 3.10 is supported in 2.12 or later.
-          # Python 2.6 is not supported with ansible-core >= 2.13
+          - ansible: stable-2.15
+            python: '3.12'
           - ansible: stable-2.16
+            python: '3.9'
+          - ansible: stable-2.17
             python: '3.9'
 
     steps:

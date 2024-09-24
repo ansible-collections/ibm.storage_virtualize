@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
-#
+#            Rahul Pawar <rahul.p@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -24,7 +24,6 @@ options:
   command:
     description:
     - Single svcinfo CLI command to be executed on Storage Virtualize system.
-      Each command must start with svcinfo keyword.
     type: str
   usesshkey:
     description:
@@ -41,7 +40,7 @@ options:
   clustername:
     description:
     - The hostname or management IP of the
-      Storage Virtualize system.
+      storage Virtualize system.
     type: str
     required: true
   username:
@@ -75,6 +74,13 @@ EXAMPLES = '''
     clustername: "{{clustername}}"
     username: "{{username}}"
     password:
+    log_path: /tmp/ansible.log
+- name: Run sainfo CLI command
+  ibm.storage_virtualize.ibm_svcinfo_command:
+    command: "sainfo lsservicenodes"
+    clustername: "{{clustername}}"
+    username: "{{username}}"
+    password: "{{password}}"
     log_path: /tmp/ansible.log
 '''
 
@@ -173,9 +179,6 @@ class IBMSVCsshClient(object):
         failed = False
 
         if self.ssh_client.is_client_connected:
-            if not self.command.startswith('svcinfo'):
-                failed = True
-                message = "The command must start with svcinfo"
             if (self.command.find('|') != -1):
                 failed = True
                 message = "Pipe(|) is not supported in command."

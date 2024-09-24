@@ -4,6 +4,7 @@
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -70,7 +71,7 @@ options:
             - Specifies the type for the portset.
             - Applies only during creation of portset.
             - If not specified, I(portset_type=host) will be used.
-        choices: [ host, replication ]
+        choices: [ host, replication, highspeedreplication ]
         type: str
     ownershipgroup:
         description:
@@ -98,6 +99,7 @@ options:
 author:
     - Sanjaikumaar M (@sanjaikumaar)
     - Sudheesh Reddy Satti (@sudheeshreddy)
+    - Sumit Kumar Gupta (@sumitguptaibm)
 notes:
     - This module supports C(check_mode).
 '''
@@ -129,6 +131,15 @@ EXAMPLES = '''
    porttype: fc
    portset_type: host
    ownershipgroup: owner1
+   state: present
+- name: Create an highspeedreplication portset
+  ibm.storage_virtualize.ibm_svc_manage_portset:
+   clustername: "{{cluster}}"
+   username: "{{username}}"
+   password: "{{password}}"
+   name: fcportset1
+   porttype: ethernet
+   portset_type: highspeedreplication
    state: present
 - name: Rename the portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
@@ -175,7 +186,7 @@ class IBMSVCPortset:
                 ),
                 portset_type=dict(
                     type='str',
-                    choices=['host', 'replication']
+                    choices=['host', 'replication', 'highspeedreplication']
                 ),
                 ownershipgroup=dict(
                     type='str',

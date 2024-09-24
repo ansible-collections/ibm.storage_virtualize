@@ -2,6 +2,7 @@
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -477,23 +478,37 @@ class TestIBMSVChost(unittest.TestCase):
         data = v.host_rename(arg_data)
         self.assertEqual(data, 'Host [name] has been successfully rename to [new_name].')
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_host_rename_failure_for_unsupported_param(self, am):
+    def test_host_rename_failure_for_unsupported_param(self, svc_auth_mock, mock_existing_host):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'old_name': 'name',
-            'name': 'new_name',
+            'old_name': 'ansible_host',
+            'name': 'new_ansible_host',
             'state': 'present',
             'fcwwpn': True
         })
+
+        mock_existing_host.return_value = [
+            {
+                "id": "1", "name": "ansible_host", "port_count": "1",
+                "iogrp_count": "4", "status": "offline",
+                "site_id": "", "site_name": "",
+                "host_cluster_id": "", "host_cluster_name": "",
+                "protocol": "scsi", "owner_id": "",
+                "owner_name": ""
+            }
+        ]
         with pytest.raises(AnsibleFailJson) as exc:
             v = IBMSVChost()
             v.apply()
         self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], "Parameters ['fcwwpn'] not supported while renaming a host.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_host.IBMSVChost.host_iscsiname_update')
@@ -652,12 +667,12 @@ class TestIBMSVChost(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_host.IBMSVChost.get_existing_host')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_host.IBMSVChost.host_create')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_tcpnvmehost_successfully(self, svc_authorize_mock,
-                                             host_create_mock,
+                                             svc_run_command_mock,
                                              get_existing_host_mock):
         set_module_args({
             'clustername': 'clustername',
@@ -671,11 +686,240 @@ class TestIBMSVChost(unittest.TestCase):
         })
         host = {u'message': u'Host, id [0], '
                             u'successfully created', u'id': u'0'}
-        host_create_mock.return_value = host
+        svc_run_command_mock.return_value = host
         get_existing_host_mock.return_value = []
         tcpnvme_host_obj = IBMSVChost()
         with pytest.raises(AnsibleExitJson) as exc:
             tcpnvme_host_obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_mutually_exclusive_params(self, svc_authorize_mock):
+        '''
+        Failure test for mutually exclusive parameteres: partition and nopartition
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'protocol': 'tcpnvme',
+            'nqn': 'nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397',
+            'partition': "ptn0",
+            'nopartition': True
+        })
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            tcpnvme_host_obj = IBMSVChost()
+            tcpnvme_host_obj.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], "Mutually exclusive parameters: partition, nopartition")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_add_existing_host_to_draftpartition(self, svc_authorize_mock, get_existing_host_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'draftpartition': "ptn0"
+        })
+        svc_run_command_mock.return_value = {}
+        get_existing_host_mock.return_value = {
+            "draft_partition_id": "",
+            "draft_partition_name": "",
+            "host_cluster_id": "",
+            "host_cluster_name": "",
+            "id": "1",
+            "name": "ansible_host",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host = IBMSVChost()
+            host.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_host_with_draftpartition(self, svc_authorize_mock, get_existing_host_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'protocol': 'tcpnvme',
+            'nqn': 'nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397',
+            'draftpartition': "ptn0"
+        })
+        get_existing_host_mock.return_value = {}
+        with pytest.raises(AnsibleFailJson) as exc:
+            host = IBMSVChost()
+            host.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_modify_published_partition_host(self, svc_authorize_mock, get_existing_host_mock):
+        '''
+        Test add host to a partition which is already published
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'draftpartition': "ptn0"
+        })
+        get_existing_host_mock.return_value = {
+            "draft_partition_id": "",
+            "draft_partition_name": "",
+            "host_cluster_id": "",
+            "host_cluster_name": "",
+            "id": "1",
+            "name": "ansible_host",
+            "partition_id": "1",
+            "partition_name": "ptn0"
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host = IBMSVChost()
+            host.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_modify_draft_partition_host(self, svc_authorize_mock, get_existing_host_mock):
+        '''
+        Test add host to a partition which is already in draft state
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'draftpartition': "ptn0"
+        })
+        get_existing_host_mock.return_value = {
+            "draft_partition_id": "1",
+            "draft_partition_name": "ptn0",
+            "host_cluster_id": "",
+            "host_cluster_name": "",
+            "id": "1",
+            "name": "ansible_host",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host = IBMSVChost()
+            host.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_draft_partition_from_host(self, svc_authorize_mock, get_existing_host_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'nodraftpartition': True
+        })
+        svc_run_command_mock.return_value = {}
+        get_existing_host_mock.return_value = {
+            "draft_partition_id": "1",
+            "draft_partition_name": "ptn0",
+            "host_cluster_id": "",
+            "host_cluster_name": "",
+            "id": "1",
+            "name": "ansible_host",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host = IBMSVChost()
+            host.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_fcnvmehost_successfully(self, svc_authorize_mock,
+                                            svc_run_command_mock,
+                                            get_existing_host_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'protocol': 'fcnvme',
+            'nqn': 'nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397'
+        })
+        host = {u'message': u'Host, id [0], '
+                            u'successfully created', u'id': u'0'}
+        svc_run_command_mock.return_value = host
+        get_existing_host_mock.return_value = []
+        fcnvme_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            fcnvme_host_obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_fcnvmehost_without_protocol(self, svc_authorize_mock,
+                                                get_existing_host_mock):
+        '''
+        Test to create fcnvme host without protocol, should fail
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'state': 'present',
+            'nqn': 'nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397'
+        })
+
+        get_existing_host_mock.return_value = {}
+        with pytest.raises(AnsibleFailJson) as exc:
+            nqn_host_obj = IBMSVChost()
+            nqn_host_obj.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
 
 
 if __name__ == '__main__':

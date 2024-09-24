@@ -69,13 +69,13 @@ options:
   objectname:
     description:
     - If specified, only the instance with the I(objectname) is returned. If not specified, all the instances are returned.
-    - If I(objectname:"all") is specified, display detailed output of all instances of all objects that are specified
+    - If I(objectname:"all") specified, display detailed output of all instances of all objects that are specified
       in gather_subset and command_list.
     - For entities that require objectname as a mandatory parameter, I(objectname:"all") will throw error.
     type: str
   filtervalue:
     description:
-    - Specifies (key=value) combination to get subset of objects satisfying the condition.
+    - Specifies (key=value) combination that helps in returning a subset of objects satisfying the condition.
     type: str
   gather_subset:
     type: list
@@ -229,7 +229,7 @@ EXAMPLES = '''
     log_path: /tmp/ansible.log
     gather_subset: vol
     objectname: Volume1
-- name: Get detailed info of all volumes
+- name: Get detailed info of all volumes.
   ibm.storage_virtualize.ibm_svc_info:
     clustername: "{{clustername}}"
     domain: "{{domain}}"
@@ -238,7 +238,7 @@ EXAMPLES = '''
     log_path: /tmp/ansible.log
     gather_subset: vol
     objectname: all
-- name: Get detailed info for objects returned by lsvdiskcopy using command_list
+- name: Get detailed info for objects returned by lsvdiskcopy using command_list.
   ibm.storage_virtualize.ibm_svc_info:
     clustername: "{{clustername}}"
     domain: "{{domain}}"
@@ -247,7 +247,7 @@ EXAMPLES = '''
     log_path: /tmp/ansible.log
     command_list: lsvdiskcopy
     objectname: all
-- name: Get detailed info of multiple objects using gather_subset and command_list
+- name: Get detailed info of multiple objects using gather_subset and command_list.
   ibm.storage_virtualize.ibm_svc_info:
     clustername: "{{clustername}}"
     domain: "{{domain}}"
@@ -786,7 +786,7 @@ Testldapserver:
 Availablepatch:
     description:
         - Data will be populated when I(gather_subset=availablepatch) or I(gather_subset=all)
-        - Displays the patches that are compatible with the SVC version on the users system.
+        - Display the patches that are compatible with the SVC version on the users system.
     returned: success
     type: list
     elements: dict
@@ -944,7 +944,7 @@ class IBMSVCGatherInfo(object):
 
     def validate(self, subset):
         if not self.objectname:
-            self.module.fail_json(msg='Following paramter is mandatory to execute {0}: objectname'.format(subset))
+            self.module.fail_json(msg='Following parameter is mandatory to execute {0}: objectname'.format(subset))
         if self.objectname == "all":
             self.module.fail_json(msg="Objectname specified as 'all' which is invalid for the gather_subset [%s]" % subset)
 
@@ -994,7 +994,13 @@ class IBMSVCGatherInfo(object):
                 elif svc_obj_out == 404 or "CMMVC7205E" in str(svc_obj_out):
                     self.module.fail_json(msg="Command [%s] not found or "
                                           "CMMVC7205E command [%s] is not supported on current svc version." % cmd)
-
+                '''
+                Handle these errors internally
+                error-codes:
+                    CMMVC5707E - Required parameters are missing.
+                    CMMVC5767E - One or more of the parameters specified are invalid or a parameter is missing.
+                    CMMVC7205E - The command failed because it is not supported.
+                '''
             exceptions = {'cloudbackupgeneration', 'enclosurestatshistory'}
             if subset in exceptions:
                 output[op_key] = getattr(self, subset)

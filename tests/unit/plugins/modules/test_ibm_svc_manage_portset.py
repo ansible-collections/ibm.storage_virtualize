@@ -410,6 +410,63 @@ class TestIBMSVCPortset(unittest.TestCase):
             p.apply()
         self.assertFalse(exc.value.args[0]['changed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_portset_with_highspeedreplication_type_params(self,
+                                                                  svc_authorize_mock,
+                                                                  svc_run_command_mock,
+                                                                  portset_exist_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'portset1',
+            'porttype': 'ethernet',
+            'portset_type': 'highspeedreplication',
+            'state': 'present'
+        })
+
+        portset_exist_mock.return_value = {}
+        p = IBMSVCPortset()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            p.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_fc_portset_with_highspeedreplication_type_params(self,
+                                                                     svc_authorize_mock,
+                                                                     svc_run_command_mock,
+                                                                     portset_exist_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'portset1',
+            'porttype': 'fc',
+            'portset_type': 'highspeedreplication',
+            'state': 'present'
+        })
+
+        portset_exist_mock.return_value = {}
+        svc_run_command_mock.side_effect = fail_json
+        p = IBMSVCPortset()
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            p.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
 
 if __name__ == '__main__':
     unittest.main()

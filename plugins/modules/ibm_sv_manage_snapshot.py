@@ -284,7 +284,7 @@ class IBMSVSnapshot:
         self.name = self.module.params['name']
         self.state = self.module.params['state']
 
-        # Default paramters
+        # Default parameters
         self.ignorelegacy = self.module.params['ignorelegacy']
 
         # Optional parameters
@@ -530,7 +530,7 @@ class IBMSVSnapshot:
 
         if self.safeguarded in {True, False} and self.safeguarded != strtobool(ls_data.get('safeguarded', 0)):
             self.module.fail_json(
-                msg='Following paramter not applicable for update operation: safeguarded'
+                msg='Following parameter not applicable for update operation: safeguarded'
             )
 
         self.log('Snapshot probe result: %s', updates)
