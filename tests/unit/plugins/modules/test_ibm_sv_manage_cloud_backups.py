@@ -162,9 +162,9 @@ class TestIBMSVCloudBackup(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_with_invalid_create_paramters(self, svc_authorize_mock,
-                                           svc_obj_info_mock,
-                                           svc_run_command_mock):
+    def test_with_invalid_create_parameters(self, svc_authorize_mock,
+                                            svc_obj_info_mock,
+                                            svc_run_command_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',

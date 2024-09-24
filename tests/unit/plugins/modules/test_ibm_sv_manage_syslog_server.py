@@ -1,4 +1,4 @@
-# Copyright (C) 2023 IBM CORPORATION
+# Copyright (C) 2022 IBM CORPORATION
 # Author(s): Shilpi Jain<shilpi.jain1@ibm.com>
 #
 # GNU General Public License v3.0+
@@ -390,6 +390,116 @@ class TestIBMSVSyslogserver(unittest.TestCase):
         with pytest.raises(AnsibleExitJson) as exc:
             p.apply()
         self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_syslog_server_with_tls(self,
+                                           svc_authorize_mock,
+                                           svc_run_command_mock,
+                                           server_exist_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'server1',
+            'ip': '1.1.1.1',
+            'state': 'present',
+            'protocol': 'tls'
+        })
+
+        server_exist_mock.return_value = {}
+        p = IBMSVSyslogserver()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            p.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_protocol_syslog_server(self,
+                                           svc_authorize_mock,
+                                           svc_run_command_mock,
+                                           svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'server1',
+            'ip': '1.1.1.1',
+            'state': 'present',
+            'protocol': 'tls'
+        })
+
+        svc_obj_info_mock.return_value = {
+            "id": "1",
+            "name": "server1",
+            "IP_address": "1.1.1.1",
+            "error": "on",
+            "warning": "on",
+            "info": "on",
+            "cadf": "off",
+            "audit": "off",
+            "login": "off",
+            "facility": "0",
+            "protocol": "udp",
+            "port": "514"
+        }
+        p = IBMSVSyslogserver()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            p.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_protocol_syslog_server_to_tls(self,
+                                                  svc_authorize_mock,
+                                                  svc_run_command_mock,
+                                                  svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'server1',
+            'ip': '1.1.1.1',
+            'state': 'present',
+            'protocol': 'tcp'
+        })
+
+        svc_obj_info_mock.return_value = {
+            "id": "1",
+            "name": "server1",
+            "IP_address": "1.1.1.1",
+            "error": "on",
+            "warning": "on",
+            "info": "on",
+            "cadf": "off",
+            "audit": "off",
+            "login": "off",
+            "facility": "0",
+            "protocol": "tls",
+            "port": "6514"
+        }
+        p = IBMSVSyslogserver()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            p.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

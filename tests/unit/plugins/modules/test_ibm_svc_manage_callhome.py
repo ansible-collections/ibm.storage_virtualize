@@ -1,5 +1,6 @@
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -82,7 +83,7 @@ class TestIBMSVCCallhome(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_basic_checks(self, mock_svc_authorize):
+    def test_basic_checks_email_callhome(self, mock_svc_authorize):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -90,22 +91,86 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
         ch = IBMSVCCallhome()
         data = ch.basic_checks()
         self.assertEqual(data, None)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_missing_mandatory_params_in_email_callhome(self, mock_svc_authorize):
+        '''
+        Test: contact_email, serverIP, serverPort are mandatory parameters.
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'state': 'enabled',
+            'callhome_type': 'email'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            ch = IBMSVCCallhome()
+            ch.basic_checks()
+        self.assertTrue(exc.value.args[0]["failed"])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_basic_checks_cloud_callhome(self, mock_svc_authorize):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'state': 'enabled',
+            'callhome_type': 'cloud services',
+            'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
+            'proxy_port': 3128,
+            'proxy_type': 'open_proxy'
+        })
+        ch = IBMSVCCallhome()
+        data = ch.basic_checks()
+        self.assertEqual(data, None)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_missing_mandatory_params_in_cloud_callhome(self, mock_svc_authorize):
+        '''
+        Test: proxy_type, proxy_url, proxy_port are mandatory parameters.
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'state': 'enabled',
+            'callhome_type': 'cloud services'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            ch = IBMSVCCallhome()
+            ch.basic_checks()
+        self.assertTrue(exc.value.args[0]["failed"])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_basic_checks_cloud_callhome_2(self, mock_svc_authorize):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'state': 'enabled',
+            'callhome_type': 'cloud services',
+            'proxy_type': 'open_proxy'
+        })
+        with pytest.raises(AnsibleFailJson) as exc:
+            ch = IBMSVCCallhome()
+            ch.basic_checks()
+        self.assertTrue(exc.value.args[0]["failed"])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -281,16 +346,7 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
@@ -332,16 +388,7 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
@@ -370,16 +417,7 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
@@ -411,16 +449,8 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
             'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
@@ -445,15 +475,7 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'state': 'enabled',
             'callhome_type': 'email',
             'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
@@ -468,8 +490,10 @@ class TestIBMSVCCallhome(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_enable_email_callhome(self, mock_svc_authorize, mock_src):
+    def test_enable_email_callhome(self, mock_svc_authorize, mock_svc_obj_info, mock_src):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -477,23 +501,56 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
             'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
             'serverIP': '9.20.118.16',
             'serverPort': 25
         })
-        mock_src.return_value = ''
-        ch = IBMSVCCallhome()
-        data = ch.enable_email_callhome()
-        self.assertEqual(data, None)
+        existing_email_server_data = {}
+        existing_email_user_data = {}
+        system_data = {
+            "id": "0000010023806192",
+            "name": "Cluster_9.71.42.198",
+            "location": "local",
+            "code_level": "8.4.2.0 (build 154.20.2109031944000)",
+            "console_IP": "9.71.42.198:443",
+            "id_alias": "0000010023806192",
+            "email_reply": "sandip.rajbanshi@ibm.com",
+            "email_contact": "Sandip Rajbanshi",
+            "email_contact_primary": "8007755",
+            "email_contact_alternate": "8037755",
+            "email_contact_location": "IBM",
+            "inventory_mail_interval": "1",
+            "cluster_ntp_IP_address": "2.2.2.2",
+            "cluster_isns_IP_address": "",
+            "email_organization": "IBM",
+            "email_machine_address": "Street 39",
+            "email_machine_city": "New York",
+            "email_machine_state": "CAN",
+            "email_machine_zip": "123456",
+            "email_machine_country": "US",
+            "total_drive_raw_capacity": "10.10TB",
+            "compression_destage_mode": "off",
+            "max_replication_delay": "0",
+            "partnership_exclusion_threshold": "315",
+            "gen1_compatibility_mode_enabled": "no",
+            "ibm_customer": "262727272",
+            "ibm_component": "",
+            "enhanced_callhome": "on",
+            "censor_callhome": "on",
+            "quorum_lease": "short",
+            "automatic_vdisk_analysis_enabled": "on",
+            "callhome_accepted_usage": "no",
+            "safeguarded_copy_suspended": "no",
+            'serverIP': '9.20.118.16',
+            'serverPort': 25
+        }
+        mock_src.return_value = {"message": "success"}
+        mock_svc_obj_info.side_effect = [existing_email_server_data, existing_email_user_data,
+                                         existing_email_user_data, system_data]
+        with pytest.raises(AnsibleExitJson) as exc:
+            ch = IBMSVCCallhome()
+            ch.apply()
+        self.assertTrue(exc.value.args[0]["changed"])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -507,18 +564,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'disabled',
             'callhome_type': 'email',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25
         })
         mock_src.return_value = ''
         ch = IBMSVCCallhome()
@@ -567,18 +612,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'disabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
@@ -607,18 +640,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'no_proxy'
@@ -640,18 +661,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
@@ -673,18 +682,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
@@ -713,18 +710,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
@@ -749,18 +734,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'disabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
@@ -779,8 +752,10 @@ class TestIBMSVCCallhome(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_enable_cloud_callhome(self, mock_svc_authorize, mock_src):
+    def test_enable_cloud_callhome(self, mock_svc_authorize, mock_svc_obj_info, mock_src):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -788,26 +763,78 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'enabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
             'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
             'proxy_port': 3128,
             'proxy_type': 'open_proxy'
         })
-        mock_src.return_value = ''
-        ch = IBMSVCCallhome()
-        data = ch.enable_cloud_callhome()
-        self.assertEqual(data, None)
+        existing_proxy_data = {
+            "certificate": "",
+            "enabled": "no",
+            "password_set": "no",
+            "port": "0",
+            "url": "",
+            "username": ""
+        }
+        existing_cloud_callhome_disable_data = {
+            "status": "disabled",
+            "connection": "",
+            "error_sequence_number": "",
+            "last_failure": "",
+            "last_success": "",
+            "si_tenant_id": ""
+        }
+        existing_cloud_callhome_enable_data = {
+            "status": "enabled",
+            "connection": "active",
+            "error_sequence_number": "",
+            "last_failure": "240813093550",
+            "last_success": "240812075649",
+            "si_tenant_id": "01eb027a-8d9b-1dd8-9763-380d31ca56fb"
+        }
+        system_data = {
+            "id": "0000010023806192",
+            "name": "Cluster_9.71.42.198",
+            "location": "local",
+            "code_level": "8.4.2.0 (build 154.20.2109031944000)",
+            "console_IP": "9.71.42.198:443",
+            "id_alias": "0000010023806192",
+            "email_reply": "sandip.rajbanshi@ibm.com",
+            "email_contact": "Sandip Rajbanshi",
+            "email_contact_primary": "8007755",
+            "email_contact_alternate": "8037755",
+            "email_contact_location": "IBM",
+            "inventory_mail_interval": "1",
+            "cluster_ntp_IP_address": "2.2.2.2",
+            "cluster_isns_IP_address": "",
+            "email_organization": "IBM",
+            "email_machine_address": "Street 39",
+            "email_machine_city": "New York",
+            "email_machine_state": "CAN",
+            "email_machine_zip": "123456",
+            "email_machine_country": "US",
+            "total_drive_raw_capacity": "10.10TB",
+            "compression_destage_mode": "off",
+            "max_replication_delay": "0",
+            "partnership_exclusion_threshold": "315",
+            "gen1_compatibility_mode_enabled": "no",
+            "ibm_customer": "262727272",
+            "ibm_component": "",
+            "enhanced_callhome": "on",
+            "censor_callhome": "on",
+            "quorum_lease": "short",
+            "automatic_vdisk_analysis_enabled": "on",
+            "callhome_accepted_usage": "no",
+            "safeguarded_copy_suspended": "no",
+            'serverIP': '9.20.118.16',
+            'serverPort': 25
+        }
+        mock_src.return_value = {"message": "success"}
+        mock_svc_obj_info.side_effect = [existing_proxy_data, existing_cloud_callhome_disable_data,
+                                         existing_cloud_callhome_enable_data, system_data]
+        with pytest.raises(AnsibleExitJson) as exc:
+            ch = IBMSVCCallhome()
+            ch.apply()
+        self.assertTrue(exc.value.args[0]["changed"])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -821,21 +848,6 @@ class TestIBMSVCCallhome(unittest.TestCase):
             'password': 'password',
             'state': 'disabled',
             'callhome_type': 'cloud services',
-            'company_name': 'company_name',
-            'address': 'address',
-            'city': 'city',
-            'province': 'PRV',
-            'postalcode': '123456',
-            'country': 'US',
-            'location': 'location',
-            'contact_name': 'contact_name',
-            'contact_email': 'test@domain.com',
-            'phonenumber_primary': '1234567890',
-            'serverIP': '9.20.118.16',
-            'serverPort': 25,
-            'proxy_url': 'http://h-proxy3.ssd.hursley.ibm.com',
-            'proxy_port': 3128,
-            'proxy_type': 'open_proxy'
         })
         mock_src.return_value = ''
         ch = IBMSVCCallhome()

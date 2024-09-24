@@ -5,6 +5,7 @@
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -220,10 +221,19 @@ options:
             - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
         type: str
         version_added: 2.3.0
+    draftpartition:
+        description:
+            - Specifies the name of the draft partition to be assigned to the volume group.
+            - Applies when I(state=present).
+            - Supported from Storage Virtualize family systems 8.6.3.0 or later.
+        type: str
+        version_added: 2.5.0
+
 author:
     - Shilpi Jain(@Shilpi-J)
     - Sanjaikumaar M (@sanjaikumaar)
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Sandip G. Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
     - Safeguarded policy and snapshot policy cannot be used at the same time.
@@ -340,6 +350,16 @@ EXAMPLES = '''
     name: vg0
     state: absent
     evictvolumes: true
+- name: Add new or existing volumegroup to a draft partition
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    state: present
+    draftpartition: partition_name
 '''
 
 RETURN = '''#'''
@@ -382,7 +402,8 @@ class IBMSVCVG(object):
                 old_name=dict(type='str', required=False),
                 partition=dict(type='str'),
                 nopartition=dict(type='bool'),
-                evictvolumes=dict(type='bool')
+                evictvolumes=dict(type='bool'),
+                draftpartition=dict(type='str')
             )
         )
 
@@ -421,6 +442,7 @@ class IBMSVCVG(object):
         self.partition = self.module.params.get('partition', '')
         self.nopartition = self.module.params.get('nopartition', False)
         self.evictvolumes = self.module.params.get('evictvolumes', False)
+        self.draftpartition = self.module.params.get('draftpartition', '')
 
         # Dynamic variable
         self.parentuid = None
@@ -465,7 +487,7 @@ class IBMSVCVG(object):
                         'nosafeguardpolicy', 'snapshotpolicy', 'nosnapshotpolicy',
                         'policystarttime', 'type', 'fromsourcegroup', 'pool', 'iogrp',
                         'safeguarded', 'ignoreuserfcmaps', 'replicationpolicy',
-                        'noreplicationpolicy', 'old_name', 'fromsourcevolumes')
+                        'noreplicationpolicy', 'old_name', 'fromsourcevolumes', 'draftpartition')
 
             param_exists = ', '.join((param for param in unwanted if getattr(self, param)))
 
@@ -502,7 +524,8 @@ class IBMSVCVG(object):
             ('ownershipgroup', 'policystarttime'),
             ('snapshotpolicy', 'safeguardpolicyname'),
             ('replicationpolicy', 'noreplicationpolicy'),
-            ('partition', 'nopartition')
+            ('partition', 'nopartition'),
+            ('draftpartition', 'partition')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -517,7 +540,7 @@ class IBMSVCVG(object):
 
         if unsupported_exists:
             self.module.fail_json(
-                msg='Following paramters not supported during creation scenario: {0}'.format(unsupported_exists)
+                msg='Following parameters not supported during creation scenario: {0}'.format(unsupported_exists)
             )
 
         if self.type and not self.snapshot and not self.fromsourcevolumes:
@@ -535,8 +558,7 @@ class IBMSVCVG(object):
             ('nosafeguardpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'safeguardpolicyname'),
-            ('replicationpolicy', 'noreplicationpolicy'),
-            ('partition', 'nopartition')
+            ('replicationpolicy', 'noreplicationpolicy')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -549,7 +571,8 @@ class IBMSVCVG(object):
             ('type', data.get('volume_group_type', '')),
             ('snapshot', data.get('source_snapshot', '')),
             ('fromsourcevolumes', data.get('source_volumes_set', '')),
-            ('fromsourcegroup', data.get('source_volume_group_name', ''))
+            ('fromsourcegroup', data.get('source_volume_group_name', '')),
+            ('partition', data.get('partition_name', ''))
         )
         unsupported = (
             fields[0] for fields in unsupported_maps if getattr(self, fields[0]) and getattr(self, fields[0]) != fields[1]
@@ -558,7 +581,7 @@ class IBMSVCVG(object):
 
         if unsupported_exists:
             self.module.fail_json(
-                msg='Following paramters not supported during update: {0}'.format(unsupported_exists)
+                msg='Following parameters not supported during update: {0}'.format(unsupported_exists)
             )
 
     def get_existing_vg(self, vg_name):
@@ -679,7 +702,8 @@ class IBMSVCVG(object):
             ('nosnapshotpolicy', not bool(data.get('snapshot_policy_name', ''))),
             ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
             ('partition', data.get('partition_name', '')),
-            ('nopartition', not bool(data.get('partition_name', '')))
+            ('nopartition', not bool(data.get('partition_name', ''))),
+            ('draftpartition', data.get('draft_partition_name', ''))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
@@ -705,6 +729,13 @@ class IBMSVCVG(object):
             if self.safeguarded not in ('', None) and self.safeguarded != strtobool(data.get('snapshot_policy_safeguarded', 0)):
                 props['snapshotpolicy'] = self.snapshotpolicy
                 props['safeguarded'] = self.safeguarded
+
+        if self.draftpartition:
+            if "draftpartition" in props and props["draftpartition"] == data.get('partition_name'):
+                props.pop("draftpartition")
+                self.log("Partition [%s] which contains Volumegroup [%s] is already published.", self.draftpartition, self.name)
+            elif self.draftpartition == data.get("draft_partition_name"):
+                self.log("Partition [%s] which contains Volumegroup [%s] is already in draft state.", self.draftpartition, self.name)
 
         # Adding snapshotpolicysuspended to props
         if self.snapshotpolicysuspended and self.snapshotpolicysuspended != data.get('snapshot_policy_suspended', ''):
@@ -785,7 +816,8 @@ class IBMSVCVG(object):
 
         if self.partition:
             cmdopts['partition'] = self.partition
-
+        elif self.draftpartition:
+            cmdopts['draftpartition'] = self.draftpartition
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup
         elif self.safeguardpolicyname:
@@ -921,18 +953,18 @@ class IBMSVCVG(object):
                         modify = self.vg_probe(vg_data)
                         if modify:
                             self.vg_update(modify)
-                            self.msg = "volume group [%s] has been modified." % self.name
+                            self.msg = "Volume group [%s] has been modified." % self.name
                         else:
                             self.msg = "No Modifications detected, Volume group already exists."
                 else:
                     self.vg_delete()
-                    self.msg = "volume group [%s] has been deleted." % self.name
+                    self.msg = "Volume group [%s] has been deleted." % self.name
             else:
                 if self.state == 'absent':
                     self.msg = "Volume group [%s] does not exist." % self.name
                 else:
                     self.vg_create()
-                    self.msg = "volume group [%s] has been created." % self.name
+                    self.msg = "Volume group [%s] has been created." % self.name
 
         if self.module.check_mode:
             self.msg = 'skipping changes due to check mode.'

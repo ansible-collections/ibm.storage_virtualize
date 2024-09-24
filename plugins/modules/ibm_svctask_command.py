@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -14,17 +16,19 @@ short_description: This module implements SSH Client which helps to run
                    svctask CLI command(s) on IBM Storage Virtualize family systems
 version_added: "1.2.0"
 description:
-- Runs svctask CLI command(s) on IBM Storage Virtualize Family systems.
-  In case any svctask command fails while running this module, then the
+- Runs svctask and satask CLI command(s) on IBM Storage Virtualize Family systems.
+  In case any command fails while running this module, then the
   module stops processing further commands in the list.
   Paramiko must be installed to use this module.
 author:
     - Shilpi Jain (@Shilpi-Jain1)
+    - Sumit Kumar Gupta (@sumitguptaibm)
+    - Rahul Pawar (@rahulpawaribm)
+
 options:
   command:
     description:
     - A list containing svctask CLI commands to be executed on storage.
-    - Each command must start with 'svctask' keyword.
     type: list
     elements: str
   usesshkey:
@@ -81,6 +85,13 @@ EXAMPLES = '''
     username: "{{username}}"
     password:
     usesshkey: yes
+    log_path: /tmp/ansible.log
+- name: Run satask CLI command
+  ibm.storage_virtualize.ibm_svctask_command:
+    command: "satask snap"
+    clustername: "{{clustername}}"
+    username: "{{username}}"
+    password: "{{password}}"
     log_path: /tmp/ansible.log
 '''
 
@@ -167,9 +178,6 @@ class IBMSVCsshClient(object):
         message = ""
         if self.ssh_client.is_client_connected:
             for cmd in self.command:
-                if not cmd.startswith('svctask'):
-                    self.ssh_client._svc_disconnect()
-                    self.module.fail_json(msg="The command must start with svctask", changed=False)
                 self.log("Executing CLI command: %s", cmd)
                 stdin, stdout, stderr = self.ssh_client.client.exec_command(cmd)
                 for line in stdout.readlines():

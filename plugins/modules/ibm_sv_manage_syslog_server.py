@@ -106,7 +106,7 @@ options:
         description:
             - Specifies the communication protocol that is used by this server. The default value is udp.
         type: str
-        choices: [ tcp, udp ]
+        choices: [ tcp, udp, tls ]
     port:
         description:
             - Specifies the communication port that is used by this server.
@@ -126,6 +126,7 @@ options:
         type: bool
 author:
     - Shilpi Jain (@Shilpi-J)
+    - Sumit Kumar Gupta (@sumitguptaibm)
 notes:
     - This module supports C(check_mode).
 '''
@@ -138,6 +139,15 @@ EXAMPLES = '''
    password: '{{password}}'
    name: server1
    ip: 1.2.3.4
+   state: present
+- name: Create a syslog server that communicates with TLS
+  ibm.storage_virtualize.ibm_sv_manage_syslog_server:
+   clustername: '{{clustername}}'
+   username: '{{username}}'
+   password: '{{password}}'
+   name: server1
+   ip: 1.2.3.4
+   protocol: tls
    state: present
 - name: Modify the server details
   ibm.storage_virtualize.ibm_sv_manage_syslog_server:
@@ -214,7 +224,7 @@ class IBMSVSyslogserver:
                 ),
                 protocol=dict(
                     type='str',
-                    choices=['tcp', 'udp']
+                    choices=['tcp', 'udp', 'tls']
                 ),
                 port=dict(
                     type='int'
@@ -287,7 +297,7 @@ class IBMSVSyslogserver:
 
                 if unsupported_exists:
                     self.module.fail_json(
-                        msg='Following paramters are not supported while renaming: {0}'.format(unsupported_exists)
+                        msg='Following parameters are not supported while renaming: {0}'.format(unsupported_exists)
                     )
         elif self.state == 'absent':
             invalids = ('ip', 'facility', 'error', 'warning', 'info', 'login', 'audit', 'protocol', 'port', 'cadf', 'old_name')
@@ -295,7 +305,7 @@ class IBMSVSyslogserver:
 
             if invalid_exists:
                 self.module.fail_json(
-                    msg='state=absent but following paramters have been passed: {0}'.format(invalid_exists)
+                    msg='state=absent but following parameters have been passed: {0}'.format(invalid_exists)
                 )
 
     def get_syslog_server_details(self, server_name):

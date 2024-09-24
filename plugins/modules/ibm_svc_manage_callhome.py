@@ -3,6 +3,7 @@
 
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -194,6 +195,7 @@ options:
         type: str
 author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -226,6 +228,32 @@ EXAMPLES = '''
     invemailinterval: 1
     enhancedcallhome: "on"
     censorcallhome: "on"
+
+- name: Configure callhome with cloud
+  ibm.storage_virtualize.ibm_svc_manage_callhome:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "/tmp/playbook.debug"
+    state: "enabled"
+    callhome_type: "cloud services"
+    province: "{{ province }}"
+    proxy_type: "{{ proxy_type }}"
+    proxy_url: "{{ proxy_url }}"
+    proxy_port: "{{ proxy_port }}"
+
+- name: Configure callhome with email
+  ibm.storage_virtualize.ibm_svc_manage_callhome:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "/tmp/playbook.debug"
+    state: "enabled"
+    callhome_type: "email"
+    contact_email: "{{ contact_email }}"
+    serverIP: "{{ server_ip }}"
+    serverPort: "{{ server_port }}"
+
 '''
 
 RETURN = '''#'''
@@ -280,6 +308,8 @@ class IBMSVCCallhome(object):
         # Required
         self.state = self.module.params['state']
         self.callhome_type = self.module.params['callhome_type']
+
+        # Optional
         self.company_name = self.module.params['company_name']
         self.address = self.module.params['address']
         self.city = self.module.params['city']
@@ -290,8 +320,6 @@ class IBMSVCCallhome(object):
         self.contact_name = self.module.params['contact_name']
         self.contact_email = self.module.params['contact_email']
         self.phonenumber_primary = self.module.params['phonenumber_primary']
-
-        # Optional
         self.proxy_type = self.module.params.get('proxy_type', False)
         self.proxy_url = self.module.params.get('proxy_url', False)
         self.proxy_port = self.module.params.get('proxy_port', False)
@@ -345,34 +373,28 @@ class IBMSVCCallhome(object):
             self.module.fail_json(msg="Missing mandatory parameter: state")
         if not self.callhome_type:
             self.module.fail_json(msg="Missing mandatory parameter: callhome_type")
-        if (self.callhome_type in ['email', 'both']) and (not self.serverIP or not self.serverPort) and (self.state == 'enabled'):
-            self.module.fail_json(msg="Parameters: serverIP, serverPort are required when callhome_type is email/both")
-        if self.state == "enabled" and self.proxy_type in ["cloud services", "both"] and self.proxy_type:
+        if self.state == "enabled" and self.callhome_type in ["cloud services", "both"]:
+            if not self.proxy_type:
+                self.module.fail_json(msg="Parameter [proxy_type] required when callhome_type=cloud services or both")
             if self.proxy_type == 'open_proxy' and (not self.proxy_url or not self.proxy_port):
                 self.module.fail_json(msg="Parameters [proxy_url, proxy_port] required when proxy_type=open_proxy")
             if self.proxy_type == 'basic_authentication' and (not self.proxy_url or not self.proxy_port or not self.proxy_username or not self.proxy_password):
                 self.module.fail_json(msg="Parameters [proxy_url, proxy_port, proxy_username, proxy_password] required when proxy_type=basic_authentication")
             if self.proxy_type == 'certificate' and (not self.proxy_url or not self.proxy_port or not self.sslcert):
                 self.module.fail_json(msg="Parameters [proxy_url, proxy_port, sslcert] required when proxy_type=certificate")
-        if self.state == 'enabled':
+        if self.state == 'enabled' and self.callhome_type in ["email", "both"]:
             parameters = {
-                'callhome_type': self.callhome_type,
-                'company_name': self.company_name,
-                'address': self.address,
-                'city': self.city,
-                'province': self.province,
-                'country': self.country,
-                'location': self.location,
-                'contact_name': self.contact_name,
                 'contact_email': self.contact_email,
-                'phonenumber_primary': self.phonenumber_primary,
+                'serverIP': self.serverIP,
+                'serverPort': self.serverPort
             }
             parameter_not_provided = []
             for parameter in parameters:
                 if not parameters[parameter]:
                     parameter_not_provided.append(parameter)
             if parameter_not_provided:
-                self.module.fail_json(msg="Parameters {0} are required when state is 'enabled'".format(parameter_not_provided))
+                self.module.fail_json(msg="Parameters {0} are required when state is 'enabled' and"
+                                      " callhome_type is email or both".format(parameter_not_provided))
 
     # function to fetch lssystem data
     def get_system_data(self):

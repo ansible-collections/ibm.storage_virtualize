@@ -6,6 +6,8 @@
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Rohit Kumar <rohit.kumar6@ibm.com>
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
+#            Lavanya C R <Lavanya.c.r1@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -85,7 +87,7 @@ options:
         description:
             - Specifies the protocol used by the host to communicate with the storage system. Only 'scsi' protocol is supported.
             - Valid when I(state=present), to create a host.
-        choices: [scsi, rdmanvme, tcpnvme]
+        choices: [scsi, rdmanvme, tcpnvme, fcnvme]
         type: str
     type:
         description:
@@ -139,6 +141,21 @@ options:
            - Supported from Storage Virtualize family systems 8.6.1.0 or later.
        type : bool
        version_added: '2.1.0'
+    draftpartition:
+       description:
+           - Specifies the name of the draft partition to be assigned to the host.
+           - Valid when I(state=present), to modify a host.
+           - Supported from Storage Virtualize family systems 8.6.3.0 or later.
+       type : str
+       version_added: '2.5.0'
+    nodraftpartition:
+       description:
+           - If specified as C(True), the host object is removed from the draft partition.
+           - Parameters I(draftpartition) and I(nodraftpartition) are mutually exclusive.
+           - Valid when I(state=present), to modify an existing host.
+           - Supported from Storage Virtualize family systems 8.6.3.0 or later.
+       type : bool
+       version_added: '2.5.0'
     log_path:
         description:
             - Path of debug log file.
@@ -151,6 +168,8 @@ options:
 author:
     - Sreshtant Bohidar (@Sreshtant-Bohidar)
     - Rohit Kumar (@rohitk-github)
+    - Sandip G. Rajbanshi (@Sandip-Rajbanshi)
+    - Lavanya C R(@Lavanya-C-R1)
 notes:
     - This module supports C(check_mode).
 '''
@@ -234,6 +253,38 @@ EXAMPLES = '''
     log_path: /tmp/playbook.debug
     name: new_host_name
     state: absent
+- name: Add existing host to draft partition
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/playbook.debug
+    name: host_name
+    state: prersent
+    draftpartition: partition_name
+- name: Remove a host from a draft partition
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/playbook.debug
+    name: host_name
+    state: present
+    nodraftpartition: True
+- name: Create a fcnvme host
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{clustername}}"
+    domain: "{{domain}}"
+    username: "{{username}}"
+    password: "{{password}}"
+    log_path: /tmp/playbook.debug
+    name: host_name
+    protocol: fcnvme
+    nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
+    portset: portset_name
+    state: present
 '''
 
 RETURN = '''#'''
@@ -257,7 +308,9 @@ class IBMSVChost(object):
                 iscsiname=dict(type='str', required=False),
                 iogrp=dict(type='str', required=False),
                 protocol=dict(type='str', required=False, choices=['scsi',
-                                                                   'rdmanvme', 'tcpnvme']),
+                                                                   'rdmanvme',
+                                                                   'tcpnvme',
+                                                                   'fcnvme']),
                 type=dict(type='str'),
                 site=dict(type='str'),
                 hostcluster=dict(type='str'),
@@ -266,7 +319,9 @@ class IBMSVChost(object):
                 nqn=dict(type='str', required=False),
                 portset=dict(type='str', required=False),
                 partition=dict(type='str', required=False),
-                nopartition=dict(type='bool', required=False)
+                nopartition=dict(type='bool', required=False),
+                draftpartition=dict(type='str', required=False),
+                nodraftpartition=dict(type='bool', required=False)
             )
         )
 
@@ -296,6 +351,8 @@ class IBMSVChost(object):
         self.portset = self.module.params.get('portset', '')
         self.partition = self.module.params.get('partition', '')
         self.nopartition = self.module.params.get('nopartition', '')
+        self.draftpartition = self.module.params.get('draftpartition', '')
+        self.nodraftpartition = self.module.params.get('nodraftpartition', '')
 
         self.basic_checks()
 
@@ -327,8 +384,8 @@ class IBMSVChost(object):
             self.module.fail_json(msg='Missing mandatory parameter: name')
         # Handling for parameter protocol
         if self.protocol:
-            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme'):
-                self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi', 'rdmanvme' and 'tcpnvme' "
+            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme', 'fcnvme'):
+                self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi', 'rdmanvme', 'tcpnvme', and 'fcnvme' "
                                           "protocols are supported.".format(self.protocol))
 
         self.restapi = IBMSVCRestApi(
@@ -344,10 +401,23 @@ class IBMSVChost(object):
 
     def basic_checks(self):
         if self.state == 'present':
-            if self.partition and self.nopartition:
-                self.module.fail_json(msg='Mutually exclusive parameters: partition, nopartition')
+            mutually_exclusive = (
+                ('hostcluster', 'nohostcluster'),
+                ('partition', 'nopartition'),
+                ('draftpartition', 'nodraftpartition'),
+                ('draftpartition', 'partition')
+            )
+            for param1, param2 in mutually_exclusive:
+                if getattr(self, param1) and getattr(self, param2):
+                    self.module.fail_json(
+                        msg='Mutually exclusive parameters: {0}, {1}'.format(param1, param2)
+                    )
+
+            if self.nqn and not self.protocol:
+                self.module.fail_json(msg='nqn can only be entered when protocol has been entered')
+
         if self.state == 'absent':
-            fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition'] if getattr(self, f)]
+            fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a host'.format(', '.join(fields)))
@@ -394,13 +464,6 @@ class IBMSVChost(object):
     # TBD: Implement a more generic way to check for properties to modify.
     def host_probe(self, data):
         props = []
-        if self.hostcluster and self.nohostcluster:
-            self.module.fail_json(msg="You must not pass in both hostcluster and "
-                                      "nohostcluster to the module.")
-
-        if self.partition and self.nopartition:
-            self.module.fail_json(msg="You must not pass in both partition and "
-                                      "nopartition to the module.")
 
         if self.hostcluster and (self.hostcluster != data['host_cluster_name']):
             if data['host_cluster_name'] != '':
@@ -453,24 +516,37 @@ class IBMSVChost(object):
             if data['partition_name'] != '':
                 props += ['nopartition']
 
+        if self.draftpartition:
+            if self.draftpartition == data['draft_partition_name']:
+                self.log("Host [%s] is already associated with draft partition [%s].", self.name, self.draftpartition)
+            elif self.draftpartition == data['partition_name']:
+                self.log("Host [%s] is already associated with partition [%s].", self.name, self.draftpartition)
+            else:
+                props += ['draftpartition']
+
+        if self.nodraftpartition:
+            if data['draft_partition_name'] != '':
+                props += ['nodraftpartition']
+
         self.log("host_probe props='%s'", props)
         return props
 
     def host_create(self):
         if (not self.fcwwpn) and (not self.iscsiname) and (not self.nqn):
-            self.module.fail_json(msg="You must pass in fcwwpn or iscsiname or nqn "
-                                      "to the module.")
+            self.module.fail_json(msg="One of fcwwpn, iscsiname or nqn must be provided to create a new host.")
 
         if (self.fcwwpn and self.iscsiname) or (self.nqn and self.iscsiname) or (self.fcwwpn and self.nqn):
             self.module.fail_json(msg="You have to pass only one parameter among fcwwpn, nqn and "
                                       "iscsiname to the module.")
 
-        if self.hostcluster and self.nohostcluster:
-            self.module.fail_json(msg="You must not pass in both hostcluster and "
-                                      "nohostcluster to the module.")
-
         if self.hostcluster and self.partition:
-            self.module.fail_json(msg='You must not pass in both hostcluster and partition to the module.')
+            self.module.fail_json(msg='Mutually exclusive parameters: hostcluster and partition')
+
+        if self.draftpartition:
+            self.module.fail_json(msg='CMMVC5709E [draftpartition] is not a supported parameter while creating host')
+        elif self.nodraftpartition:
+            self.module.fail_json(msg='CMMVC5709E [nodraftpartition] is not a supported parameter while creating host')
+        # CMMVC5709E [value] is not a supported parameter
 
         if self.module.check_mode:
             self.changed = True
@@ -600,6 +676,10 @@ class IBMSVChost(object):
             cmdopts['partition'] = self.partition
         if 'nopartition' in modify:
             cmdopts['nopartition'] = self.nopartition
+        if 'draftpartition' in modify:
+            cmdopts['draftpartition'] = self.draftpartition
+        if 'nodraftpartition' in modify:
+            cmdopts['nodraftpartition'] = self.nodraftpartition
         if cmdopts:
             cmdargs = [self.name]
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)

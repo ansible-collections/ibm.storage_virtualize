@@ -218,7 +218,7 @@ class IBMSVReplicationPolicy:
 
             if invalid_exists:
                 self.module.fail_json(
-                    msg='state=absent but following paramters have been passed: {0}'.format(invalid_exists)
+                    msg='state=absent but following parameters have been passed: {0}'.format(invalid_exists)
                 )
 
     def is_rp_exists(self):

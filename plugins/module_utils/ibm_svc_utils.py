@@ -1,7 +1,6 @@
 # Copyright (C) 2024 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sandip G. Rajbanshi <sandip.rajbanshi@ibm.com>
-#            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -20,7 +19,7 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.4.1"
+COLLECTION_VERSION = "2.5.0"
 TIMEOUT = 600
 
 
@@ -167,7 +166,7 @@ class IBMSVCRestApi(object):
         :type headers: dict
         :param cmd: svc command to run
         :type cmd: string
-        :param cmdopts: svc command options, name paramter and value
+        :param cmdopts: svc command options, name parameter and value
         :type cmdopts: dict
         :param cmdargs: svc command arguments, non-named paramaters
         :type timeout: int
@@ -260,7 +259,7 @@ class IBMSVCRestApi(object):
         """ Run SVC command with token info added into header
         :param cmd: svc command to run
         :type cmd: string
-        :param cmdopts: svc command options, name paramter and value
+        :param cmdopts: svc command options, name parameter and value
         :type cmdopts: dict
         :param cmdargs: svc command arguments, non-named paramaters
         :type cmdargs: list
@@ -320,13 +319,22 @@ class IBMSVCRestApi(object):
 
         rest = self._svc_token_wrap(cmd, cmdopts, cmdargs, timeout)
         self.log("svc_obj_info rest=%s", rest)
+        '''
+        ibm_svc_info may throw following error-codes for few svc objects when objectname = all
+        Handle those errors internally
+        error-codes:
+            CMMVC5707E - Required parameters are missing.
+            CMMVC5767E - One or more of the parameters specified are invalid or a parameter is missing.
+            CMMVC7205E - The command failed because it is not supported.
+        '''
+        error_codes_to_absorb = ["CMMVC5707E", "CMMVC5767E", "CMMVC7205E"]
         if rest['code']:
             if rest['code'] == 500:
                 # Object did not exist, which is quite valid.
                 error_text = rest['out'].decode('utf8').split(":")[-1].strip()
                 error_code = error_text.split(" ")[0]
                 self.log(error_code)
-                if error_code == "CMMVC5707E" or error_code == "CMMVC5767E" or error_code == "CMMVC7205E":
+                if error_code in error_codes_to_absorb:
                     return error_text
                 return None
             if rest['code'] == 404:

@@ -270,7 +270,7 @@ class IBMSVFCPartnership:
     def create_validation(self, validate):
         if validate:
             if not self.remote_clustername:
-                self.module.fail_json(msg='Following paramter is mandatory during creation: remote_clustername')
+                self.module.fail_json(msg='Following parameter is mandatory during creation: remote_clustername')
 
             if not self.linkbandwidthmbits:
                 self.module.fail_json(msg='Missing mandatory parameter: linkbandwidthmbits')

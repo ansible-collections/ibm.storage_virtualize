@@ -199,7 +199,7 @@ class IBMSVProvisioningPolicy:
             unsupported_exists = ','.join(field for field in unsupported if getattr(self, field))
             if unsupported_exists:
                 self.module.fail_json(
-                    msg='state=absent but following paramters passed: {0}'.format(unsupported_exists)
+                    msg='state=absent but following parameters passed: {0}'.format(unsupported_exists)
                 )
 
     def create_validation(self):
@@ -275,9 +275,9 @@ class IBMSVProvisioningPolicy:
         if self.capacitysaving:
             capsav = 'none' if self.capacitysaving == 'drivebased' else self.capacitysaving
             if capsav and capsav != self.pp_data.get('capacity_saving', ''):
-                self.module.fail_json(msg='Following paramter not applicable for update operation: capacitysaving')
+                self.module.fail_json(msg='Following parameter not applicable for update operation: capacitysaving')
         if self.deduplicated and not strtobool(self.pp_data.get('deduplicated', 0)):
-            self.module.fail_json(msg='Following paramter not applicable for update operation: deduplicated')
+            self.module.fail_json(msg='Following parameter not applicable for update operation: deduplicated')
         return updates
 
     def update_provisioning_policy(self, updates):

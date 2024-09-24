@@ -905,7 +905,7 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_objectname_all_object_has_id_but_objectname_not_valid_paramter(self, mock_svc_authorize, mock_svc_obj_info):
+    def test_objectname_all_object_has_id_but_objectname_not_valid_parameter(self, mock_svc_authorize, mock_svc_obj_info):
         '''
         This test is about checking the commands like lssiste,
         If lssite is executed with objectname (i.e. lssite <id>) then it is invalid but with objectname all it
@@ -1038,7 +1038,7 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
 
         with pytest.raises(AnsibleExitJson) as exc:
             IBMSVCGatherInfo().apply()
-        self.assertEqual(exc.value.args[0]['Volume'], filter_value_output)
+        self.assertEquals(exc.value.args[0]['Volume'], filter_value_output)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')

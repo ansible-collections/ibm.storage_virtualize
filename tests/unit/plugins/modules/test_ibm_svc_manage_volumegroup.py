@@ -1,5 +1,5 @@
 # Copyright (C) 2020 IBM CORPORATION
-# Author(s):
+# Author(s): Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -1072,14 +1072,11 @@ class TestIBMSVCvdisk(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_update_storage_partition(self, mock_svc_authorize,
-                                      svc_obj_info_mock,
-                                      svc_run_command_mock):
+    def test_failure_update_storage_partition(self, mock_svc_authorize,
+                                              svc_obj_info_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -1106,10 +1103,12 @@ class TestIBMSVCvdisk(unittest.TestCase):
             "snapshot_policy_safeguarded": "no",
             "partition_name": ""
         }
-
-        vg = IBMSVCVG()
-        probe_data = vg.vg_probe(data)
-        self.assertTrue('partition' in probe_data)
+        svc_obj_info_mock.return_value = data
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Following parameters not supported during update: partition')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_volumegroup.IBMSVCVG.create_transient_snapshot')
@@ -1632,6 +1631,197 @@ class TestIBMSVCvdisk(unittest.TestCase):
             vg.apply()
         self.assertFalse(exc.value.args[0]['changed'])
         self.assertEqual(exc.value.args[0]['msg'], 'Parameter [pool] is invalid for modifying volumegroup.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_VG_in_draftpartition(self,
+                                         svc_authorize_mock,
+                                         svc_get_existing_vg_mock,
+                                         svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'present',
+            'draftpartition': 'ptn0'
+        })
+        svc_get_existing_vg_mock.return_value = {}
+        svc_run_command_mock.return_value = {}
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Volume group [VG0] has been created.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_VG_in_draftpartition_idempotency(self,
+                                                     svc_authorize_mock,
+                                                     svc_get_existing_vg_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'present',
+            'draftpartition': 'ptn0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            "draft_partition_id": "0",
+            "draft_partition_name": "ptn0",
+            "id": "2",
+            "name": "VG0",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'No Modifications detected, Volume group already exists.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_remove_VG_with_invalid_param_draftpartition(self,
+                                                                 svc_authorize_mock,
+                                                                 svc_get_existing_vg_mock,
+                                                                 svc_run_command_mock):
+        '''
+        Specifying invalid parameter draftpartition while removing volumegroup; should fail
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'absent',
+            'draftpartition': 'ptn0'
+        })
+        svc_run_command_mock.return_value = {}
+        svc_get_existing_vg_mock.return_value = {
+            "draft_partition_id": "0",
+            "draft_partition_name": "ptn0",
+            "id": "2",
+            "name": "VG0",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'State=absent but following parameter(s) exist: draftpartition')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_modify_VG_in_published_partition(self,
+                                              svc_authorize_mock,
+                                              svc_get_existing_vg_mock):
+        '''
+        Test for modifying voluemgeroup which is part of published partition but partition is specified in draftpartition.
+        Note: 'ptno' is a published partition
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'present',
+            'draftpartition': 'ptn0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            "draft_partition_id": "",
+            "draft_partition_name": "",
+            "id": "2",
+            "name": "VG0",
+            "partition_id": "0",
+            "partition_name": "ptn0"
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'No Modifications detected, Volume group already exists.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test__failure_create_VG_with_mutually_exclusive_parameter_1(self,
+                                                                    svc_authorize_mock,
+                                                                    svc_get_existing_vg_mock):
+        '''
+        Test for creating volumegroup incase of mutually exclusive draftpartition and partition parameter
+        '''
+
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'present',
+            'draftpartition': 'ptn0',
+            'partition': 'ptn1'
+        })
+        svc_get_existing_vg_mock.return_value = {}
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Mutually exclusive parameters: draftpartition, partition')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_modify_VG_with_mutually_exclusive_parameter_2(self,
+                                                                   svc_authorize_mock,
+                                                                   svc_get_existing_vg_mock):
+        '''
+       Test for modifying volumegroup incase of mutually exclusive draftpartition and partition parameter
+        '''
+
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'VG0',
+            'state': 'present',
+            'partition': 'ptn1',
+            'draftpartition': 'ptn0'
+        })
+        svc_get_existing_vg_mock.return_value = {
+            "draft_partition_id": "0",
+            "draft_partition_name": "ptn0",
+            "id": "2",
+            "name": "VG0",
+            "partition_id": "",
+            "partition_name": ""
+        }
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Following parameters not supported during update: partition')
 
 
 if __name__ == '__main__':
