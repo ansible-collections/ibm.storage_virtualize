@@ -117,7 +117,7 @@ class TestIBMSVCvolume(unittest.TestCase):
         ]
         v = IBMSVCvolume()
         v.assemble_iogrp()
-        self.assertTrue(type(v.iogrp) is list)
+        self.assertTrue(isinstance(v.iogrp, list))
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')

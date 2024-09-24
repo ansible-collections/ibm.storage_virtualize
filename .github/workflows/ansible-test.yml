@@ -125,7 +125,7 @@ jobs:
         exclude:
           # Python 3.10 is supported in 2.12 or later.
           - ansible: stable-2.15
-            python: '3.12'		
+            python: '3.12'
           - ansible: stable-2.16
             python: '3.9'
           - ansible: stable-2.17

@@ -1038,7 +1038,7 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
 
         with pytest.raises(AnsibleExitJson) as exc:
             IBMSVCGatherInfo().apply()
-        self.assertEquals(exc.value.args[0]['Volume'], filter_value_output)
+        self.assertEqual(exc.value.args[0]['Volume'], filter_value_output)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
