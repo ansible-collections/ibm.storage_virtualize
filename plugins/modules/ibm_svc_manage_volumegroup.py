@@ -198,14 +198,6 @@ options:
             - Supported from Storage Virtualize family systems 8.6.1.0 or later.
         type: str
         version_added: 2.1.0
-    nopartition:
-        description:
-            - If specified `True`, removes the volume group from the storage partition.
-            - Parameters I(partition) and I(nopartition) are mutually exclusive.
-            - Applies when I(state=present) to modify an existing volume group.
-            - Supported from Storage Virtualize family systems 8.6.1.0 or later.
-        type: bool
-        version_added: 2.1.0
     evictvolumes:
         description:
             - If specified `True`, delete the volume group but does not remove volumes.
@@ -430,7 +422,6 @@ class IBMSVCVG(object):
                 noreplicationpolicy=dict(type='bool'),
                 old_name=dict(type='str', required=False),
                 partition=dict(type='str'),
-                nopartition=dict(type='bool'),
                 evictvolumes=dict(type='bool'),
                 draftpartition=dict(type='str'),
                 nodrreplication=dict(type='bool')
@@ -470,7 +461,6 @@ class IBMSVCVG(object):
         self.noreplicationpolicy = self.module.params.get('noreplicationpolicy', False)
         self.old_name = self.module.params.get('old_name', '')
         self.partition = self.module.params.get('partition', '')
-        self.nopartition = self.module.params.get('nopartition', False)
         self.evictvolumes = self.module.params.get('evictvolumes', False)
         self.draftpartition = self.module.params.get('draftpartition', '')
         self.nodrreplication = self.module.params.get('nodrreplication', False)
@@ -541,7 +531,6 @@ class IBMSVCVG(object):
             "snapshotpolicy": self.snapshotpolicy,
             "nosnapshotpolicy": self.nosnapshotpolicy,
             "partition": self.partition,
-            "nopartition": self.nopartition,
             "fromsourcevolumes": self.fromsourcevolumes,
             "nodrreplication": self.nodrreplication
         }
@@ -556,7 +545,6 @@ class IBMSVCVG(object):
             ('ownershipgroup', 'policystarttime'),
             ('snapshotpolicy', 'safeguardpolicyname'),
             ('replicationpolicy', 'noreplicationpolicy'),
-            ('partition', 'nopartition'),
             ('draftpartition', 'partition'),
             ('replicationpolicy', 'nodrreplication'),
             ('noreplicationpolicy', 'nodrreplication')
@@ -752,7 +740,6 @@ class IBMSVCVG(object):
             ('nosnapshotpolicy', not bool(data.get('snapshot_policy_name', ''))),
             ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
             ('partition', data.get('partition_name', '')),
-            ('nopartition', not bool(data.get('partition_name', ''))),
             ('draftpartition', data.get('draft_partition_name', '')),
             ('nodrreplication', not bool(data.get('replication_policy_name', '')))
         )

@@ -17,11 +17,11 @@ Tasks performed via this playbook:
   - Create a replication policy between IO-groups of 2 clusters
   - Assign replication policy to partition
 
-There are total 3 files used for this use-case:
+There are total 4 files used for moving existing objects in PBHA, and decommission_partition.yml is for decommissioning the partition.
   1. main.yml:
      This is the main file to be executed as below:
      ansible-playbook main.yml -i inventory.ini
-     main.yml leverages create_mTLs.yml and replication_setup.yml for completing its initialial setup tasks. After 
+     main.yml leverages create_mTLS.yml and replication_setup.yml for completing its initialial setup tasks. After 
      that, it continues to move objects into a new partition, finally establishing high-availability between primary and
      secondary clusters.
 
@@ -44,20 +44,32 @@ There are total 3 files used for this use-case:
       - ha_policy_name: HA Replication policy name
       - partition_name: storage partition name
       - volume_group_name: Volume-group name
-      - log_path: Log path of playbook. If not specified, logs will be generated in default file
-      "/tmp/ansiblePB.debug".    
+      - log_path: Log path of playbook. (Default file "ansiblePB.debug").
+      - ams_cluster_name: Active management site's cluster name
+      - ams_cluster_ip: Active management site's cluster IP
+      - ams_cluster_username: Active management site's cluster username
+      - ams_cluster_password: Active management site's cluster password
+      - keep_volumegroups: <true/false>
 
-  3. create_mTLs.yml:
+  3. create_mTLS.yml:
      This playbook sets up Mutual Transport Layer Security (mTLS) which includes generating and exporting
      certificate and creating truststore on both clusters.
 
   4. replication_setup.yml:
      This file links pools of both the sites and creates an HA replication policy
+
+  5. decommission_partition.yml:
+     This file should be run when user wants to decommission partition. It does following:
+     - Make partition non-HA (if it is in HA relationship) by removing HA replication policy
+     - Remove all volumegroups from partition
+     - Delete partition
+     - Delete volumegroup(s) while keeping volumes, if keep_volumegroups == false
   
   Note:
     - When last task (i.e. assigning HA replication policy to partition) is completed, objects are replicated to
       secondary cluster's pool and data copy starts immediately from primary cluster to secondary. Time taken by
       data-synchronization is dependent on amount of data. After sync is complete, 'lspartition' output shows
       ha_status=established and link_status=synchronized.
+    - decommission_partition.yml is meant for decommissioning partition.
 
 Authors: Sumit Kumar Gupta (sumit.gupta16@ibm.com)

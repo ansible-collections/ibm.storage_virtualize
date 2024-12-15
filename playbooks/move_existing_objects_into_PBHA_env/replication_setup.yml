@@ -4,7 +4,7 @@
     clustername: "{{ clusters[1].cluster_ip }}"
     username: "{{ clusters[1].cluster_username }}"
     password: "{{ clusters[1].cluster_password }}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{ log_path | default('ansiblePB.log') }}"
     gather_subset: "pool"
     objectname: "{{ clusters[1].pool_name }}"
 
@@ -18,7 +18,7 @@
     clustername: "{{ clusters[0].cluster_ip }}"
     username: "{{ clusters[0].cluster_username }}"
     password: "{{ clusters[0].cluster_password }}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{ log_path | default('ansiblePB.log') }}"
     gather_subset: "partnership"
 
 - name: Set primary cluster's cluster id
@@ -38,7 +38,7 @@
     clustername: "{{ clusters[0].cluster_ip }}"
     username: "{{ clusters[0].cluster_username }}"
     password: "{{ clusters[0].cluster_password }}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{ log_path | default('ansiblePB.log') }}"
     name: "{{ clusters[0].pool_name }}"
     state: "present"
     replicationpoollinkuid: "{{ uid }}"
@@ -49,7 +49,7 @@
     clustername: "{{ clusters[0].cluster_ip }}"
     username: "{{ clusters[0].cluster_username }}"
     password: "{{ clusters[0].cluster_password }}"
-    log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+    log_path: "{{ log_path | default('ansiblePB.log') }}"
     name: "{{ ha_policy_name }}"
     topology: "2-site-ha"
     location1system: "{{ clusterid1 }}"

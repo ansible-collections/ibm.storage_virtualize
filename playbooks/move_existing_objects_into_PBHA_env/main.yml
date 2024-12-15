@@ -37,7 +37,7 @@
         clustername: "{{ clusters[0].cluster_ip }}"
         username: "{{ clusters[0].cluster_username }}"
         password: "{{ clusters[0].cluster_password }}"
-        log_path: "{{ log_path | default('/tmp/ansiblePB.debug') }}"
+        log_path: "{{ log_path | default('ansiblePB.log') }}"
         name: "{{ host_name }}"
         state: "present"
         fcwwpn: "{{ fcwwpn }}"
