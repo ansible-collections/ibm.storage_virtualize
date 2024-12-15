@@ -119,22 +119,22 @@ notes:
 EXAMPLES = '''
 - name: Create MDisk and name as mdisk20
   ibm.storage_virtualize.ibm_svc_mdisk:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: mdisk20
     state: present
     level: raid0
     drive: '5:6'
-    encrypt: no
+    encrypt: 'no'
     mdiskgrp: pool20
 - name: Delete MDisk named mdisk20
   ibm.storage_virtualize.ibm_svc_mdisk:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: mdisk20
     state: absent
     mdiskgrp: pool20
@@ -412,7 +412,7 @@ class IBMSVCmdisk(object):
                         self.changed = True
                 elif self.state == 'absent':
                     self.mdisk_delete()
-                    msg = "Volume [%s] has been deleted." % self.name
+                    msg = "Mdisk [%s] has been deleted." % self.name
                     self.changed = True
             else:
                 self.log("exiting with no changes")

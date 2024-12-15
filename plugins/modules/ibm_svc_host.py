@@ -177,10 +177,10 @@ notes:
 EXAMPLES = '''
 - name: Define a new iSCSI host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host4test
     state: present
@@ -192,20 +192,20 @@ EXAMPLES = '''
     portset: portset0
 - name: Add a host to an existing host cluster
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host4test
     state: present
     hostcluster: hostcluster0
 - name: Define a new FC host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host4test
     state: present
@@ -225,20 +225,20 @@ EXAMPLES = '''
     state: "present"
 - name: Create an iSCSI host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host_name
     iscsiname: iqn.1994-05.com.redhat:2e358e438b8a,iqn.localhost.hostid.7f000001
     state: present
 - name: Create a tcpnvme host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host_name
     protocol: tcpnvme
@@ -246,39 +246,39 @@ EXAMPLES = '''
     state: present
 - name: Delete a host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: new_host_name
     state: absent
 - name: Add existing host to draft partition
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host_name
     state: prersent
     draftpartition: partition_name
 - name: Remove a host from a draft partition
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host_name
     state: present
-    nodraftpartition: True
+    nodraftpartition: 'True'
 - name: Create a fcnvme host
   ibm.storage_virtualize.ibm_svc_host:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: host_name
     protocol: fcnvme

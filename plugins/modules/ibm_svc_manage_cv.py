@@ -88,10 +88,10 @@ notes:
 EXAMPLES = '''
 - name: Create master change volume and associate with rcopy
   ibm.storage_virtualize.ibm_svc_manage_cv:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     rname: sample_rcopy
@@ -99,10 +99,10 @@ EXAMPLES = '''
     basevolume: vol1
 - name: Create auxiliary change volume and associate with rcopy
   ibm.storage_virtualize.ibm_svc_manage_cv:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     rname: sample_rcopy
@@ -111,20 +111,20 @@ EXAMPLES = '''
     ismaster: false
 - name: Delete master change volume and disassociate from rcopy
   ibm.storage_virtualize.ibm_svc_manage_cv:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: absent
     rname: sample_rcopy
     cvname: vol1_cv
 - name: Delete auxiliary change volume and disassociate from rcopy
   ibm.storage_virtualize.ibm_svc_manage_cv:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: absent
     rname: sample_rcopy

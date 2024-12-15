@@ -4,13 +4,14 @@
 # Copyright (C) 2023 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: ibm_sv_manage_storage_partition
 short_description: This module manages storage partition on IBM Storage Virtualize family systems
@@ -112,6 +113,41 @@ options:
             - Applies when I(state=present).
         type: str
         version_added: 2.5.0
+    drlink_partition_uuid:
+        description:
+            - Specifies uuid of the disaster-recovery system's partition
+            - Applies, when I(state=present).
+            - Supported from Storage Virtualize family systems 8.7.1.0 or later.
+        type: str
+        version_added: 2.6.0
+    remotesystem:
+        description:
+            - Specifies the disaster-recovery system.
+            - Applies, when I(state=present).
+            - Supported from Storage Virtualize family systems 8.7.1.0 or later.
+        type: str
+        version_added: 2.6.0
+    removedrlink:
+        description:
+            - Removes the disaster recovery link from this partition.
+            - Applies, when I(state=present).
+            - Supported from Storage Virtualize family systems 8.7.1.0 or later.
+        type: bool
+        version_added: 2.6.0
+    location:
+        description:
+            - Specifies a desired target system location to migrate an existing storage partition.
+        type: str
+        version_added: 2.6.0
+    migrationaction:
+        description:
+            - Indicates how the partition migration should continue on target system.
+              fixeventwithchecks - The system marks the event as fixed and re-check the configuration. If
+              the error condition still exists, the event is logged again. This ensures migration only proceeds
+              when error conditions are resolved.
+        type: str
+        choices: [ fixeventwithchecks ]
+        version_added: 2.6.0
     validate_certs:
         description:
             - Validates certification.
@@ -120,24 +156,28 @@ options:
 author:
     - Shilpi Jain (@Shilpi-J)
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
+    - Parameters drlink_partition_uuid and remotesystem are interdependent and mutually exclusive with other parameters.
+    - When a migrationaction is triggered for a partition that does not exist on the target cluster, ansible returns
+      'CMMVC5753E The specified partition object does not exist.' error.
 '''
 
 EXAMPLES = '''
 - name: Create Storage Partition
   ibm.storage_virtualize.ibm_sv_manage_storage_partition:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: partition1
    state: present
    replicationpolicy: ha_policy_1
 - name: Delete the storage partition
   ibm.storage_virtualize.ibm_sv_manage_storage_partition:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: partition1
    state: absent
 - name: Create a partition in draft state
@@ -170,6 +210,39 @@ EXAMPLES = '''
    name: partition0
    state: present
    partition_to_merge: partition1
+- name: Create dr-link using remote system uuid
+  ibm.storage_virtualize.ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition1
+   state: present
+   drlink_partition_uuid: 4D837492-8C69-5BEA-9147-F5C937D38028
+   remotesystem: '{{ remote_system }}'
+- name: Remove existing DR link
+  ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition1
+   state: present
+   removedrlink: true
+- name: Initiate partition migration by changing location to target cluster
+  ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition0
+   state: present
+   location: '{{ target_cluster_fqdn_name }}'
+- name: Complete migration on target cluster
+  ibm_sv_manage_storage_partition:
+   clustername: "{{ target_cluster_name }}"
+   username: "{{ target_cluster_username }}"
+   password: "{{ target_cluster_password }}"
+   name: partition0
+   state: present
+   migrationaction: fixeventwithchecks
 '''
 
 RETURN = '''#'''
@@ -222,6 +295,22 @@ class IBMSVStoragePartition:
                 ),
                 partition_to_merge=dict(
                     type='str'
+                ),
+                drlink_partition_uuid=dict(
+                    type='str'
+                ),
+                remotesystem=dict(
+                    type='str'
+                ),
+                removedrlink=dict(
+                    type='bool'
+                ),
+                location=dict(
+                    type='str'
+                ),
+                migrationaction=dict(
+                    type='str',
+                    choices=['fixeventwithchecks']
                 )
 
             )
@@ -243,6 +332,11 @@ class IBMSVStoragePartition:
         self.deletepreferredmanagementobjects = self.module.params.get('deletepreferredmanagementobjects', '')
         self.draft = self.module.params.get('draft', '')
         self.partition_to_merge = self.module.params.get('partition_to_merge', '')
+        self.drlink_partition_uuid = self.module.params.get('drlink_partition_uuid')
+        self.remotesystem = self.module.params.get('remotesystem')
+        self.removedrlink = self.module.params.get('removedrlink')
+        self.location = self.module.params.get('location')
+        self.migrationaction = self.module.params.get('migrationaction')
 
         # logging setup
         self.log_path = self.module.params['log_path']
@@ -270,6 +364,14 @@ class IBMSVStoragePartition:
         if not self.name:
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
+        common_invalids = [
+            'replicationpolicy', 'noreplicationpolicy',
+            'preferredmanagementsystem', 'deletepreferredmanagementcopy',
+            'removedrlink', 'drlink_partition_uuid',
+            'draft', 'partition_to_merge',
+            'location', 'migrationaction'
+        ]
+
         if self.state == 'present':
             if self.deletenonpreferredmanagementobjects or self.deletepreferredmanagementobjects:
                 self.module.fail_json(
@@ -277,49 +379,21 @@ class IBMSVStoragePartition:
                         'deletenonpreferredmanagementobjects, deletepreferredmanagementobjects'
                 )
 
-            if self.draft is not None:
-                invalids_with_draft_opt = (
-                    'replicationpolicy',
-                    'noreplicationpolicy',
-                    'preferredmanagementsystem',
-                    'deletepreferredmanagementcopy',
-                    'partition_to_merge'
-                )
-                invalid_exists_for_draft_opt = ', '.join((var for var in invalids_with_draft_opt if getattr(self, var) not in {'', None}))
-
-                if invalid_exists_for_draft_opt:
-                    self.module.fail_json(
-                        msg='Parameter (draft) is mutually exclusive with parameter(s): ({0})'.format(
-                            invalid_exists_for_draft_opt)
-                    )
-
-            if self.partition_to_merge:
-                invalids_with_partition_to_merge = (
-                    'replicationpolicy',
-                    'noreplicationpolicy',
-                    'preferredmanagementsystem',
-                    'deletepreferredmanagementcopy',
-                    'draft'
-                )
-
-                invalid_exists_for_partition_to_merge_opt = ', '.join((var for var in invalids_with_partition_to_merge if getattr(self, var) not in {'', None}))
-
-                if invalid_exists_for_partition_to_merge_opt:
-                    self.module.fail_json(
-                        msg='Parameter (partition_to_merge) is mutually exclusive with parameter(s): ({0})'.format(
-                            invalid_exists_for_partition_to_merge_opt)
-                    )
+            # These parameters are loners; cannot be specified with any other parameters in common_invalids
+            loners_list = ['drlink_partition_uuid', 'removedrlink', 'draft',
+                           'partition_to_merge', 'location', 'migrationaction']
+            for attr in loners_list:
+                if getattr(self, attr) is not None:
+                    # Remove attr itself from list, and get invalids with this loner
+                    common_invalids.remove(attr)
+                    current_invalids = ', '.join((var for var in common_invalids if not getattr(self, var) in {'', None}))
+                    if current_invalids:
+                        self.module.fail_json(
+                            msg="Parameter {0} is mutually exclusive with"
+                            " specified parameters: {1}.".format(attr, current_invalids))
 
         else:
-            invalids_for_delete = (
-                'replicationpolicy',
-                'noreplicationpolicy',
-                'preferredmanagementsystem',
-                'deletepreferredmanagementcopy',
-                'draft',
-                'partition_to_merge'
-            )
-
+            invalids_for_delete = common_invalids + ['remotesystem']
             invalid_exists = ', '.join((var for var in invalids_for_delete if getattr(self, var) not in {'', None}))
 
             if invalid_exists:
@@ -340,7 +414,8 @@ class IBMSVStoragePartition:
         return merged_result
 
     def create_storage_partition(self):
-        unsupported = ('noreplicationpolicy', 'preferredmanagementsystem', 'deletepreferredmanagementcopy')
+        unsupported = ('noreplicationpolicy', 'preferredmanagementsystem', 'deletepreferredmanagementcopy',
+                       'drlink_partition_uuid', 'remotesystem', 'removedrlink')
         unsupported_exists = ', '.join((field for field in unsupported if getattr(self, field) not in {'', None}))
 
         if unsupported_exists:
@@ -367,6 +442,9 @@ class IBMSVStoragePartition:
         self.changed = True
 
     def partition_probe(self, data):
+        if (self.drlink_partition_uuid and not self.remotesystem) or (not self.drlink_partition_uuid and self.remotesystem):
+            self.module.fail_json(msg="Parameter 'drlink_partition_uuid' and 'remotesystem' must be specified together.")
+
         if self.replicationpolicy and self.noreplicationpolicy:
             self.module.fail_json(msg='Mutual exclusive parameters: {0}, {1}'.format("replicationpolicy",
                                                                                      "noreplicationpolicy"))
@@ -381,17 +459,54 @@ class IBMSVStoragePartition:
         params_mapping = (
             ('replicationpolicy', data.get('replication_policy_name', '')),
             ('preferredmanagementsystem', data.get('preferred_management_system_name', '')),
-            ('noreplicationpolicy', not bool(data.get('replication_policy_name', '')))
+            ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
+            ('drlink_partition_uuid', data.get('dr_linked_partition_uuid', '')),
+            ('removedrlink', not bool(data.get('dr_linked_partition_name')))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
-
-        if self.noreplicationpolicy in props:
+        if "noreplicationpolicy" in props:
             if self.deletepreferredmanagementcopy:
-                props['deletepreferredmanagementcopy'] = True
+                if data.get("preferred_management_system_name") == data.get("active_management_system_name"):
+                    self.module.fail_json(msg='CMMVC1042E active management and preferred management system are'
+                                          ' same thereforce not able to remove preferredmanagementcopy')
+                props['deletepreferredmanagementcopy'] = self.deletepreferredmanagementcopy
+        if "drlink_partition_uuid" in props and data.get('dr_linked_partition_uuid'):
+            self.module.fail_json(msg='CMMVC1245E Storage partition {0} already has a disaster recovery link configured.'.format(self.name))
+        '''
+        Handle these errors internally
+        error-codes:
+            CMMVC1245E - The command failed because the storage partition already has a disaster recovery link configured.
+            CMMVC1042E - The command failed to remove the storage partition replication policy using -deletepreferredmanagementcopy
+            because the active management system and preferred management system are the same.
+        '''
 
         if data.get('draft', '') == 'yes' and self.draft is False:
             props['draft'] = True
+
+        # Handle Partition migration logic
+        if self.location or self.migrationaction:
+            current_migration_status = data.get('migration_status')
+
+            # At source cluster, handle 'location' parameter
+            if self.location:
+                if not (current_migration_status == 'in_progress' and
+                        self.location == data.get('desired_location_system_name')):
+                    # If partition is currently not in migration with desired target,
+                    # continue with chpartition -location command, else do nothing
+                    props['location'] = self.location
+                elif (current_migration_status == 'in_progress' and
+                      self.location == data.get('desired_location_system_name')):
+                    self.module.exit_json(changed=self.changed,
+                                          msg='A partition migration is already in progress'
+                                              ' with target cluster {0}.'.format(self.location))
+            # At target cluster, handle 'migrationaction' parameter
+            # We need to avoid running "chpartition -migrationaction fixeventwithchecks partition_name" in
+            # below 2 cases:
+            # 1. Partition migration just got initiated: i.e. migration_status = 'in_progress' on target
+            # 2. Partition migration got completed: At this stage, it has already completed, so don't run it.
+            if self.migrationaction and not (current_migration_status in ['', 'in_progress']):
+                props['migrationaction'] = self.migrationaction
 
         self.log("Storage Partition props = %s", props)
 
@@ -413,6 +528,11 @@ class IBMSVStoragePartition:
         if 'draft' in cmdopts:
             cmdopts.pop('draft')
             cmdopts['publish'] = True
+
+        if "drlink_partition_uuid" in cmdopts:
+            cmdopts["makedrlink"] = True
+            cmdopts["remotedrlinkedpartitionuuid"] = cmdopts.pop("drlink_partition_uuid")
+            cmdopts["remotesystem"] = self.remotesystem
 
         self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=cmdargs)
         self.changed = True
@@ -479,8 +599,13 @@ class IBMSVStoragePartition:
             elif self.partition_to_merge:
                 self.module.fail_json(msg="Target Partition ({0}) does not exist. Merge failed.".format(self.name))
             else:
-                self.create_storage_partition()
-                self.msg = 'Storage Partition ({0}) created.'.format(self.name)
+                if self.location:
+                    self.msg = 'Storage Partition ({0}) either does not exist or already migrated'.format(self.name)
+                elif self.migrationaction:
+                    self.module.fail_json(msg='CMMVC5753E The specified partition object does not exist.')
+                else:
+                    self.create_storage_partition()
+                    self.msg = 'Storage Partition ({0}) created.'.format(self.name)
 
         if self.module.check_mode:
             self.msg = 'skipping changes due to check mode.'

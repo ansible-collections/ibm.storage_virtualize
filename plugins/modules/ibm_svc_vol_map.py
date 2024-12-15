@@ -89,10 +89,10 @@ notes:
 EXAMPLES = '''
 - name: Map a volume to a host
   ibm.storage_virtualize.ibm_svc_vol_map:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     volname: volume0
     host: host4test
@@ -100,10 +100,10 @@ EXAMPLES = '''
     state: present
 - name: Unmap a volume from a host
   ibm.storage_virtualize.ibm_svc_vol_map:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     volname: volume0
     host: host4test

@@ -68,30 +68,30 @@ EXAMPLES = '''
 - name: Run svctask CLI commands using SSH client with password
   ibm.storage_virtualize.ibm_svctask_command:
     command: [
-        "svctask mkvdisk -name {{ volname }} -mdiskgrp '{{ pool }}' -easytier '{{ easy_tier }}' -size {{ size }} -unit {{ unit }}",
-        "svctask rmvdisk {{ volname }}"
+      "svctask mkvdisk -name {{ volname }} -mdiskgrp '{{ pool }}' -easytier '{{ easy_tier }}' -size {{ size }} -unit {{ unit }}",
+      "svctask rmvdisk {{ volname }}"
     ]
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
 - name: Run svctask CLI command using passwordless SSH Client
   ibm.storage_virtualize.ibm_svctask_command:
     command: [
-        "svctask mkvdisk -name vol0 -mdiskgrp pool0 -easytier off -size 1 -unit gb",
-        "svctask rmvdisk vol0"
+      "svctask mkvdisk -name vol0 -mdiskgrp pool0 -easytier off -size 1 -unit gb",
+      "svctask rmvdisk vol0"
     ]
-    clustername: "{{clustername}}"
-    username: "{{username}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
     password:
-    usesshkey: yes
+    usesshkey: 'yes'
     log_path: /tmp/ansible.log
 - name: Run satask CLI command
   ibm.storage_virtualize.ibm_svctask_command:
     command: "satask snap"
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
 '''
 

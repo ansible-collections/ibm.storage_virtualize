@@ -76,17 +76,17 @@ notes:
 EXAMPLES = '''
 - name: Add port ID to the portset
   ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset1
    fcportid: 3
    state: present
 - name: Remove port ID from portset
   ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset1
    fcportid: 3
    state: absent

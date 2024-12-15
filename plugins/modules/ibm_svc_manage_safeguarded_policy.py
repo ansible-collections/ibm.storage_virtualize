@@ -94,9 +94,9 @@ notes:
 EXAMPLES = '''
 - name: Create safeguarded policy
   ibm.storage_virtualize.ibm_svc_manage_safeguarded_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: sgpolicy0
     backupunit: day
     backupinterval: 1
@@ -105,21 +105,21 @@ EXAMPLES = '''
     state: present
 - name: Suspend safeguarded copy functionality
   ibm.storage_virtualize.ibm_svc_manage_safeguarded_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     state: suspend
 - name: Resume safeguarded copy functionality
   ibm.storage_virtualize.ibm_svc_manage_safeguarded_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     state: resume
 - name: Delete safeguarded policy
   ibm.storage_virtualize.ibm_svc_manage_safeguarded_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: sgpolicy0
     state: absent
 '''

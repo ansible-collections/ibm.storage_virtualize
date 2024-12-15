@@ -21,7 +21,7 @@ There are total 3 files used for this use-case:
   1. main.yml:
      This is the main file to be executed as below:
      ansible-playbook main.yml -i inventory.ini
-     main.yml leverages create_mTLS.yml and replication_setup.yml for completing its initialial setup tasks. After 
+     main.yml leverages create_mTLs.yml and replication_setup.yml for completing its initialial setup tasks. After 
      that, it continues to move objects into a new partition, finally establishing high-availability between primary and
      secondary clusters.
 
@@ -47,7 +47,7 @@ There are total 3 files used for this use-case:
       - log_path: Log path of playbook. If not specified, logs will be generated in default file
       "/tmp/ansiblePB.debug".    
 
-  3. create_mTLS.yml:
+  3. create_mTLs.yml:
      This playbook sets up Mutual Transport Layer Security (mTLS) which includes generating and exporting
      certificate and creating truststore on both clusters.
 

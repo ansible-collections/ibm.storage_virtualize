@@ -3,6 +3,7 @@
 
 # Copyright (C) 2023 IBM CORPORATION
 # Author(s): Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -44,7 +45,7 @@ options:
         type: str
     sshprotocol:
         description:
-            - Specifies the numeric value for the SSH security level setting in range 1 - 3.
+            - Specifies the numeric value for the SSH security level setting in range 1 - 4.
             - The level 1 Allows the following key exchange methods
               curve25519-sha256
               curve25519-sha256@libssh.org
@@ -79,6 +80,12 @@ options:
               diffie-hellman-group16-sha512
               diffie-hellman-group18-sha512
               diffie-hellman-group14-sha256
+            - The level 4 Allows the following key exchange methods
+              curve25519-sha256
+              curve25519-sha256@libssh.org
+              ecdh-sha2-nistp256
+              ecdh-sha2-nistp384
+              ecdh-sha2-nistp521
         type: int
     guitimeout:
         description:
@@ -217,34 +224,36 @@ options:
 author:
     - Sumit Kumar Gupta (@sumitguptaibm)
     - Lavanya C R (@lavanyacr)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
+    - The 3-site-orchestrator does not support SSH protocol level 4.
 '''
 
 EXAMPLES = r'''
 - name: Change max failed login limit
   ibm.storage_virtualize.ibm_sv_manage_security:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    log_path: /tmp/playbook.debug
    maxfailedlogins: 5
 
 - name: Change SSH protocol level
   ibm.storage_virtualize.ibm_sv_manage_security:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    log_path: /tmp/playbook.debug
    sshprotocol: 2
 
 - name: Enables the patch auto updater service
   ibm.storage_virtualize.ibm_sv_manage_security:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    log_path: /tmp/playbook.debug
-   patchautoupdate: yes
+   patchautoupdate: 'yes'
 '''
 
 RETURN = r'''#'''

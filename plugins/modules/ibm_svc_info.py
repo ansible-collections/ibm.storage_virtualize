@@ -189,74 +189,92 @@ notes:
 EXAMPLES = '''
 - name: Get volume info
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: vol
 - name: Get volume info
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     objectname: volumename
     gather_subset: vol
 - name: Get pool info
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: pool
 - name: Get population information about volumes and volumegroups of type clone or thinclone
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
-    gather_subset: ['volumepopulation','volumegrouppopulation']
+    gather_subset: ['volumepopulation', 'volumegrouppopulation']
 - name: Get all info related to volume 'Volume1'
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: vol
     objectname: Volume1
 - name: Get detailed info of all volumes.
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: vol
     objectname: all
 - name: Get detailed info for objects returned by lsvdiskcopy using command_list.
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     command_list: lsvdiskcopy
     objectname: all
 - name: Get detailed info of multiple objects using gather_subset and command_list.
   ibm.storage_virtualize.ibm_svc_info:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: [vol, host]
     command_list: [lsvdiskcopy, lssite]
     objectname: all
+- name: Get list of candidate drives info using filtervale and gather_subset.
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/ansible.log
+    gather_subset: drive
+    filtervalue: "use=candidate"
+- name: Get list of replication type portsets info using filtervalue and command_list.
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/ansible.log
+    command_list: lsportset
+    filtervalue: "type=replication"
 '''
 
 RETURN = '''

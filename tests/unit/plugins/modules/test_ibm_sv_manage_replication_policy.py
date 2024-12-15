@@ -96,7 +96,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -123,7 +123,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -196,7 +196,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -229,13 +229,10 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_update_replication_policy(self,
-                                       svc_authorize_mock,
-                                       svc_run_command_mock,
-                                       svc_obj_info_mock):
+    def test_failure_update_replication_policy(self,
+                                               svc_authorize_mock,
+                                               svc_obj_info_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -258,7 +255,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -287,14 +284,11 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_replication_policy_idempotency(self,
                                                    svc_authorize_mock,
-                                                   svc_run_command_mock,
                                                    rp_exists_mock):
         set_module_args({
             'clustername': 'clustername',
@@ -313,14 +307,11 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_rp_exists')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_replication_policy_validation(self,
                                                   svc_authorize_mock,
-                                                  svc_run_command_mock,
                                                   rp_exists_mock):
         set_module_args({
             'clustername': 'clustername',
@@ -341,6 +332,160 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
 
         with pytest.raises(AnsibleFailJson) as exc:
             IBMSVReplicationPolicy()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_async_dr_replication_policy(self,
+                                                svc_authorize_mock,
+                                                svc_run_command_mock,
+                                                rp_exists_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition': 'ptn0',
+            'rpoalert': 60,
+            'state': 'present'
+        })
+
+        rp_exists_mock.return_value = {}
+        rp = IBMSVReplicationPolicy()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_async_dr_replication_policy_idempotency(self,
+                                                            svc_authorize_mock,
+                                                            rp_exists_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition': 'ptn0',
+            'rpoalert': 60,
+            'state': 'present'
+        })
+
+        rp_exists_mock.return_value = {
+            'id': 0,
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition_name': 'ptn0',
+            'rpo_alert': 60
+        }
+        rp = IBMSVReplicationPolicy()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            rp.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_missing_parameter(self,
+                                       svc_authorize_mock,
+                                       rp_exists_mock):
+        # Module failed if 'partition' is not specified for 'async_dr' replication policy
+        # 'async-dr' topology is mutuly inclusive with 'partition'
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'rpoalert': 60,
+            'state': 'present'
+        })
+
+        rp_exists_mock.return_value = {}
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            rp = IBMSVReplicationPolicy()
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_mutually_exclusive_parameter(self,
+                                                  svc_authorize_mock,
+                                                  rp_exists_mock):
+        '''
+        for 'asycn_dr' replication policy, all parameter other than 'partiiton' and 'rpoalert' is mutually exlcusive
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition': 'ptn0',
+            'rpoalert': 60,
+            'state': 'present',
+            'location1system': 'cluster_A',
+            'location1iogrp': '0',
+            'location2system': 'cluster_B',
+            'location2iogrp': '0'
+        })
+
+        rp_exists_mock.return_value = {}
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            rp = IBMSVReplicationPolicy()
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_mutually_exclusive_parameter(self,
+                                                  svc_authorize_mock,
+                                                  rp_exists_mock):
+        '''
+        Parameter 'partition' is invalid for topology other than 'async-dr'
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': '2-site-async-dr',
+            'partition': 'ptn0',
+            'rpoalert': 60,
+            'state': 'present',
+            'location1system': 'cluster_A',
+            'location1iogrp': '0',
+            'location2system': 'cluster_B',
+            'location2iogrp': '0'
+        })
+
+        rp_exists_mock.return_value = {}
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            rp = IBMSVReplicationPolicy()
+            rp.apply()
         self.assertTrue(exc.value.args[0]['failed'])
 
 

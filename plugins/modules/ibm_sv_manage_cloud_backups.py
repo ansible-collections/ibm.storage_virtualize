@@ -106,25 +106,25 @@ notes:
 EXAMPLES = '''
 - name: Create cloud backup of volume
   ibm.storage_virtualize.ibm_sv_manage_cloud_backups:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     volume_name: vol1
     full: true
     state: present
 - name: Create cloud backup of volumegroup
   ibm.storage_virtualize.ibm_sv_manage_cloud_backups:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     volumegroup_name: VG1
     full: true
     state: present
 - name: Delete cloud backup
   ibm.storage_virtualize.ibm_sv_manage_cloud_backups:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     volume_UID: 6005076400B70038E00000000000001C
     all: true
     state: absent

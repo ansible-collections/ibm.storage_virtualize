@@ -100,9 +100,9 @@ notes:
 EXAMPLES = '''
 - name: Create snapshot policy
   ibm.storage_virtualize.ibm_sv_manage_snapshotpolicy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: policy0
     backupunit: day
     backupinterval: 1
@@ -111,21 +111,21 @@ EXAMPLES = '''
     state: present
 - name: Suspend snapshot policy functionality
   ibm.storage_virtualize.ibm_sv_manage_snapshotpolicy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     state: suspend
 - name: Resume snapshot policy functionality
   ibm.storage_virtualize.ibm_sv_manage_snapshotpolicy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     state: resume
 - name: Delete snapshot policy
   ibm.storage_virtualize.ibm_sv_manage_snapshotpolicy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: policy0
     state: absent
 '''

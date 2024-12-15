@@ -3,7 +3,7 @@
 
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
-#
+#            Lavanya C R <lavanya.c.r1@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -132,8 +132,20 @@ options:
             - Specifies whether the encryption license function is enabled or disabled.
         type: str
         choices: [ 'on', 'off' ]
+    flashcopydefaultgrainsize:
+        description:
+            - Allow a user to change the FC grainsize to be one of either 64K or 256K.
+        type: int
+        version_added: 2.6.0
+    storageinsightscontrolaccess:
+        description:
+            - Indicates whether the storage insights control access for the system is enabled or disabled.
+        type: str
+        version_added: 2.6.0
+        choices: [ 'yes', 'no' ]
 author:
     - Shilpi Jain (@Shilpi-J)
+    - Lavanya C R (@lavanyacr)
 notes:
     - This module supports C(check_mode).
 '''
@@ -141,10 +153,10 @@ notes:
 EXAMPLES = '''
 - name: Initial configuration on FlashSystem 9200
   ibm.storage_virtualize.ibm_svc_initial_setup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     system_name: cluster_test_0
     time: 101009142021
@@ -157,10 +169,10 @@ EXAMPLES = '''
       - 8921-4567-89AB-GHIJ
 - name: Add DNS servers
   ibm.storage_virtualize.ibm_svc_initial_setup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     system_name: cluster_test_
     dnsname:
@@ -171,16 +183,30 @@ EXAMPLES = '''
       - '2.2.2.2'
 - name: Delete dns_02 server
   ibm.storage_virtualize.ibm_svc_initial_setup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     system_name: cluster_test_
     dnsname:
       - dns_01
     dnsip:
       - '1.1.1.1'
+- name: Change flashcopydefaultgrainsize to 64.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    flashcopydefaultgrainsize: 64
+- name: Change storageinsightscontrolaccess to no.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    storageinsightscontrolaccess: "no"
 '''
 
 RETURN = '''#'''
@@ -211,7 +237,9 @@ class IBMSVCInitialSetup(object):
                 cloud=dict(type='int'),
                 easytier=dict(type='int'),
                 physical_flash=dict(type='str', default='off', choices=['on', 'off']),
-                encryption=dict(type='str', choices=['on', 'off'])
+                encryption=dict(type='str', choices=['on', 'off']),
+                flashcopydefaultgrainsize=dict(type='int'),
+                storageinsightscontrolaccess=dict(type='str', choices=['yes', 'no'])
             )
         )
 
@@ -234,6 +262,8 @@ class IBMSVCInitialSetup(object):
         self.ntpip = self.module.params.get('ntpip', '')
         self.time = self.module.params.get('time', '')
         self.timezone = self.module.params.get('timezone', '')
+        self.flashcopydefaultgrainsize = self.module.params.get('flashcopydefaultgrainsize', '')
+        self.storageinsightscontrolaccess = self.module.params.get('storageinsightscontrolaccess', '')
 
         # license related parameters
         self.license_key = self.module.params.get('license_key', '')
@@ -293,6 +323,28 @@ class IBMSVCInitialSetup(object):
         if self.ntpip:
             self.message += " NTP IP [%s] updated." % self.ntpip
 
+    def fcgrainsize_update(self):
+        cmd = 'chsystem'
+        cmdopts = {}
+        cmdopts['flashcopydefaultgrainsize'] = self.flashcopydefaultgrainsize
+
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        # Any error will have been raised in svc_run_command
+        self.changed = True
+        self.log("Properties: flashcopydefaultgrainsize %s updated", self.flashcopydefaultgrainsize)
+        self.message += "flashcopydefaultgrainsize [%s] updated." % self.flashcopydefaultgrainsize
+
+    def sicontrolaccess_update(self):
+        cmd = 'chsystem'
+        cmdopts = {}
+        cmdopts['storageinsightscontrolaccess'] = self.storageinsightscontrolaccess
+
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        # Any error will have been raised in svc_run_command
+        self.changed = True
+        self.log("Properties: storageinsightscontrolaccess %s updated", self.storageinsightscontrolaccess)
+        self.message += "storageinsightscontrolaccess [%s] updated." % self.storageinsightscontrolaccess
+
     def systemtime_update(self):
         cmd = 'setsystemtime'
         cmdopts = {}
@@ -319,6 +371,8 @@ class IBMSVCInitialSetup(object):
     def system_update(self, data):
         name_change_required = False
         ntp_change_required = False
+        fcgrainsize_change_required = False
+        si_controlaccess_required = False
         time_change_required = False
         timezone_change_required = False
         tz = (None, None)
@@ -333,6 +387,12 @@ class IBMSVCInitialSetup(object):
         if self.ntpip and self.ntpip != data['cluster_ntp_IP_address']:
             self.log("NTP change detected")
             ntp_change_required = True
+        if self.flashcopydefaultgrainsize and self.flashcopydefaultgrainsize != int(data['flashcopy_default_grainsize']):
+            self.log("fcgrainsize change detected")
+            fcgrainsize_change_required = True
+        if self.storageinsightscontrolaccess and self.storageinsightscontrolaccess != data['storage_insights_control_access']:
+            self.log("si change detected")
+            si_controlaccess_required = True
         if self.time and data['cluster_ntp_IP_address'] is not None:
             self.log("TIME change detected, clearing NTP IP")
             ntp_change_required = True
@@ -353,6 +413,11 @@ class IBMSVCInitialSetup(object):
             if self.time and ntp_change_required:
                 ip = '0.0.0.0'
             self.ntp_update(ip)
+        if fcgrainsize_change_required:
+            self.fcgrainsize_update()
+
+        if si_controlaccess_required:
+            self.sicontrolaccess_update()
 
         if time_change_required:
             self.systemtime_update()
@@ -560,7 +625,7 @@ class IBMSVCInitialSetup(object):
         self.basic_checks()
 
         self.system_data = self.get_system_info()
-        if self.systemname or self.ntpip or self.timezone or self.time:
+        if self.systemname or self.ntpip or self.flashcopydefaultgrainsize or self.storageinsightscontrolaccess or self.timezone or self.time:
             self.system_update(self.system_data)
 
         # DNS configuration

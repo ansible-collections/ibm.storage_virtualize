@@ -201,59 +201,59 @@ notes:
 EXAMPLES = '''
 - name: Create mdisk group
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: pool1
     provisioningpolicy: pp0
-    replicationpoollinkuid: 000000000000000
-    replication_partner_clusterid: 000000000032432342
+    replicationpoollinkuid: '000000000000000'
+    replication_partner_clusterid: '000000000032432342'
     etfcmoverallocationmax: 120
     state: present
-    datareduction: no
+    datareduction: 'no'
     easytier: auto
-    encrypt: no
+    encrypt: 'no'
     ext: 1024
 - name: Create childpool with ownershipgroup
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: childpool0
     ownershipgroup: owner0
     parentmdiskgrp: pool1
     state: present
-    datareduction: no
+    datareduction: 'no'
     easytier: auto
-    encrypt: no
+    encrypt: 'no'
     ext: 1024
 - name: Create a safeguarded backup location
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
-    clustername: "{{clustername}}"
-    token: "{{results.token}}"
-    log_path: "{{log_path}}"
+    clustername: "{{ clustername }}"
+    token: "{{ results.token }}"
+    log_path: "{{ log_path }}"
     parentmdiskgrp: Pool1
     name: Pool1child1
     datareduction: 'yes'
-    safeguarded: True
+    safeguarded: 'True'
     ext: 1024
-    noquota: True
+    noquota: 'True'
     state: present
 - name: Delete mdisk group
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: pool1
     state: absent
 - name: Delete a safeguarded backup location
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
-    clustername: "{{clustername}}"
-    token: "{{results.token}}"
-    log_path: "{{log_path}}"
+    clustername: "{{ clustername }}"
+    token: "{{ results.token }}"
+    log_path: "{{ log_path }}"
     parentmdiskgrp: Pool1
     name: Pool1child1
     state: absent

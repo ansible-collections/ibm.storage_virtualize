@@ -122,6 +122,7 @@ options:
         description:
             - Specifies the type of volume group to be created from the snapshot.
             - Valid during creation of host accessible volume group from an existing snapshot.
+            - Also used to convert a thinclone volumegroup to clone. type = clone should be specified.
         choices: [ clone, thinclone ]
         type: str
         version_added: 1.9.0
@@ -179,7 +180,7 @@ options:
     noreplicationpolicy:
         description:
             - If specified `True`, removes the replication policy assigned to the volume group.
-            - Parameters I(replicationpolicy) and I(noreplicationpolicy) are mutually exclusive.
+            - I(noreplicationpolicy) is mutually exclusive with parameters I(replicationpolicy) and I(nodrreplication).
             - Applies when I(state=present) to modify an existing volume group.
             - Supported from Storage Virtualize family systems 8.5.2.1 or later.
         type: bool
@@ -228,6 +229,14 @@ options:
             - Supported from Storage Virtualize family systems 8.6.3.0 or later.
         type: str
         version_added: 2.5.0
+    nodrreplication:
+        description:
+            - If specified `True`, removes the volume group from the async-dr replication policy.
+            - I(nodrreplication) is mutually exclusive with parameters I(replicationpolicy) and I(noreplicationpolicy).
+            - Applies when I(state=present) to modify an existing volume group.
+            - Supported from Storage Virtualize family systems 8.7.1.0 or later.
+        type: bool
+        version_added: 2.6.0
 
 author:
     - Shilpi Jain(@Shilpi-J)
@@ -268,7 +277,7 @@ EXAMPLES = '''
     log_path: /tmp/playbook.debug
     name: vg0
     state: present
-    noownershipgroup: True
+    noownershipgroup: true
     safeguardpolicyname: sg1
 - name: Update volumegroup with snapshot policy and remove safeguarded policy
   ibm.storage_virtualize.ibm_svc_manage_volumegroup:
@@ -291,7 +300,7 @@ EXAMPLES = '''
     name: vg0
     safeguarded: true
     snapshotpolicy: sp1
-    ignoreuserfcmaps: yes
+    ignoreuserfcmaps: 'yes'
     state: present
 - name: Suspend snapshot policy in an existing volume group
   ibm.storage_virtualize.ibm_svc_manage_volumegroup:
@@ -340,6 +349,16 @@ EXAMPLES = '''
     fromsourcevolumes: vol1:vol2
     pool: Pool0
     state: present
+- name: Convert a thinclone volumegroup to clone
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    type: clone
+    state: present
 - name: Delete a volume group, keeping volumes which were associated with volumegroup
   ibm.storage_virtualize.ibm_svc_manage_volumegroup:
     clustername: "{{ clustername }}"
@@ -360,6 +379,16 @@ EXAMPLES = '''
     name: vg0
     state: present
     draftpartition: partition_name
+- name: Remove DR replication-policy from volume group
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: vg0
+    state: absent
+    nodrreplication: true
 '''
 
 RETURN = '''#'''
@@ -403,7 +432,8 @@ class IBMSVCVG(object):
                 partition=dict(type='str'),
                 nopartition=dict(type='bool'),
                 evictvolumes=dict(type='bool'),
-                draftpartition=dict(type='str')
+                draftpartition=dict(type='str'),
+                nodrreplication=dict(type='bool')
             )
         )
 
@@ -443,6 +473,7 @@ class IBMSVCVG(object):
         self.nopartition = self.module.params.get('nopartition', False)
         self.evictvolumes = self.module.params.get('evictvolumes', False)
         self.draftpartition = self.module.params.get('draftpartition', '')
+        self.nodrreplication = self.module.params.get('nodrreplication', False)
 
         # Dynamic variable
         self.parentuid = None
@@ -487,7 +518,7 @@ class IBMSVCVG(object):
                         'nosafeguardpolicy', 'snapshotpolicy', 'nosnapshotpolicy',
                         'policystarttime', 'type', 'fromsourcegroup', 'pool', 'iogrp',
                         'safeguarded', 'ignoreuserfcmaps', 'replicationpolicy',
-                        'noreplicationpolicy', 'old_name', 'fromsourcevolumes', 'draftpartition')
+                        'noreplicationpolicy', 'old_name', 'fromsourcevolumes', 'draftpartition', 'nodrreplication')
 
             param_exists = ', '.join((param for param in unwanted if getattr(self, param)))
 
@@ -511,7 +542,8 @@ class IBMSVCVG(object):
             "nosnapshotpolicy": self.nosnapshotpolicy,
             "partition": self.partition,
             "nopartition": self.nopartition,
-            "fromsourcevolumes": self.fromsourcevolumes
+            "fromsourcevolumes": self.fromsourcevolumes,
+            "nodrreplication": self.nodrreplication
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -525,7 +557,9 @@ class IBMSVCVG(object):
             ('snapshotpolicy', 'safeguardpolicyname'),
             ('replicationpolicy', 'noreplicationpolicy'),
             ('partition', 'nopartition'),
-            ('draftpartition', 'partition')
+            ('draftpartition', 'partition'),
+            ('replicationpolicy', 'nodrreplication'),
+            ('noreplicationpolicy', 'nodrreplication')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -535,17 +569,12 @@ class IBMSVCVG(object):
                 )
 
         unsupported = ('nosafeguardpolicy', 'noownershipgroup', 'nosnapshotpolicy',
-                       'snapshotpolicysuspended', 'noreplicationpolicy')
+                       'snapshotpolicysuspended', 'noreplicationpolicy', 'nodrreplication')
         unsupported_exists = ', '.join((field for field in unsupported if getattr(self, field)))
 
         if unsupported_exists:
             self.module.fail_json(
                 msg='Following parameters not supported during creation scenario: {0}'.format(unsupported_exists)
-            )
-
-        if self.type and not self.snapshot and not self.fromsourcevolumes:
-            self.module.fail_json(
-                msg='type={0} requires either snapshot or fromsourcevolumes parameter'.format(self.type)
             )
 
     def update_validation(self, data):
@@ -558,7 +587,8 @@ class IBMSVCVG(object):
             ('nosafeguardpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'nosnapshotpolicy'),
             ('snapshotpolicy', 'safeguardpolicyname'),
-            ('replicationpolicy', 'noreplicationpolicy')
+            ('replicationpolicy', 'nodrreplication'),
+            ('noreplicationpolicy', 'nodrreplication')
         )
 
         for param1, param2 in mutually_exclusive:
@@ -567,8 +597,28 @@ class IBMSVCVG(object):
                     msg='Mutually exclusive parameters: {0}, {1}'.format(param1, param2)
                 )
 
+        if self.type:
+            # converttoclone accepts only type=clone, so update validation will include that
+            if self.type == 'clone':
+                invalids_while_converting_to_clone = ('safeguardpolicyname', 'nosafeguardpolicy', 'ownershipgroup',
+                                                      'snapshotpolicy', 'policystarttime', 'nosnapshotpolicy',
+                                                      'replicationpolicy', 'nodrreplication', 'noreplicationpolicy')
+                invalid_params_for_convert_to_clone = ', '.join((param for param in invalids_while_converting_to_clone
+                                                                if getattr(self, param)))
+
+                if invalid_params_for_convert_to_clone:
+                    self.module.fail_json(
+                        msg='Following parameter(s) are invalid while converting thinclone volumegroup to clone: {0}'
+                        .format(invalid_params_for_convert_to_clone)
+                    )
+            else:
+                # If type=thinclone (or some invalid value) was passed, return error.
+                self.module.fail_json(
+                    msg='type = {0} is invalid for updating volumegroup. Only type = clone is supported.'
+                    .format(self.type)
+                )
+
         unsupported_maps = (
-            ('type', data.get('volume_group_type', '')),
             ('snapshot', data.get('source_snapshot', '')),
             ('fromsourcevolumes', data.get('source_volumes_set', '')),
             ('fromsourcegroup', data.get('source_volume_group_name', '')),
@@ -611,10 +661,10 @@ class IBMSVCVG(object):
         #  [type], that is also considered as an attempt to create/change an already
         #  existing volume. So, it should be recorded to throw error later.
         is_existing_vg_thinclone = False
-        if merged_result and 'volume_group_type' in merged_result and merged_result['volume_group_type'] == 'thinclone':
+
+        if merged_result and merged_result.get('volume_group_type') == 'thinclone':
             is_existing_vg_thinclone = True
-        if merged_result and (self.type and self.fromsourcevolumes) or\
-           is_existing_vg_thinclone is True:
+        if merged_result and (self.type and self.fromsourcevolumes) or is_existing_vg_thinclone is True:
             volumes_data = []
             if self.type == "thinclone" or is_existing_vg_thinclone is True:
                 cmd = 'lsvolumepopulation'
@@ -703,7 +753,8 @@ class IBMSVCVG(object):
             ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
             ('partition', data.get('partition_name', '')),
             ('nopartition', not bool(data.get('partition_name', ''))),
-            ('draftpartition', data.get('draft_partition_name', ''))
+            ('draftpartition', data.get('draft_partition_name', '')),
+            ('nodrreplication', not bool(data.get('replication_policy_name', '')))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
@@ -740,6 +791,11 @@ class IBMSVCVG(object):
         # Adding snapshotpolicysuspended to props
         if self.snapshotpolicysuspended and self.snapshotpolicysuspended != data.get('snapshot_policy_suspended', ''):
             props['snapshotpolicysuspended'] = self.snapshotpolicysuspended
+
+        if self.type and self.type != data.get('volume_group_type'):
+            # Handle cases other than '' to clone
+            if not (data.get('volume_group_type') == '' and self.type == 'clone'):
+                props['type'] = self.type
 
         self.log("volumegroup props = %s", props)
 
@@ -838,36 +894,49 @@ class IBMSVCVG(object):
         self.changed = True
 
     def vg_update(self, modify):
+        if 'type' in modify and modify['type'] != "clone":
+            self.module.fail_json(msg='Only type=clone is supported for updating volumegroup.')
         if self.module.check_mode:
             self.changed = True
             return
 
         # update the volume group
         self.log("updating volume group '%s' ", self.name)
+        cmdopts = dict()
         cmdargs = [self.name]
 
         try:
             del modify['snapshotpolicysuspended']
         except KeyError:
-            self.log("snapshotpolicysuspended modification not reqiured!!")
+            self.log("snapshotpolicysuspended modification not required!!")
         else:
             cmd = 'chvolumegroupsnapshotpolicy'
             cmdopts = {'snapshotpolicysuspended': self.snapshotpolicysuspended}
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
 
-        cmd = 'chvolumegroup'
-        unmaps = ('noownershipgroup', 'nosafeguardpolicy', 'nosnapshotpolicy', 'noreplicationpolicy')
-        for field in unmaps:
-            cmdopts = {}
-            if field == 'nosafeguardpolicy' and field in modify:
-                cmdopts['nosafeguardedpolicy'] = modify.pop('nosafeguardpolicy')
-                self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
-            elif field in modify:
-                cmdopts[field] = modify.pop(field)
-                self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
-        if modify:
-            cmdopts = modify
+        if modify.get('type') == "clone":
+            # Run converttoclone command
+            cmd = 'converttoclone'
+            cmdopts['volumegroup'] = self.name
+            cmdargs = None
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+            self.log("Volumegroup %s converted from thinclone to clone!!", self.name)
+        else:
+            cmd = 'chvolumegroup'
+            unmaps = ('noownershipgroup', 'nosafeguardpolicy', 'nosnapshotpolicy', 'noreplicationpolicy', 'nodrreplication')
+            for field in unmaps:
+                cmdopts = {}
+                if field == 'nosafeguardpolicy' and field in modify:
+                    cmdopts['nosafeguardedpolicy'] = modify.pop('nosafeguardpolicy')
+                    self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+                elif field in modify:
+                    cmdopts[field] = modify.pop(field)
+                    self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+
+            if modify:
+                cmdopts = modify
+                self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+
         # Any error would have been raised in svc_run_command
         self.changed = True
 
@@ -920,42 +989,52 @@ class IBMSVCVG(object):
             if vg_data:
                 if self.state == 'present':
                     is_existing_vg_thinclone = False
-                    if vg_data.get('volume_group_type') == 'thinclone':
+                    existing_vg_type = vg_data.get('volume_group_type')
+                    if existing_vg_type == 'thinclone':
                         is_existing_vg_thinclone = True
-                    if (self.type and self.fromsourcevolumes) or is_existing_vg_thinclone is True:
-                        # Check whether provided source volumes are same as in existing volumegroup
-                        volumes_with_existing_vg = None
-                        if 'source_volumes_set' in vg_data:
-                            volumes_with_existing_vg = vg_data['source_volumes_set']
-                        provided_volumes_set = set()
-                        if self.fromsourcevolumes:
-                            provided_volumes_set = set(self.fromsourcevolumes.split(":"))
-                        if volumes_with_existing_vg or provided_volumes_set:
-                            self.changed = False
-                            if not provided_volumes_set and volumes_with_existing_vg:
-                                self.module.fail_json(
-                                    msg="Existing thinclone volumegroup found.",
-                                    changed=self.changed
-                                )
-                            if volumes_with_existing_vg != provided_volumes_set:
-                                self.module.fail_json(
-                                    msg="Parameter [fromsourcevolumes] is invalid for modifying volumegroup.",
-                                    changed=self.changed
-                                )
-                            elif self.pool and vg_data['source_volumes_pool_set'] and (list(vg_data['source_volumes_pool_set'])[0] != self.pool):
-                                self.module.fail_json(
-                                    msg="Parameter [pool] is invalid for modifying volumegroup.",
-                                    changed=self.changed
-                                )
-                            else:
-                                self.msg = "A volumegroup with name [%s] already exists." % self.name
-                    else:
+
+                    if self.type and not self.fromsourcevolumes:
                         modify = self.vg_probe(vg_data)
                         if modify:
                             self.vg_update(modify)
                             self.msg = "Volume group [%s] has been modified." % self.name
                         else:
-                            self.msg = "No Modifications detected, Volume group already exists."
+                            self.msg = "No Modifications detected."
+                    else:
+                        if (self.type and self.fromsourcevolumes) or is_existing_vg_thinclone is True:
+                            # Check whether provided source volumes are same as in existing volumegroup
+                            volumes_with_existing_vg = None
+                            if 'source_volumes_set' in vg_data:
+                                volumes_with_existing_vg = vg_data['source_volumes_set']
+                            provided_volumes_set = set()
+                            if self.fromsourcevolumes:
+                                provided_volumes_set = set(self.fromsourcevolumes.split(":"))
+                            if volumes_with_existing_vg or provided_volumes_set:
+                                self.changed = False
+                                if not provided_volumes_set and volumes_with_existing_vg:
+                                    self.module.fail_json(
+                                        msg="Existing thinclone volumegroup found.",
+                                        changed=self.changed
+                                    )
+                                if volumes_with_existing_vg != provided_volumes_set:
+                                    self.module.fail_json(
+                                        msg="Parameter [fromsourcevolumes] is invalid for modifying volumegroup.",
+                                        changed=self.changed
+                                    )
+                                elif self.pool and vg_data['source_volumes_pool_set'] and (list(vg_data['source_volumes_pool_set'])[0] != self.pool):
+                                    self.module.fail_json(
+                                        msg="Parameter [pool] is invalid for modifying volumegroup.",
+                                        changed=self.changed
+                                    )
+                                else:
+                                    self.msg = "A volumegroup with name [%s] already exists." % self.name
+                        else:
+                            modify = self.vg_probe(vg_data)
+                            if modify:
+                                self.vg_update(modify)
+                                self.msg = "Volume group [%s] has been modified." % self.name
+                            else:
+                                self.msg = "No Modifications detected, Volume group already exists."
                 else:
                     self.vg_delete()
                     self.msg = "Volume group [%s] has been deleted." % self.name

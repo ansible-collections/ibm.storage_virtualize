@@ -61,7 +61,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
         self.mock_module_helper.start()
         self.addCleanup(self.mock_module_helper.stop)
 
-    def test_module_mandatory_parameter(self):
+    def test_missing_mandatory_parameter_name(self):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -76,7 +76,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_with_name(self, svc_connect_mock, ssh_mock):
+    def test_create_truststore(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -108,9 +108,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_with_name_idempotency(self,
-                                                            svc_connect_mock,
-                                                            ssh_mock):
+    def test_create_truststore_idempotency(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -141,77 +139,12 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_without_name(self, svc_connect_mock,
-                                                   ssh_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'username': 'username',
-            'password': 'password',
-            'remote_clustername': 'x.x.x.x',
-            'remote_username': 'remote_username',
-            'remote_password': 'remote_password',
-            'state': 'present'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
-
-        ts = IBMSVTrustStore()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('store_x.x.x.x' in exc.value.args[0]['msg'])
-
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
-           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_without_name_idempotency(self, svc_connect_mock,
-                                                               ssh_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'username': 'username',
-            'password': 'password',
-            'remote_clustername': 'x.x.x.x',
-            'remote_username': 'remote_username',
-            'remote_password': 'remote_password',
-            'state': 'present'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "store_x.x.x.x"}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
-
-        ts = IBMSVTrustStore()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-
-        self.assertFalse(exc.value.args[0]['changed'])
-
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
-           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_delete_truststore_with_name(self, svc_connect_mock,
-                                                ssh_mock):
+    def test_delete_truststore(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'name': 'truststore1',
-            'remote_clustername': 'x.x.x.x',
             'state': 'absent'
         })
         con_mock = Mock()
@@ -233,13 +166,12 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_delete_truststore_with_name_idempotency(self, svc_connect_mock,
-                                                            ssh_mock):
+    def test_delete_truststore_idempotency(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
-            'remote_clustername': 'x.x.x.x',
+            'name': 'truststore1',
             'state': 'absent'
         })
         con_mock = Mock()
@@ -261,65 +193,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_delete_truststore_without_name(self, svc_connect_mock,
-                                                   ssh_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'username': 'username',
-            'password': 'password',
-            'remote_clustername': 'x.x.x.x',
-            'state': 'absent'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "store_x.x.x.x"}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
-
-        ts = IBMSVTrustStore()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('store_x.x.x.x' in exc.value.args[0]['msg'])
-
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
-           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_delete_truststore_without_name_idempotency(self, svc_connect_mock,
-                                                               ssh_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'username': 'username',
-            'password': 'password',
-            'remote_clustername': 'x.x.x.x',
-            'state': 'absent'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
-
-        ts = IBMSVTrustStore()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
-           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_with_syslog_and_restapi(self, svc_connect_mock, ssh_mock):
+    def test_create_truststore_with_syslog_and_restapi_on(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -353,7 +227,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_module_create_truststore_with_ipsec_and_vasa(self, svc_connect_mock, ssh_mock):
+    def test_create_truststore_with_ipsec_and_vasa(self, svc_connect_mock, ssh_mock):
         set_module_args({
             'clustername': 'clustername',
             'username': 'username',
@@ -366,6 +240,51 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'ipsec': 'on',
             'vasa': 'on'
         })
+        con_mock = Mock()
+        svc_connect_mock.return_value = True
+        ssh_mock.return_value = con_mock
+        stdin = Mock()
+        stdout = Mock()
+        stderr = Mock()
+        con_mock.exec_command.return_value = (stdin, stdout, stderr)
+        stdout.read.side_effect = iter([br'{}', b'', b''])
+        stdout.channel.recv_exit_status.return_value = 0
+
+        ts = IBMSVTrustStore()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            ts.apply()
+
+        self.assertTrue(exc.value.args[0]['changed'])
+        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_truststore_for_replication.IBMSVTrustStore.is_truststore_present')
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
+           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
+    def test_update_truststore_props_ipsec_and_vasa(self,
+                                                    svc_connect_mock,
+                                                    ssh_mock,
+                                                    is_truststore_present_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'name': 'truststore1',
+            'state': 'present',
+            'ipsec': 'on',
+            'syslog': 'on',
+            'snmp': 'on'
+        })
+
+        is_truststore_present_mock.return_value = {
+            "name": "truststore1",
+            "ipsec": "off",
+            "syslog": "off",
+            "snmp": "on"
+        }
+
         con_mock = Mock()
         svc_connect_mock.return_value = True
         ssh_mock.return_value = con_mock

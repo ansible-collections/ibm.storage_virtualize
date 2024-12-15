@@ -78,27 +78,27 @@ notes:
 EXAMPLES = r'''
 - name: Change drive state to candidate
   ibm.storage_virtualize.ibm_sv_manage_drive:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    drive_id: 5
    drive_state: candidate
    log_path: /tmp/playbook.debug
 
 - name: Format a drive
   ibm.storage_virtualize.ibm_sv_manage_drive:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    drive_id: 5
    task: format
    log_path: /tmp/playbook.debug
 
 - name: Trigger a drive dump
   ibm.storage_virtualize.ibm_sv_manage_drive:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    drive_id: 5
    task: triggerdump
    log_path: /tmp/playbook.debug

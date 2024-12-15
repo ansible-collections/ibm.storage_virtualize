@@ -1,13 +1,10 @@
 - name: Using Storage Virtualize collection to change security settings
   hosts: localhost
   vars:
-    - clustername: clustername
-    - username: username
-    - password: password
-  
-  collections:
-    - ibm.storage_virtualize
-  gather_facts: no
+    clustername: 'clustername'
+    username: 'username'
+    password: 'password'
+  gather_facts: false
   connection: local
   tasks:
     - name: Change max failed login limit

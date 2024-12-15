@@ -1,21 +1,19 @@
 - name: Using Storage Virtualize collection to replicate system
   hosts: localhost
-  vars_files: 
+  vars_files:
     - vars/replication_vars
     - vars/target_cluster_vars
 
-  collections: 
-    - ibm.storage_virtualize
-  gather_facts: no
+  gather_facts: false
 
   tasks:
     - name: Fetch authorization token for target cluster
       register: dest_token
-      ibm_svc_auth:
+      ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ cluster_ip }}"
         username: "{{ cluster_username }}"
         password: "{{ cluster_password }}"
- 
+
     - name: Initial cluster configuration on FlashSystem
       ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
@@ -37,8 +35,8 @@
       ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
-        dnsname: "{{ DnsServer | map (attribute='name') | list }}"
-        dnsip: "{{ DnsServer | map (attribute='IP_address') | list }}"
+        dnsname: "{{ DnsServer | map(attribute='name') | list }}"
+        dnsip: "{{ DnsServer | map(attribute='IP_address') | list }}"
 
     - name: Create Ownership group
       ibm.storage_virtualize.ibm_svc_manage_ownershipgroup:
@@ -46,7 +44,7 @@
         state: present
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
-      loop: "{{OwnershipGroup | default([], true) }}"
+      loop: "{{ OwnershipGroup | default([], true) }}"
 
     - name: Create Usergroups
       ibm.storage_virtualize.ibm_svc_manage_usergroup:
@@ -54,8 +52,8 @@
         state: present
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
-        role: "{{item.role }}"
-        ownershipgroup: "{{item.owner_name }}"
+        role: "{{ item.role }}"
+        ownershipgroup: "{{ item.owner_name }}"
       loop: "{{ UserGrp | default([], true) }}"
 
     - name: Create Users with password

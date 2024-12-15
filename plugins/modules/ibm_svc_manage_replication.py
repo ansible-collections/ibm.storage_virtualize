@@ -123,12 +123,12 @@ EXAMPLES = '''
 - name: Create remote copy
   ibm.storage_virtualize.ibm_svc_manage_replication:
     name: sample_rcopy
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: present
-    remotecluster: "{{remotecluster}}"
+    remotecluster: "{{ remotecluster }}"
     master: SourceVolume0
     aux: TargetVolume0
     copytype: global
@@ -138,29 +138,29 @@ EXAMPLES = '''
 - name: Exclude the remote copy from consistency group
   ibm.storage_virtualize.ibm_svc_manage_replication:
     name: sample_rcopy2
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: present
     noconsistgrp: true
 - name: Delete remote copy
   ibm.storage_virtualize.ibm_svc_manage_replication:
     name: sample_rcopy3
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: absent
 - name: Create GlobalMirror remote copy relationship with change volume
   ibm.storage_virtualize.ibm_svc_manage_replication:
     name: sample_rcopy4
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: present
-    remotecluster: "{{remotecluster}}"
+    remotecluster: "{{ remotecluster }}"
     master: SourceVolume1
     aux: TargetVolume1
     copytype: GMCV

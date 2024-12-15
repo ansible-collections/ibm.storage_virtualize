@@ -84,38 +84,38 @@ notes:
 EXAMPLES = '''
 - name: Start a FlashCopy mapping
   ibm.storage_virtualize.ibm_svc_start_stop_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: mapping-name
     state: started
 - name: Stop a FlashCopy mapping
   ibm.storage_virtualize.ibm_svc_start_stop_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: mapping-name
     state: stopped
 - name: Start a FlashCopy consistency group
   ibm.storage_virtualize.ibm_svc_start_stop_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: fcconsistgrp-name
     isgroup: true
     state: started
 - name: Stop a FlashCopy consistency group
   ibm.storage_virtualize.ibm_svc_start_stop_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: fcconsistgrp-name
     isgroup: true

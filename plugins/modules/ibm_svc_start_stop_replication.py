@@ -102,18 +102,18 @@ EXAMPLES = '''
 - name: Start remote copy
   ibm.storage_virtualize.ibm_svc_start_stop_replication:
     name: sample_rcopy
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: started
     clean: true
 - name: Stop remote copy
   ibm.storage_virtualize.ibm_svc_start_stop_replication:
     name: sample_rcopy
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
     state: stopped
 '''

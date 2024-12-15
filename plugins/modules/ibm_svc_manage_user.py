@@ -120,10 +120,10 @@ notes:
 EXAMPLES = '''
 - name: Create a user
   ibm.storage_virtualize.ibm_svc_manage_user:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     name: user-name
@@ -132,10 +132,10 @@ EXAMPLES = '''
     usergroup: usergroup-name
 - name: Remove a user
   ibm.storage_virtualize.ibm_svc_manage_user:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: absent
     name: user-name

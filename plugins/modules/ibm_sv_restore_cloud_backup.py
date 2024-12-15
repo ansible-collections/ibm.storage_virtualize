@@ -90,25 +90,25 @@ notes:
 EXAMPLES = '''
 - name: Restore cloud backup
   ibm.storage_virtualize.ibm_sv_restore_cloud_backup:
-    clustername: "{{cluster_A}}"
-    username: "{{username_A}}"
-    password: "{{password_A}}"
+    clustername: "{{ cluster_A }}"
+    username: "{{ username_A }}"
+    password: "{{ password_A }}"
     target_volume_name: vol1
     source_volume_uid: 6005076400B70038E00000000000001C
     generation: 1
 - name: Restore cloud backup to different cluster
   ibm.storage_virtualize.ibm_sv_restore_cloud_backup:
-    clustername: "{{cluster_B}}"
-    username: "{{username_B}}"
-    password: "{{password_B}}"
+    clustername: "{{ cluster_B }}"
+    username: "{{ username_B }}"
+    password: "{{ password_B }}"
     target_volume_name: vol2
     source_volume_uid: 6005076400B70038E00000000000001C
     generation: 1
 - name: Cancel restore operation
   ibm.storage_virtualize.ibm_sv_restore_cloud_backup:
-    clustername: "{{cluster_A}}"
-    username: "{{username_A}}"
-    password: "{{password_A}}"
+    clustername: "{{ cluster_A }}"
+    username: "{{ username_A }}"
+    password: "{{ password_A }}"
     target_volume_name: vol1
     cancel: true
 '''

@@ -5,6 +5,7 @@
 # Author(s): Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -96,10 +97,21 @@ options:
             - Validates certification.
         default: false
         type: bool
+    replicationportsetlinkuid:
+        description:
+            - Change the replication_portset_link_uid parameter of the portset.
+        type: str
+        version_added: '2.6.0'
+    resetreplicationportsetlinkuid:
+        description:
+            - Reset the replication_portset_link_uid parameter to a newly generated portset link UID.
+        type: bool
+        version_added: '2.6.0'
 author:
     - Sanjaikumaar M (@sanjaikumaar)
     - Sudheesh Reddy Satti (@sudheeshreddy)
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Rahul Pawar (@rahul-p)
 notes:
     - This module supports C(check_mode).
 '''
@@ -107,26 +119,26 @@ notes:
 EXAMPLES = '''
 - name: Create a portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset1
    portset_type: host
    ownershipgroup: owner1
    state: present
 - name: Update a portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset1
    noownershipgroup: true
    state: present
 - name: Create an FC portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: fcportset1
    porttype: fc
    portset_type: host
@@ -134,26 +146,53 @@ EXAMPLES = '''
    state: present
 - name: Create an highspeedreplication portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: fcportset1
    porttype: ethernet
    portset_type: highspeedreplication
    state: present
 - name: Rename the portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset2
    old_name: portset1
    state: present
+- name: Create an FC portset specifying a replicationportsetlinkuid
+  ibm.storage_virtualize.ibm_svc_manage_portset:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: fcportset1
+   porttype: fc
+   portset_type: host
+   ownershipgroup: owner1
+   replicationportsetlinkuid: F8C5C02FC24F019154B57B59DD753BFF
+   state: present
+- name: Modify replication_portset_link_uid parameter of portset
+  ibm.storage_virtualize.ibm_svc_manage_portset:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: portset1
+   replicationportsetlinkuid: 3A05584AC8EEA48B514F9C4F14A03540
+   state: present
+- name: Reset replication portset link uid of an existing FC portset
+  ibm.storage_virtualize.ibm_svc_manage_portset:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: ffcportset1
+   resetreplicationportsetlinkuid: true
+   state: present
 - name: Delete a portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    name: portset1
    state: absent
 '''
@@ -200,6 +239,12 @@ class IBMSVCPortset:
                 ),
                 old_name=dict(
                     type='str',
+                ),
+                replicationportsetlinkuid=dict(
+                    type='str',
+                ),
+                resetreplicationportsetlinkuid=dict(
+                    type='bool',
                 )
             )
         )
@@ -216,6 +261,8 @@ class IBMSVCPortset:
         self.noownershipgroup = self.module.params.get('noownershipgroup', '')
         self.porttype = self.module.params.get('porttype', '')
         self.old_name = self.module.params.get('old_name', '')
+        self.replicationportsetlinkuid = self.module.params.get('replicationportsetlinkuid')
+        self.resetreplicationportsetlinkuid = self.module.params.get('resetreplicationportsetlinkuid')
 
         self.basic_checks()
 
@@ -248,11 +295,15 @@ class IBMSVCPortset:
             if self.ownershipgroup and self.noownershipgroup:
                 self.module.fail_json(msg='Mutually exclusive parameter: ownershipgroup, noownershipgroup')
 
+            if self.replicationportsetlinkuid and self.resetreplicationportsetlinkuid:
+                self.module.fail_json(msg='Mutually exclusive parameters: replicationportsetlinkuid, resetreplicationportsetlinkuid')
+
         else:
             if not self.name:
                 self.module.fail_json(msg='Missing mandatory parameter: name')
 
-            fields = [f for f in ['ownershipgroup', 'noownershipgroup', 'porttype', 'portset_type', 'old_name'] if getattr(self, f)]
+            fields = [f for f in ['ownershipgroup', 'noownershipgroup', 'porttype', 'portset_type', 'old_name', 'replicationportsetlinkuid',
+                                  'resetreplicationportsetlinkuid'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a porset'.format(', '.join(fields)))
@@ -263,7 +314,9 @@ class IBMSVCPortset:
             "ownershipgroup": self.ownershipgroup,
             "noownershipgroup": self.noownershipgroup,
             "porttype": self.porttype,
-            "portset_type": self.portset_type
+            "portset_type": self.portset_type,
+            "replicationportsetlinkuid": self.replicationportsetlinkuid,
+            "resetreplicationportsetlinkuid": self.resetreplicationportsetlinkuid
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -274,7 +327,7 @@ class IBMSVCPortset:
         data = self.restapi.svc_obj_info(
             cmd='lsportset',
             cmdopts=None,
-            cmdargs=[portset_name]
+            cmdargs=['-gui', portset_name]
         )
 
         if isinstance(data, list):
@@ -284,10 +337,15 @@ class IBMSVCPortset:
             merged_result = data
 
         self.portset_details = merged_result
-
+        self.log("Existing portset data: %s", self.portset_details)
         return merged_result
 
+    def create_validation(self):
+        if self.resetreplicationportsetlinkuid:
+            self.module.fail_json(msg="Parameter resetreplicationportsetlinkuid is not supported while creating portset.")
+
     def create_portset(self):
+        self.create_validation()
         if self.module.check_mode:
             self.changed = True
             return
@@ -301,6 +359,8 @@ class IBMSVCPortset:
 
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup
+        if self.replicationportsetlinkuid:
+            cmdopts['replicationportsetlinkuid'] = self.replicationportsetlinkuid
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('Portset (%s) created', self.name)
@@ -317,6 +377,10 @@ class IBMSVCPortset:
             updates.append('ownershipgroup')
         if self.noownershipgroup:
             updates.append('noownershipgroup')
+        if self.replicationportsetlinkuid and (self.replicationportsetlinkuid != self.portset_details['replication_portset_link_uid']):
+            updates.append('replicationportsetlinkuid')
+        if self.resetreplicationportsetlinkuid:
+            updates.append('resetreplicationportsetlinkuid')
 
         self.log("Modifications to be done: %s", updates)
         return updates

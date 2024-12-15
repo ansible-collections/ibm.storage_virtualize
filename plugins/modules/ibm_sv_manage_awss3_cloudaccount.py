@@ -141,37 +141,37 @@ notes:
 EXAMPLES = '''
 - name: Configure Amazon S3 account
   ibm.storage_virtualize.ibm_sv_manage_awss3_cloudaccount:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: awss3
-    bucketprefix: "{{bucketprefix}}"
-    accesskeyid: "{{accesskeyid}}"
-    secretaccesskey: "{{secretaccesskey}}"
+    bucketprefix: "{{ bucketprefix }}"
+    accesskeyid: "{{ accesskeyid }}"
+    secretaccesskey: "{{ secretaccesskey }}"
     state: present
 - name: Update Amazon S3 account configuration
   ibm.storage_virtualize.ibm_sv_manage_awss3_cloudaccount:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: awss3
-    upbandwidthmbits: "{{upbandwidthmbits}}"
-    downbandwidthmbits: "{{downbandwidthmbits}}"
+    upbandwidthmbits: "{{ upbandwidthmbits }}"
+    downbandwidthmbits: "{{ downbandwidthmbits }}"
     state: present
 - name: Update Amazon S3 account mode to import
   ibm.storage_virtualize.ibm_sv_manage_awss3_cloudaccount:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: awss3
     mode: import
     importsystem: 123456789
     state: present
 - name: Delete Amazon S3 account configuration
   ibm.storage_virtualize.ibm_sv_manage_awss3_cloudaccount:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: awss3
     state: absent
 '''
