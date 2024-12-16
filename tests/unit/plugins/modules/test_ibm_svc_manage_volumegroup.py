@@ -1764,9 +1764,9 @@ class TestIBMSVCvdisk(unittest.TestCase):
            'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test__failure_create_VG_with_mutually_exclusive_parameter_1(self,
-                                                                    svc_authorize_mock,
-                                                                    svc_get_existing_vg_mock):
+    def test_failure_create_VG_with_mutually_exclusive_parameter_1(self,
+                                                                   svc_authorize_mock,
+                                                                   svc_get_existing_vg_mock):
         '''
         Test for creating volumegroup incase of mutually exclusive draftpartition and partition parameter
         '''
@@ -1822,6 +1822,287 @@ class TestIBMSVCvdisk(unittest.TestCase):
             vg.apply()
         self.assertTrue(exc.value.args[0]['failed'])
         self.assertEqual(exc.value.args[0]['msg'], 'Following parameters not supported during update: partition')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_dr_replication_policy(self, mock_svc_authorize,
+                                          svc_obj_info_mock,
+                                          svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volumegroup',
+            'nodrreplication': True,
+            'state': 'present',
+        })
+        data = {
+            "id": "8",
+            "name": "test_volumegroup",
+            "volume_count": "0",
+            "backup_status": "empty",
+            "last_backup_time": "",
+            "owner_id": "",
+            "owner_name": "",
+            "safeguarded_policy_id": "",
+            "safeguarded_policy_name": "",
+            "safeguarded_policy_start_time": "",
+            "snapshot_policy_name": "ss_policy2",
+            "snapshot_policy_suspended": "no",
+            "ignore_user_flash_copy_maps": "no",
+            "snapshot_policy_safeguarded": "no",
+            "replication_policy_name": "rp0"
+        }
+        svc_obj_info_mock.return_value = data
+        svc_run_command_mock.return_value = "success"
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_dr_replication_policy_idempotency(self, mock_svc_authorize,
+                                                      svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volumegroup',
+            'nodrreplication': True,
+            'state': 'present',
+        })
+        data = {
+            "id": "8",
+            "name": "test_volumegroup",
+            "volume_count": "0",
+            "backup_status": "empty",
+            "last_backup_time": "",
+            "owner_id": "",
+            "owner_name": "",
+            "safeguarded_policy_id": "",
+            "safeguarded_policy_name": "",
+            "safeguarded_policy_start_time": "",
+            "snapshot_policy_name": "ss_policy2",
+            "snapshot_policy_suspended": "no",
+            "ignore_user_flash_copy_maps": "no",
+            "snapshot_policy_safeguarded": "no",
+            "replication_policy_name": ""
+        }
+        svc_obj_info_mock.return_value = data
+        with pytest.raises(AnsibleExitJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_for_mutual_exclusive_parameter_4(self, mock_svc_authorize,
+                                                      svc_obj_info_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'state': 'present',
+            'nodrreplication': True,
+            'replicationpolicy': True
+        })
+        data = {
+            "id": "8",
+            "name": "test_volumegroup",
+            "volume_count": "0",
+            "backup_status": "empty",
+            "last_backup_time": "",
+            "owner_id": "",
+            "owner_name": "",
+            "safeguarded_policy_id": "",
+            "safeguarded_policy_name": "",
+            "safeguarded_policy_start_time": "",
+            "snapshot_policy_name": "ss_policy2",
+            "snapshot_policy_suspended": "no",
+            "ignore_user_flash_copy_maps": "no",
+            "snapshot_policy_safeguarded": "no",
+            "replication_policy_name": "rp0"
+        }
+        svc_obj_info_mock.return_value = data
+        with pytest.raises(AnsibleFailJson) as exc:
+            vg = IBMSVCVG()
+            vg.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_convert_thinclone_vg_to_clone(self,
+                                           mock_svc_authorize,
+                                           get_existing_vg_mock,
+                                           svc_run_command_mock):
+        # Convert a thinclone VG to clone
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg0',
+            'state': 'present',
+            'type': 'clone'
+        })
+        get_existing_vg_mock.return_value = {
+            'name': 'vg0',
+            'volume_group_type' : 'thinclone'
+        }
+        svc_run_command_mock.return_value = None
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            v = IBMSVCVG()
+            v.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Volume group [vg0] has been modified.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_convert_thinclone_vg_to_clone_idempotency_1(self,
+                                                         mock_svc_authorize,
+                                                         get_existing_vg_mock,
+                                                         svc_run_command_mock):
+        # Try to convert a thinclone VG to clone when it has already been run and copy is in progress
+        # At this time, volumegroup's volume_group_type = 'clone'
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg0',
+            'state': 'present',
+            'type': 'clone'
+        })
+        get_existing_vg_mock.return_value = {
+            'name': 'vg0',
+            'volume_group_type' : 'clone'
+        }
+        svc_run_command_mock.return_value = None
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            v = IBMSVCVG()
+            v.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_convert_thinclone_vg_to_clone_idempotency_2(self,
+                                                         mock_svc_authorize,
+                                                         get_existing_vg_mock,
+                                                         svc_run_command_mock):
+        # Try to convert a thinclone VG to clone when it has already been run and copy is completed
+        # At this time, volumegroup's volume_group_type = ''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg0',
+            'state': 'present',
+            'type': 'clone'
+        })
+        get_existing_vg_mock.return_value = {
+            'name': 'vg0',
+            'volume_group_type' : ''  # Volumegrouphas already converted to clone and copy is completed.
+        }
+        svc_run_command_mock.return_value = None
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            v = IBMSVCVG()
+            v.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_convert_vg_to_thinclone(self,
+                                             mock_svc_authorize,
+                                             get_existing_vg_mock,
+                                             svc_run_command_mock):
+        # If user passes type=thinclone, test whether the correct failure path is taken.
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg0',
+            'state': 'present',
+            'type': 'thinclone'
+        })
+        get_existing_vg_mock.return_value = {
+            'name': 'vg0',
+            'volume_group_type' : ''  # Volumegroup is either clone or normal VG (not thinclone)
+        }
+        svc_run_command_mock.return_value = None
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCVG()
+            v.apply()
+        self.assertEqual(exc.value.args[0]['msg'], 'type = thinclone is invalid for updating volumegroup.'
+                         ' Only type = clone is supported.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_invalid_params_with_type_change(self,
+                                                     mock_svc_authorize,
+                                                     get_existing_vg_mock,
+                                                     svc_run_command_mock):
+        # Try to convert a thinclone VG to clone, along with other param replicationpolicy
+        # It should be exclusively passed, and not with any chvolumegroup parameters, so expect failure.
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'vg0',
+            'state': 'present',
+            'type': 'clone',
+            'replicationpolicy': 'rp0'
+        })
+        get_existing_vg_mock.return_value = {
+            'name': 'vg0',
+            'volume_group_type' : 'thinclone'  # Volumegroup is either clone or normal VG (not thinclone)
+        }
+        svc_run_command_mock.return_value = None
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCVG()
+            v.apply()
+        self.assertEqual(exc.value.args[0]['msg'], 'Following parameter(s) are invalid'
+                         ' while converting thinclone volumegroup to clone: replicationpolicy')
 
 
 if __name__ == '__main__':

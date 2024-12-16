@@ -93,20 +93,20 @@ notes:
 EXAMPLES = '''
 - name: Create a FlashCopy consistency group
   ibm.storage_virtualize.ibm_svc_manage_consistgrp_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: consistgroup-name
     state: present
     ownershipgroup: ownershipgroup-name
 - name: Delete a FlashCopy consistency group
   ibm.storage_virtualize.ibm_svc_manage_consistgrp_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: consistgroup-name
     state: absent

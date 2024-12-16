@@ -634,6 +634,76 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
         self.assertFalse(exc.value.args[0]['changed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_fcgrainsize_update(self,
+                                       auth_mock,
+                                       system_info_mock,
+                                       run_cmd_mock,
+                                       dns_info_mock):
+
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'flashcopydefaultgrainsize': 256
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "flashcopy_default_grainsize": "64",
+            "location": "local",
+            "cluster_locale": "en_US",
+            "time_zone": "200 Asia/Calcutta"
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_sicontrolaccess_update(self,
+                                           auth_mock,
+                                           system_info_mock,
+                                           run_cmd_mock,
+                                           dns_info_mock):
+
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'storageinsightscontrolaccess': 'yes'
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "storage_insights_control_access": "no",
+            "location": "local",
+            "cluster_locale": "en_US",
+            "time_zone": "200 Asia/Calcutta"
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()

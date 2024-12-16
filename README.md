@@ -60,14 +60,12 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 ```yaml
 ---
 - name: Using the IBM Storage Virtualize collection
-  collections:
-    - ibm.storage_virtualize
   gather_facts: no
   connection: local
   hosts: localhost
   tasks:
     - name: Gather info from storage
-      ibm_svc_info:
+      ibm.storage_virtualize.ibm_svc_info:
         clustername: x.x.x.x
         domain:
         username: username
@@ -150,7 +148,6 @@ The modules in the IBM Storage Virtualize Ansible collection leverage REST APIs 
 3. The Ansible collection can run on all IBM Storage Virtualize system versions above 8.1.3, except versions 8.3.1.3, 8.3.1.4 and 8.3.1.5.
 4. At time of release of the SV Ansible v1.8.0 collection, no module is available for non LMC systems to automate license agreements acceptance, including EULA.
    User will be presented with a GUI setup wizard upon user-interface login, whether the Ansible modules have been used for initial configuration or not.
-
 
 ## Releasing, Versioning, and Deprecation
 

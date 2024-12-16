@@ -3,6 +3,7 @@
 
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
+#            Lavanya C R <lavanya.c.r1@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -123,6 +124,7 @@ options:
         type: str
 author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
+    - Lavanya C R(@lavanyacr)
 notes:
     - This module supports C(check_mode).
 '''
@@ -130,10 +132,10 @@ notes:
 EXAMPLES = '''
 - name: Create FlashCopy mapping for snapshot
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     name: snapshot-name
@@ -146,10 +148,10 @@ EXAMPLES = '''
     grainsize: 64
 - name: Create FlashCopy mapping for clone
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     name: snapshot-name
@@ -162,10 +164,10 @@ EXAMPLES = '''
     grainsize: 64
 - name: Create FlashCopy mapping for backup
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     name: snapshot-name
@@ -177,24 +179,39 @@ EXAMPLES = '''
     grainsize: 64
 - name: Delete FlashCopy mapping for snapshot
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: snapshot-name
     state: absent
     force: true
 - name: Delete FlashCopy mapping for clone
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: clone-name
     state: absent
     force: true
+- name: Create FlashCopy mapping with existing target volume.
+  ibm.storage_virtualize.ibm_svc_manage_flashcopy:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    state: present
+    name: snapshot-name
+    copytype: clone
+    source: source-volume-name
+    target: target-volume-name
+    consistgrp: consistencygroup-name
+    copyrate: 50
+    grainsize: 64
 '''
 
 RETURN = '''#'''
@@ -487,7 +504,7 @@ class IBMSVCFlashcopy(object):
     def apply(self):
         msg = None
         modify = []
-
+        temp = None
         if self.state == 'present' and self.old_name:
             msg = self.flashcopy_rename()
             self.module.exit_json(msg=msg, changed=self.changed)
@@ -510,12 +527,12 @@ class IBMSVCFlashcopy(object):
                         self.module.fail_json(msg="Required while creating FlashCopy mapping: 'source'")
                     if not sdata:
                         self.module.fail_json(msg="The source volume [%s] doesn't exist." % self.source)
+
                     if tdata:
                         if sdata[0]["capacity"] == tdata[0]["capacity"]:
-                            if self.copytype == 'clone':
-                                msg = "target [%s] already exists." % self.target
-                            elif self.copytype == 'snapshot':
-                                msg = "target [%s] already exists, fcmap would not be created." % self.target
+                            self.fcmap_create(self.target)
+                            msg = "mapping [%s] has been created" % self.name
+                            self.module.exit_json(msg=msg, changed=self.changed)
                         elif sdata[0]["capacity"] != tdata[0]["capacity"]:
                             self.module.fail_json(msg="source and target must be of same size")
                     if sdata and not tdata:

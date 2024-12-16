@@ -165,9 +165,9 @@ EXAMPLES = '''
     type: "ipv4"
     linkbandwidthmbits: 100
     backgroundcopyrate: 50
-    compressed: yes
+    compressed: 'yes'
     link1: "{{ portsetname }}"
-    remote_link1: "{{ remote_portsetname}}"
+    remote_link1: "{{ remote_portsetname }}"
     state: "present"
 - name: Update an IP partnership
   ibm.storage_virtualize.ibm_sv_manage_ip_partnership:
@@ -183,7 +183,7 @@ EXAMPLES = '''
     remote_cluster_id: "{{ cluster_id }}"
     linkbandwidthmbits: 110
     backgroundcopyrate: 60
-    compressed: no
+    compressed: 'no'
     state: "present"
 - name: Remove an IP partnership
   ibm.storage_virtualize.ibm_sv_manage_ip_partnership:

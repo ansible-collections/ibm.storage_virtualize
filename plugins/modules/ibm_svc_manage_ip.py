@@ -106,9 +106,9 @@ notes:
 EXAMPLES = '''
 - name: Create IP provisioning
   ibm.storage_virtualize.ibm_svc_manage_ip:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    log_path: /tmp/playbook.debug
    node: node1
    port: 1
@@ -121,9 +121,9 @@ EXAMPLES = '''
    state: present
 - name: Remove IP provisioning
   ibm.storage_virtualize.ibm_svc_manage_ip:
-   clustername: "{{cluster}}"
-   username: "{{username}}"
-   password: "{{password}}"
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
    log_path: /tmp/playbook.debug
    node: node1
    port: 1

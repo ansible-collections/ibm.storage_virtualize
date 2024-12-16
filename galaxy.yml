@@ -2,7 +2,7 @@
 
 namespace: ibm
 name: storage_virtualize
-version: 2.5.0
+version: 2.6.0
 readme: README.md
 authors:
   - Sumit Kumar Gupta (github.com/sumitguptaibm)
@@ -18,7 +18,7 @@ tags:
   - flashsystem
   - ibmsvc
 repository: https://github.com/ansible-collections/ibm.storage_virtualize
-#documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
+# documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
 homepage: https://github.com/ansible-collections/ibm.storage_virtualize
 issues: https://github.com/ansible-collections/ibm.storage_virtualize/issues
 build_ignore:

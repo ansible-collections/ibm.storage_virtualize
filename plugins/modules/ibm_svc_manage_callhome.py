@@ -253,7 +253,6 @@ EXAMPLES = '''
     contact_email: "{{ contact_email }}"
     serverIP: "{{ server_ip }}"
     serverPort: "{{ server_port }}"
-
 '''
 
 RETURN = '''#'''

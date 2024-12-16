@@ -90,34 +90,34 @@ notes:
 EXAMPLES = '''
 - name: Define a new host cluster
   ibm.storage_virtualize.ibm_svc_hostcluster:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: hostcluster0
     state: present
     ownershipgroup: group1
 - name: Update the ownershipgroup of a host cluster
   ibm.storage_virtualize.ibm_svc_hostcluster:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: hostcluster0
     state: present
-    noownershipgroup: True
+    noownershipgroup: 'True'
 - name: Delete a host cluster
   ibm.storage_virtualize.ibm_svc_hostcluster:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: hostcluster0
     state: absent
-    removeallhosts: True
+    removeallhosts: 'True'
 '''
 
 RETURN = '''#'''

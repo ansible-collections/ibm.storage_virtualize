@@ -46,9 +46,9 @@ notes:
 EXAMPLES = '''
 - name: complete intial setup
   ibm.storage_virtualize.ibm_svc_complete_initial_setup:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
 '''
 
 RETURN = '''# '''

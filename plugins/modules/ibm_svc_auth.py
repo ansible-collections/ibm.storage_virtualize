@@ -61,17 +61,17 @@ EXAMPLES = '''
 - name: Obtain an authentication token
   register: result
   ibm.storage_virtualize.ibm_svc_auth:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
 - name: Create a volume
   ibm.storage_virtualize.ibm_svc_manage_volume:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
-    token: "{{result.token}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    token: "{{ result.token }}"
     name: volume0
     state: present
     pool: Pool0

@@ -3,6 +3,7 @@
 
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sanjaikumaar M <sanjaikumaar.m@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -62,7 +63,7 @@ options:
     topology:
         description:
             - Specifies the policy topology.
-        choices: [ 2-site-async-dr, 2-site-ha ]
+        choices: [ 2-site-async-dr, 2-site-ha, async-dr ]
         type: str
     location1system:
         description:
@@ -91,8 +92,16 @@ options:
             - Validates certification.
         default: false
         type: bool
+    partition:
+        description:
+            - Specifies the name of the storage partition to be assigned to async-dr replication policy.
+            - Applies when I(state=present).
+            - Supported from Storage Virtualize family systems 8.7.1.0 or later.
+        type: str
+        version_added: 2.6.0
 author:
     - Sanjaikumaar M (@sanjaikumaar)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -100,9 +109,9 @@ notes:
 EXAMPLES = '''
 - name: Create replication policy
   ibm.storage_virtualize.ibm_sv_manage_replication_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: replication_policy0
     topology: 2-site-async-dr
     location1system: x.x.x.x
@@ -113,11 +122,21 @@ EXAMPLES = '''
     state: present
 - name: Delete replication policy
   ibm.storage_virtualize.ibm_sv_manage_replication_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: replication_policy0
     state: absent
+- name: Create DR replication policy
+  ibm.storage_virtualize.ibm_sv_manage_replication_policy:
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: replication_policy0
+    topology: async-dr
+    partition: partition0
+    rpoalert: 60
+    state: present
 '''
 
 RETURN = '''#'''
@@ -148,7 +167,7 @@ class IBMSVReplicationPolicy:
                 ),
                 topology=dict(
                     type='str',
-                    choices=['2-site-async-dr', '2-site-ha']
+                    choices=['2-site-async-dr', '2-site-ha', 'async-dr']
                 ),
                 location1system=dict(
                     type='str',
@@ -164,6 +183,9 @@ class IBMSVReplicationPolicy:
                 ),
                 rpoalert=dict(
                     type='int',
+                ),
+                partition=dict(
+                    type='str',
                 )
             )
         )
@@ -182,6 +204,7 @@ class IBMSVReplicationPolicy:
         self.location2system = self.module.params.get('location2system', '')
         self.location2iogrp = self.module.params.get('location2iogrp', '')
         self.rpoalert = self.module.params.get('rpoalert', '')
+        self.partition = self.module.params.get('partition', '')
 
         # logging setup
         self.log_path = self.module.params['log_path']
@@ -213,15 +236,25 @@ class IBMSVReplicationPolicy:
             )
 
         if self.state == 'absent':
-            invalids = ('topology', 'location1system', 'location1iogrp', 'location2system', 'location2iogrp', 'rpoalert')
+            invalids = ('topology', 'location1system', 'location1iogrp', 'location2system', 'location2iogrp', 'rpoalert', 'partition')
             invalid_exists = ', '.join((var for var in invalids if not getattr(self, var) in {'', None}))
 
             if invalid_exists:
                 self.module.fail_json(
                     msg='state=absent but following parameters have been passed: {0}'.format(invalid_exists)
                 )
+        if (self.topology == "async-dr" and not self.partition) or (self.topology != "async-dr" and self.partition):
+            self.module.fail_json(msg="DR policy async-dr and partition name must be used together to create a async-dr replication policy!!")
+        if self.topology == "async-dr":
+            invalids = ('location1system', 'location1iogrp', 'location2system', 'location2iogrp')
+            invalid_exists = ', '.join((var for var in invalids if not getattr(self, var) in {'', None}))
 
-    def is_rp_exists(self):
+            if invalid_exists:
+                self.module.fail_json(
+                    msg="For topology 'async-dr' these parameters are invalid {0}".format(invalid_exists)
+                )
+
+    def is_replication_policy_present(self):
         result = {}
         cmd = 'lsreplicationpolicy'
         data = self.restapi.svc_obj_info(cmd=cmd, cmdopts=None, cmdargs=[self.name])
@@ -250,47 +283,12 @@ class IBMSVReplicationPolicy:
             'location2system': self.location2system,
             'location2iogrp': self.location2iogrp,
             'rpoalert': self.rpoalert,
+            'partition': self.partition
         }
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('Replication policy (%s) created', self.name)
         self.changed = True
-
-    def replication_policy_probe(self):
-        field_mappings = (
-            ('topology', self.rp_data.get('topology', '')),
-            ('location1system', (
-                ('location1_system_name', self.rp_data.get('location1_system_name', '')),
-                ('location1_system_id', self.rp_data.get('location1_system_id', ''))
-            )),
-            ('location1iogrp', self.rp_data.get('location1_iogrp_id', '')),
-            ('location2system', (
-                ('location2_system_name', self.rp_data.get('location2_system_name', '')),
-                ('location2_system_id', self.rp_data.get('location2_system_id', ''))
-            )),
-            ('location2iogrp', self.rp_data.get('location2_iogrp_id', '')),
-            ('rpoalert', self.rp_data.get('rpo_alert', ''))
-        )
-
-        self.log('replication policy probe data: %s', field_mappings)
-        for f, v in field_mappings:
-            current_value = str(getattr(self, f))
-            if current_value and f in {'location1system', 'location2system'}:
-                try:
-                    next(iter(filter(lambda val: val[1] == current_value, v)))
-                except StopIteration:
-                    self.module.fail_json(
-                        msg='Policy modification is not supported. '
-                            'Please delete and recreate new policy.'
-                    )
-            elif current_value and f in {'rpoalert'}:
-                if self.topology == '2-site-ha':
-                    continue
-            elif current_value and current_value != v:
-                self.module.fail_json(
-                    msg='Policy modification is not supported. '
-                        'Please delete and recreate new policy.'
-                )
 
     def delete_replication_policy(self):
         if self.module.check_mode:
@@ -302,11 +300,32 @@ class IBMSVReplicationPolicy:
         self.log('Replication policy (%s) deleted', self.name)
         self.changed = True
 
+    def replication_policy_probe(self, data):
+        # Mapping the parameters with the existing data for comparision
+        params_mapping = (
+            ('topology', data.get('topology')),
+            ('partition', data.get('partition_name')),
+            ('location1iogrp', data.get('location1_iogrp_id')),
+            ('location2iogrp', data.get('location2_iogrp_id'))
+        )
+        props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
+        if self.rpoalert and self.rpoalert != int(data.get('rpo_alert')):
+            props["rpoalert"] = self.rpoalert
+        if self.location1system and self.location1system != data.get('location1_system_name') and self.location1system != data.get('location1_system_id'):
+            props['location1system'] = self.location1system
+        if self.location2system and self.location2system != data.get('location2_system_name') and self.location2system != data.get('location2_system_id'):
+            props['location1system'] = self.location1system
+        self.log("Replication policy modification data: %s", props)
+        return props
+
     def apply(self):
-        if self.is_rp_exists():
+        data = self.is_replication_policy_present()
+        if data:
             if self.state == 'present':
-                self.replication_policy_probe()
-                self.msg = 'Replication policy ({0}) already exists. No modifications done.'.format(self.name)
+                if self.replication_policy_probe(data):
+                    self.module.fail_json(msg='Replication policy ({0}) already exists, modification cannot be done'.format(self.name))
+                else:
+                    self.msg = 'Replication policy ({0}) already exists.'.format(self.name)
             else:
                 self.delete_replication_policy()
                 self.msg = 'Replication policy ({0}) deleted'.format(self.name)

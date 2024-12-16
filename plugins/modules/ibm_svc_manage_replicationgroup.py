@@ -112,30 +112,30 @@ notes:
 EXAMPLES = '''
 - name: Define a new rc consistency group
   ibm.storage_virtualize.ibm_svc_manage_replicationgroup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: rccg4test
     remotecluster: remotecluster
     state: present
 - name: Delete rc consistency group
   ibm.storage_virtualize.ibm_svc_manage_replicationgroup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: rccg4test
     force: true
     state: absent
 - name: Update rc consistency group
   ibm.storage_virtualize.ibm_svc_manage_replicationgroup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: rccg4test
     cyclingperiod: 60

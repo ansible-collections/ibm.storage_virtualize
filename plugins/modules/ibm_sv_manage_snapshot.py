@@ -133,27 +133,27 @@ notes:
 EXAMPLES = '''
 - name: Create volumegroup snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_1
    src_volumegroup_name: volumegroup1
    snapshot_pool: Pool0Childpool0
    state: present
 - name: Create volumes snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_2
    src_volume_names: vdisk0:vdisk1
    snapshot_pool: Pool0Childpool0
    state: present
 - name: Create safeguarded snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_2
    src_volume_names: vdisk0:vdisk1
    safeguarded: true
@@ -162,27 +162,27 @@ EXAMPLES = '''
    state: present
 - name: Update snapshot ansible_2
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_new
    old_name: ansible_2
    ownershipgroup: ownershipgroup0
    state: present
 - name: Restore all volumes of a volumegroup from a snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: snapshot0
    src_volumegroup_name: volumegroup1
    snapshot_pool: Pool0Childpool0
    state: restore
 - name: Restore subset of volumes of a volumegroup from snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: snapshot0
    src_volumegroup_name: volumegroup1
    src_volume_names: vdisk0:vdisk1
@@ -190,9 +190,9 @@ EXAMPLES = '''
    state: restore
 - name: Create transient snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: snapshot0
    src_volume_names: vdisk0:vdisk1
    safeguarded: true
@@ -201,17 +201,17 @@ EXAMPLES = '''
    state: present
 - name: Delete volumegroup snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_1
    src_volumegroup_name: volumegroup1
    state: absent
 - name: Delete volume snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: ansible_new
    state: absent
 '''

@@ -89,10 +89,10 @@ notes:
 EXAMPLES = '''
 - name: Create a user group
   ibm.storage_virtualize.ibm_svc_manage_usergroup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: present
     name: user-group-name
@@ -100,10 +100,10 @@ EXAMPLES = '''
     ownershipgroup: ownershipgroup-name
 - name: Remove a user group
   ibm.storage_virtualize.ibm_svc_manage_usergroup:
-    clustername: "{{clustername}}"
-    domain: "{{domain}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     state: absent
     name: user-group-name

@@ -118,9 +118,9 @@ notes:
 EXAMPLES = '''
 - name: Create a HyperSwap volume
   ibm.storage_virtualize.ibm_svc_manage_mirrored_volume:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     type: "local hyperswap"
     name: "vol1"
@@ -130,9 +130,9 @@ EXAMPLES = '''
     size: "1024"
 - name: Create a thin-provisioned HyperSwap volume
   ibm.storage_virtualize.ibm_svc_manage_mirrored_volume:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     type: "local hyperswap"
     name: "vol2"
@@ -143,9 +143,9 @@ EXAMPLES = '''
     thin: true
 - name: Delete a mirrored volume
   ibm.storage_virtualize.ibm_svc_manage_mirrored_volume:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/playbook.debug
     name: "vol2"
     state: absent
@@ -153,9 +153,9 @@ EXAMPLES = '''
   block:
     - name: Create Volume
       ibm.storage_virtualize.ibm_svc_manage_mirrored_volume:
-        clustername: "{{clustername}}"
-        username: "{{username}}"
-        password: "{{password}}"
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
         log_path: /tmp/playbook.debug
         name: "vol4"
         state: present
@@ -166,13 +166,13 @@ EXAMPLES = '''
   block:
     - name: Resize an existing mirrored volume
       ibm.storage_virtualize.ibm_svc_manage_mirrored_volume:
-        clustername: "{{clustername}}"
-        username: "{{username}}"
-        password: "{{password}}"
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
         log_path: /tmp/playbook.debug
         name: "vol1"
         state: present
-        size: "{{new_size}}"
+        size: "{{ new_size }}"
 '''
 
 RETURN = '''#'''

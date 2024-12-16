@@ -62,25 +62,25 @@ options:
 EXAMPLES = '''
 - name: Run svcinfo CLI command using SSH client with password
   ibm.storage_virtualize.ibm_svcinfo_command:
-    command: "svcinfo lsuser {{user}}"
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    command: "svcinfo lsuser {{ user }}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
 - name: Run svcinfo CLI command using passwordless SSH Client
   ibm.storage_virtualize.ibm_svcinfo_command:
     command: "svcinfo lsuser"
     usesshkey: "yes"
-    clustername: "{{clustername}}"
-    username: "{{username}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
     password:
     log_path: /tmp/ansible.log
 - name: Run sainfo CLI command
   ibm.storage_virtualize.ibm_svcinfo_command:
     command: "sainfo lsservicenodes"
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     log_path: /tmp/ansible.log
 '''
 

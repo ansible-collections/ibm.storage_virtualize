@@ -89,26 +89,26 @@ notes:
 EXAMPLES = '''
 - name: Create provisioning policy
   ibm.storage_virtualize.ibm_sv_manage_provisioning_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: provisioning_policy0
     capacitysaving: "compressed"
     deduplicated: true
     state: present
 - name: Rename provisioning policy
   ibm.storage_virtualize.ibm_sv_manage_provisioning_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: pp0
     old_name: provisioning_policy0
     state: present
 - name: Delete replication policy
   ibm.storage_virtualize.ibm_sv_manage_provisioning_policy:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
     name: pp0
     state: absent
 '''

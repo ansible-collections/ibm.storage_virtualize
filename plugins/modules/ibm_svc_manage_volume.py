@@ -8,7 +8,7 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-DOCUMENTATION = '''
+DOCUMENTATION = r'''
 ---
 module: ibm_svc_manage_volume
 short_description: This module manages standard volumes on IBM Storage Virtualize family systems
@@ -88,6 +88,7 @@ options:
       - Specifies the type of volume to create. Volume can be thinclone or clone type.
       - Valid when I(state=present), to create a thinclone or clone volume.
       - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+      - Also used to convert a thinclone volume to clone. type = clone should be specified.
     choices: [thinclone, clone]
     type: str
   fromsourcevolume:
@@ -165,13 +166,15 @@ author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
 notes:
     - This module supports C(check_mode).
+    - CMMVC9855E The command failed because one of more of the specified volumes does not exist.
+      This error occurs when the user-provided volume(s) do not exist.
 '''
 
-EXAMPLES = '''
+EXAMPLES = r'''
 - name: Create a volume
   ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
-    domain: "{{domain}}"
+    domain: "{{ domain }}"
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: "{{ log_path }}"
@@ -215,7 +218,7 @@ EXAMPLES = '''
 - name: Creating a volume with iogrp- io_grp0
   ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
-    domain: "{{ domain}}"
+    domain: "{{ domain }}"
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: "{{ log_path }}"
@@ -266,6 +269,26 @@ EXAMPLES = '''
     password: "{{ password }}"
     old_name: "volume_name"
     name: "new_volume_name"
+    state: "present"
+- name: Convert a thinclone volume to clone
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "vol0-0"
+    type: "clone"
+    log_path: "{{ log_path }}"
+    state: "present"
+- name: Convert list of thinclone volumes to clone
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "vol0:vol1:vol2"
+    type: "clone"
+    log_path: "{{ log_path }}"
     state: "present"
 - name: Enable cloud backup in an existing volume
   ibm.storage_virtualize.ibm_svc_manage_volume:
@@ -394,7 +417,7 @@ class IBMSVCvolume(object):
                 else:
                     temp.append(item)
             if invalid:
-                self.module.fail_json(msg='Empty or non-existing iogrp detected: %s' % invalid)
+                self.module.fail_json(msg='Empty or non-existing iogrp detected: {0}'.format(invalid))
             self.iogrp = temp
 
     # for validating mandatory parameters of the module
@@ -486,6 +509,46 @@ class IBMSVCvolume(object):
         return self.restapi.svc_obj_info(
             'lsvdisk', {'bytes': True}, [volume_name]
         )
+
+    def get_all_target_volumes(self, criteria=None):
+        # This function does following:
+        # 1. It fetches a set of volumes from SVC in all_vols_set
+        # 2. It converts self.name into a provided_vols_set
+        # 3. It gets common volumes set from both that meet the criteria
+        # 4. If any user-provide volume(s) do not exist on the cluster, returns error
+        # 5. It sets a new attribute self.target_vols_list_str which is a string formed
+        #    by joining colon-separated list of common volumes.
+
+        all_vols_set = set()
+        self.target_vols_list_str = ''
+
+        if self.module.check_mode:
+            self.changed = True
+            return
+
+        cmdopts = {}
+        if criteria:
+            cmdopts['filtervalue'] = criteria
+        data = self.restapi.svc_obj_info('lsvdisk', cmdopts, None)
+        if data:
+            for item in data:
+                all_vols_set.add(item['name'])
+
+        user_provided_vols_set = set(self.name.split(':'))
+        invalid_vols_list = list(user_provided_vols_set.difference(all_vols_set))
+        if invalid_vols_list:
+            self.module.fail_json(msg="CMMVC9855E The command failed because one or more of"
+                                  " the specified volumes does not exist.")
+
+        target_vols_list = []
+        if data:
+            for item in data:
+                if item['name'] in user_provided_vols_set and item['volume_type'] == "thinclone":
+                    target_vols_list.append(item['name'])
+        self.target_vols_list_str = ':'.join(target_vols_list)
+        self.log("Volume(s) that need to be converted from thinclone to clone: [%s].", self.target_vols_list_str)
+
+        return
 
     # function to get list of associated iogrp to a volume
     def get_existing_iogrp(self):
@@ -733,10 +796,29 @@ class IBMSVCvolume(object):
         )
         self.changed = True
 
+    def convert_to_clone(self):
+        # when check_mode is enabled
+        if self.module.check_mode:
+            self.msg = 'Skipping changes due to check mode.'
+            self.changed = True
+            return
+
+        cmdopts = {}
+        # For a list of volumes, target_volumes_list_str will be set by get_all_target_volumes()
+        if hasattr(self, 'target_vols_list_str') and self.target_vols_list_str != '':
+            cmdopts['volumes'] = self.target_vols_list_str
+        else:
+            cmdopts['volumes'] = self.name
+        cmdargs = None
+        self.restapi.svc_run_command('converttoclone', cmdopts, cmdargs)
+        self.msg = "Volume(s) [{0}] converted to clone.".format(self.name)
+        self.changed = True
+        return
+
     # function to update an existing volume
     def update_volume(self, modify):
         # raise error for unsupported parameter
-        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'type', 'fromsourcevolume']
+        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'fromsourcevolume']
         unsupported_exists = []
         for parameter in unsupported_parameters:
             if parameter in modify:
@@ -747,6 +829,7 @@ class IBMSVCvolume(object):
         if self.module.check_mode:
             self.changed = True
             return
+
         # updating iogrps of a volume
         if 'iogrp' in modify:
             if 'add' in modify['iogrp']:
@@ -801,7 +884,34 @@ class IBMSVCvolume(object):
     def apply(self):
         changed, msg, modify = False, None, {}
         self.mandatory_parameter_validation()
-        volume_data = self.get_existing_volume(self.name)
+
+        if ':' in self.name and self.type == 'clone' and self.state == 'present':
+            # Special handling for list of volumes
+            # Only applicable for converting thinclone volumes list to clone
+            self.get_all_target_volumes()
+            # self.target_vols_list_str will be set after calling get_all_target_volumes()
+            if self.target_vols_list_str != '':
+                self.convert_to_clone()
+                self.module.exit_json(msg=self.msg, changed=self.changed)
+            else:
+                self.msg = "Volume(s) [{0}] are not thinclone!!".format(self.name)
+                self.module.exit_json(msg=self.msg, changed=self.changed)
+        else:
+            volume_data = self.get_existing_volume(self.name)
+
+        if volume_data and self.type == 'clone' and not self.fromsourcevolume:
+            # If an existing volume was passed along with type=clone
+            # but not fromsourcevolume, user wants to convert thinclone to clone
+            if volume_data[0].get('volume_type') == 'thinclone':
+                # If volume is thinclone, convert it to clone.
+                self.convert_to_clone()
+                self.module.exit_json(msg=self.msg, changed=self.changed)
+            else:
+                # If volume is not thinclone, just return message.
+                # This is for cases, where it was either already done
+                # the last time it was run, or was never a thinclone.
+                self.module.exit_json(msg='Volume {0} is not a thinclone.'.format(self.name), changed=self.changed)
+
         if self.state == "present" and self.old_name:
             msg = self.volume_rename(volume_data)
         elif self.state == "absent" and self.old_name:

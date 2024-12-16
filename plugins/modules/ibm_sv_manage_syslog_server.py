@@ -134,34 +134,34 @@ notes:
 EXAMPLES = '''
 - name: Create syslog server
   ibm.storage_virtualize.ibm_sv_manage_syslog_server:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: server1
    ip: 1.2.3.4
    state: present
 - name: Create a syslog server that communicates with TLS
   ibm.storage_virtualize.ibm_sv_manage_syslog_server:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: server1
    ip: 1.2.3.4
    protocol: tls
    state: present
 - name: Modify the server details
   ibm.storage_virtualize.ibm_sv_manage_syslog_server:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: server1
-   info: off
+   info: 'off'
    state: present
 - name: Delete the syslog server
   ibm.storage_virtualize.ibm_sv_manage_syslog_server:
-   clustername: '{{clustername}}'
-   username: '{{username}}'
-   password: '{{password}}'
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
    name: server1
    state: absent
 '''

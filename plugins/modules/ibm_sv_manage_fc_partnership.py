@@ -127,39 +127,39 @@ notes:
 EXAMPLES = '''
 - name: Create an FC partnership and start the partnership
   ibm.storage_virtualize.ibm_sv_manage_fc_partnership:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
-    remote_clustername: "{{remote_clustername}}"
-    remote_username: "{{remote_username}}"
-    remote_password: "{{remote_password}}"
-    remote_system: "{{remote_system}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    remote_clustername: "{{ remote_clustername }}"
+    remote_username: "{{ remote_username }}"
+    remote_password: "{{ remote_password }}"
+    remote_system: "{{ remote_system }}"
     linkbandwidthmbits: 50
     backgroundcopyrate: 50
-    start: True
+    start: 'True'
     state: present
 - name: Update an FC partnership and stop the partnership
   ibm.storage_virtualize.ibm_sv_manage_fc_partnership:
-    clustername: "{{clustername}}"
-    username: "{{username}}"
-    password: "{{password}}"
-    remote_clustername: "{{remote_clustername}}"
-    remote_username: "{{remote_username}}"
-    remote_password: "{{remote_password}}"
-    remote_system: "{{remote_system}}"
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    remote_clustername: "{{ remote_clustername }}"
+    remote_username: "{{ remote_username }}"
+    remote_password: "{{ remote_password }}"
+    remote_system: "{{ remote_system }}"
     linkbandwidthmbits: 40
     backgroundcopyrate: 20
-    stop: True
+    stop: 'True'
     state: present
 - name: Delete the FC partnership
   ibm.storage_virtualize.ibm_sv_manage_fc_partnership:
-    clustername: "{{cluster}}"
-    username: "{{username}}"
-    password: "{{password}}"
-    remote_clustername: "{{remote_clustername}}"
-    remote_username: "{{remote_username}}"
-    remote_password: "{{remote_password}}"
-    remote_system: "{{remote_system}}"
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    remote_clustername: "{{ remote_clustername }}"
+    remote_username: "{{ remote_username }}"
+    remote_password: "{{ remote_password }}"
+    remote_system: "{{ remote_system }}"
     state: absent
 '''
 

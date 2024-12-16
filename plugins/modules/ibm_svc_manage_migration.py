@@ -168,15 +168,15 @@ EXAMPLES = '''
     state: cleanup
     source_volume: "src_vol"
     token: "{{ source_cluster_token }}"
-    log_path : /tmp/ansible.log
+    log_path: /tmp/ansible.log
 - name: Migration an existing vol from pool0 to pool1
   ibm.storage_virtualize.ibm_svc_manage_migration:
     clustername: "{{ source_cluster }}"
     token: "{{ source_cluster_token }}"
-    log_path : /tmp/ansible.log
-    type_of_migration : across_pools
-    source_volume : vol1
-    new_pool : pool1
+    log_path: /tmp/ansible.log
+    type_of_migration: across_pools
+    source_volume: vol1
+    new_pool: pool1
 '''
 
 RETURN = '''#'''

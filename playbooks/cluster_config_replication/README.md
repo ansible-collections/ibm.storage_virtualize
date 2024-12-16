@@ -5,6 +5,7 @@ Replication of system configuration from one Flashsystem to another Flashsystem
 
 **Prerequisite:**
 - IBM Storage Virtualize ansible collection version 2.2.0 or above must be installed
+- jmespath python library must be installed
 
 **Features:**
 - Set System name
