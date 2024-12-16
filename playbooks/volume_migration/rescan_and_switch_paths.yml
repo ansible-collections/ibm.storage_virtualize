@@ -51,7 +51,7 @@
       loop: "{{ fcdetails.TargetPortFC }}"
     - name: Modify svc wwpn the way switch want
       ansible.builtin.set_fact:
-        specv_wwpn_switch_format: "{{ specv_wwpn_switch_format | default([]) +[item | map('join') | join(':')] }}"
+        specv_wwpn_switch_format: "{{ specv_wwpn_switch_format | default([]) + [item | map('join') | join(':')] }}"
       loop: "{{ (specv_wwpn) | map('batch', 2) | map('list') | list | lower }}"
     - name: Get all zoning information from switch
       brocade.fos.brocade_facts:

@@ -35,7 +35,7 @@
 
     - name: Modify specv wwpn the way switch want
       ansible.builtin.set_fact:
-        specv_wwpn_switch_format: "{{ specv_wwpn_switch_format | default([]) +[item | map('join') | join(':')] }}"
+        specv_wwpn_switch_format: "{{ specv_wwpn_switch_format | default([]) + [item | map('join') | join(':')] }}"
       loop: "{{ (specv_wwpn) | map('batch', 2) | map('list') | list | lower }}"
 
     - name: Get all zoning information from switch
@@ -75,12 +75,12 @@
 
     - name: Create host list for specv without colon format
       ansible.builtin.set_fact:
-        application_host_wwpns_specvformat_list: "{{ application_host_wwpns_specvformat_list | default([]) + [(item | replace(':','')) | upper] }}"
+        application_host_wwpns_specvformat_list: "{{ application_host_wwpns_specvformat_list | default([]) + [(item | replace(':', '')) | upper] }}"
       loop: "{{ application_host_wwpns }}"
 
     - name: Create host list for specv without colon format
       ansible.builtin.set_fact:
-        application_host_wwpns_specvformat: "{{ application_host_wwpns_specvformat | default('')+item +':' }}"
+        application_host_wwpns_specvformat: "{{ application_host_wwpns_specvformat | default('') + item + ':' }}"
       loop: "{{ application_host_wwpns_specvformat_list | select() }}"
 
     - name: Application host
@@ -174,9 +174,9 @@
 
     - name: Find vollist data
       ansible.builtin.set_fact:
-        vol_list_full_data: "{{ vol_list_full_data | default([])+ [item] }}"
-        vol_name_uid: "{{ vol_name_uid | default([]) + [[item['volume_name'],item['vdisk_UID'] | lower]] }}"
-      when: (item.volume_name in vol_name_list )
+        vol_list_full_data: "{{ vol_list_full_data | default([]) + [item] }}"
+        vol_name_uid: "{{ vol_name_uid | default([]) + [[item['volume_name'], item['vdisk_UID'] | lower]] }}"
+      when: (item.volume_name in vol_name_list)
       loop: "{{ volinfo.Volume }}"
 
     - name: Volume name uid
@@ -202,7 +202,7 @@
 
     - name: Find unmapped volume
       ansible.builtin.set_fact:
-        unmaped_vol_name_list: "{{ unmaped_vol_name_list | default([])+ [item] }}"
+        unmaped_vol_name_list: "{{ unmaped_vol_name_list | default([]) + [item] }}"
       when: (item not in vdisk_mapped_multipath)
       loop: "{{ vol_name_list }}"
 

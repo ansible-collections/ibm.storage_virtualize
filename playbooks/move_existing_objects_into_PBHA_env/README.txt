@@ -21,7 +21,7 @@ There are total 4 files used for moving existing objects in PBHA, and decommissi
   1. main.yml:
      This is the main file to be executed as below:
      ansible-playbook main.yml -i inventory.ini
-     main.yml leverages create_mTLS.yml and replication_setup.yml for completing its initialial setup tasks. After 
+     main.yml leverages create_mTLS.yml and replication_setup.yml for completing its initial setup tasks. After 
      that, it continues to move objects into a new partition, finally establishing high-availability between primary and
      secondary clusters.
 
