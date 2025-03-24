@@ -19,7 +19,7 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.7.0"
+COLLECTION_VERSION = "2.7.1"
 TIMEOUT = 600
 
 
