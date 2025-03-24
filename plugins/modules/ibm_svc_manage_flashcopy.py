@@ -61,7 +61,7 @@ options:
         description:
             - Specifies the copy type when creating the FlashCopy mapping.
             - Required when I(state=present), to create a FlashCopy mapping.
-        choices: [ snapshot, clone, backup]
+        choices: [ snapshot, clone, backup ]
         type: str
     source:
         description:
@@ -96,7 +96,14 @@ options:
             - Specifies the copy rate. The rate varies between 0-150.
             - If unspecified, the default copy rate of 50 for clone and 0 for snapshot is used.
             - Valid when I(state=present), to create or modify a FlashCopy mapping.
-        type: str
+        type: int
+    cleanrate:
+        description:
+            - Specifies the clean rate. The rate varies between 0-150.
+            - If unspecified, the default clean rate is 50.
+            - Valid when I(state=present), to create or modify a FlashCopy mapping.
+        type: int
+        version_added: 2.7.0
     grainsize:
         description:
             - Specifies the grain size for the FlashCopy mapping.
@@ -145,7 +152,20 @@ EXAMPLES = '''
     mdiskgrp: Pool0
     consistgrp: consistencygroup-name
     copyrate: 50
+    cleanrate: 60
     grainsize: 64
+- name: Update FlashCopy mapping
+  ibm.storage_virtualize.ibm_svc_manage_flashcopy:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    state: present
+    name: snapshot-name
+    consistgrp: consistencygroup-name
+    copyrate: 50
+    cleanrate: 60
 - name: Create FlashCopy mapping for clone
   ibm.storage_virtualize.ibm_svc_manage_flashcopy:
     clustername: "{{ clustername }}"
@@ -236,7 +256,8 @@ class IBMSVCFlashcopy(object):
                 state=dict(type='str', required=True, choices=['present', 'absent']),
                 consistgrp=dict(type='str', required=False),
                 noconsistgrp=dict(type='bool', required=False),
-                copyrate=dict(type='str', required=False),
+                copyrate=dict(type='int', required=False),
+                cleanrate=dict(type='int', required=False),
                 grainsize=dict(type='str', required=False),
                 force=dict(type='bool', required=False),
                 old_name=dict(type='str')
@@ -263,6 +284,7 @@ class IBMSVCFlashcopy(object):
         self.noconsistgrp = self.module.params.get('noconsistgrp', False)
         self.grainsize = self.module.params.get('grainsize', False)
         self.copyrate = self.module.params.get('copyrate', False)
+        self.cleanrate = self.module.params.get('cleanrate', False)
         self.force = self.module.params.get('force', False)
         self.old_name = self.module.params.get('old_name', '')
 
@@ -355,10 +377,10 @@ class IBMSVCFlashcopy(object):
     def fcmap_create(self, temp_target_name):
         if self.copyrate:
             if self.copytype in ('clone', 'backup'):
-                if int(self.copyrate) not in range(1, 151):
+                if self.copyrate not in range(1, 151):
                     self.module.fail_json(msg="Copyrate for clone and backup must be in range 1-150")
             if self.copytype == 'snapshot':
-                if int(self.copyrate) not in range(0, 151):
+                if self.copyrate not in range(0, 151):
                     self.module.fail_json(msg="Copyrate for snapshot must be in range 0-150")
         else:
             if self.copytype in ('clone', 'backup'):
@@ -376,6 +398,7 @@ class IBMSVCFlashcopy(object):
         cmdopts['source'] = self.source
         cmdopts['target'] = temp_target_name
         cmdopts['copyrate'] = self.copyrate
+        cmdopts['cleanrate'] = self.cleanrate
         if self.grainsize:
             cmdopts['grainsize'] = self.grainsize
         if self.consistgrp:
@@ -446,9 +469,10 @@ class IBMSVCFlashcopy(object):
             if self.consistgrp:
                 if self.consistgrp != data['group_name']:
                     props['consistgrp'] = self.consistgrp
-        if self.copyrate:
-            if self.copyrate != data['copy_rate']:
-                props['copyrate'] = self.copyrate
+        if self.copyrate and self.copyrate != int(data['copy_rate']):
+            props['copyrate'] = self.copyrate
+        if self.cleanrate and self.cleanrate != int(data['clean_rate']):
+            props['cleanrate'] = self.cleanrate
         return props
 
     def fcmap_update(self, modify):
@@ -470,6 +494,7 @@ class IBMSVCFlashcopy(object):
         parameters = {
             "copytype": self.copytype,
             "copyrate": self.copyrate,
+            "cleanrate": self.cleanrate,
             "source": self.source,
             "target": self.target,
             "grainsize": self.grainsize,

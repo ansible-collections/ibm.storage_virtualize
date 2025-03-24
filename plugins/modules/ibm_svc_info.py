@@ -95,6 +95,7 @@ options:
     - hc - lists information for host clusters.
     - fc - lists information for FC connectivity.
     - fcport - lists information for FC ports.
+    - fabricport -  list the FDMI information that is discovered by the system.
     - targetportfc - lists information for WWPN which is required to set up
                      FC zoning and to display the current failover status
                      of host I/O ports.
@@ -160,8 +161,12 @@ options:
     - availablepatch - display the patches that are compatible with the SVC version.
     - patch - displays a list of all the patches on a specific node.
     - systempatches - displays patches installed on all the nodes in the system.
+    - flashgrid - displays the summarized view of flashsystem grid.
+    - flashgridmembers - displays the summarized view of flashsystem grid members.
+    - flashgridsystem - displays the information about all systems in the flashsystem grid.
+    - flashgridpartition - displays the information about all partitions in the flashsystem grid.
     choices: [vol, pool, node, iog, host, hostvdiskmap, vdiskhostmap, hc, fcport
-              , iscsiport, fc, fcmap, fcconsistgrp, rcrelationship, rcconsistgrp
+              , fabricport, iscsiport, fc, fcmap, fcconsistgrp, rcrelationship, rcconsistgrp
               , vdiskcopy, targetportfc, array, system, 'cloudaccount', 'cloudaccountusage',
                'ldapserver', 'drive', 'user', 'usergroup', 'ownershipgroup',
                'partnership', 'replicationpolicy', 'cloudbackup', 'enclosurestats',
@@ -172,7 +177,7 @@ options:
                'truststore', 'callhome', 'ip', 'portset', 'safeguardedpolicy',
                'mdisk', 'safeguardedpolicyschedule', 'cloudimportcandidate', 'eventlog', 'driveclass', 'security', 'partition',
                'volumegroupreplication', 'plugin', 'quorum', 'enclosure', 'snmpserver', 'testldapserver', 'availablepatch',
-               'patch', 'systempatches', all]
+               'patch', 'systempatches', 'flashgrid', 'flashgridmembers', 'flashgridsystem', 'flashgridpartition', all]
   command_list:
     type: list
     elements: str
@@ -367,7 +372,7 @@ EmailUser:
     type: list
     elements: dict
     sample: [{...}]
-FCConnectivitie:
+FCConnectivity:
     description:
         - Data will be populated when I(gather_subset=fc) or I(gather_subset=all)
         - Lists information for FC connectivity
@@ -395,6 +400,14 @@ FCPort:
     description:
         - Data will be populated when I(gather_subset=fcport) or I(gather_subset=all)
         - Lists information for FC ports
+    returned: success
+    type: list
+    elements: dict
+    sample: [{...}]
+FabricPort:
+    description:
+        - Data will be populated when I(gather_subset=fabricport) or I(gather_subset=all)
+        - List the FDMI information that is discovered by the system.
     returned: success
     type: list
     elements: dict
@@ -824,13 +837,43 @@ Systempatches:
     returned: success
     type: list
     elements: dict
-    sample: [{...}]
+FlashsystemGrid:
+    description:
+        - Data will be populated when I(gather_subset=flashgrid) or I(gather_subset=all)
+        - Displays summarized view of flashsystem grid.
+    returned: success
+    type: list
+    elements: dict
+FlashsystemGridMembers:
+    description:
+        - Data will be populated when I(gather_subset=flashgridmembers) or I(gather_subset=all)
+        - Displays summarized view of flashsystem grid members.
+    returned: success
+    type: list
+    elements: dict
+FlashsystemGridSystem:
+    description:
+        - Data will be populated when I(gather_subset=flashgridsystem) or I(gather_subset=all)
+        - Displays the information about all systems in the flashsystem grid.
+    returned: success
+    type: list
+    elements: dict
+FlashsystemGridPartition:
+    description:
+        - Data will be populated when I(gather_subset=flashgridpartition) or I(gather_subset=all)
+        - Displays the information about all partitions in the flashsystem grid.
+    returned: success
+    type: list
+    elements: dict
 '''
 
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
 from ansible.module_utils._text import to_native
+from time import time, sleep
+
+MAX_API_ENDPOINT_CALLS_PER_SECOND = 10
 
 
 class IBMSVCGatherInfo(object):
@@ -852,6 +895,7 @@ class IBMSVCGatherInfo(object):
                                             'hc',
                                             'fc',
                                             'fcport',
+                                            'fabricport',
                                             'targetportfc',
                                             'iscsiport',
                                             'fcmap',
@@ -910,6 +954,10 @@ class IBMSVCGatherInfo(object):
                                             'availablepatch',
                                             'patch',
                                             'systempatches',
+                                            'flashgrid',
+                                            'flashgridmembers',
+                                            'flashgridsystem',
+                                            'flashgridpartition',
                                             'all'
                                             ]),
                 command_list=dict(type='list', elements='str', required=False)
@@ -1064,10 +1112,24 @@ class IBMSVCGatherInfo(object):
                                     list_object.append(obj[id_name])
                                 if len(list_object) == len(set(list_object)):  # Those commands in which all ids are unique (ex. lsmdisk, lsvdisk etc)
                                     cnt = 0
+                                    current_cmd_endpoint_calls_cnt = 0
+                                    start_time_cmd_endpoint_hit = time()
                                     for object_id in list_object:
+                                        current_time = time()
+                                        elapsed_time = current_time - start_time_cmd_endpoint_hit
+                                        # Adjust the request speed to keep command endpoints well within throttling limit
+                                        # Current limit is 10 APIs per limit. Let's leave 50% quota for other applications
+                                        # So, let's keep it limited to 5 requests per second from ansible.
+                                        if (current_cmd_endpoint_calls_cnt >= MAX_API_ENDPOINT_CALLS_PER_SECOND / 2) and\
+                                           (elapsed_time < 1):
+                                            self.log.info("API rate limit reached. Sleeping for a fraction of second.")
+                                            sleep(1 - elapsed_time)
+                                            current_cmd_endpoint_calls_cnt = 0
+
                                         op_key_list.append(self.restapi.svc_obj_info(cmd=cmd,
                                                                                      cmdopts=None,
                                                                                      cmdargs=[object_id]))
+                                        current_cmd_endpoint_calls_cnt += 1
                                         if cnt == 0:
                                             cnt += 1
                                             '''
@@ -1095,6 +1157,7 @@ class IBMSVCGatherInfo(object):
                                                 lsvolumegroupsnapshotschedule etc.)
                                                 '''
                                                 return output
+
                                     output[op_key] = op_key_list
                                 else:
                                     output[op_key] = get_all_objects
@@ -1111,7 +1174,7 @@ class IBMSVCGatherInfo(object):
                                 In few cases id is not mentioned or id is invalid with command lscommand <id>.
                                 (ex. lsauthmultifactorduo, lsauthmultifactorverify, lsauthsinglesignon, lscloudcallhome,
                                 lsencryption, lskeyserverisklm, lsldap, lslicense, lsnodestatus, lsproxy, lssecurity, lssra,
-                                lssystem, lssystemcert, lssystemethernet etc.)
+                                lssystem, lssystemcert, lssystemethernet, lsflashgrid, lsflashgridmembers etc.)
                                 '''
                                 return output
                     else:
@@ -1159,11 +1222,12 @@ class IBMSVCGatherInfo(object):
             'HostVdiskMap': [],
             'VdiskHostMap': [],
             'HostCluster': [],
-            'FCConnectivitie': [],
+            'FCConnectivity': [],
             'FCConsistgrp': [],
             'RCConsistgrp': [],
             'VdiskCopy': [],
             'FCPort': [],
+            'FabricPort': [],
             'TargetPortFC': [],
             'iSCSIPort': [],
             'FCMap': [],
@@ -1216,6 +1280,10 @@ class IBMSVCGatherInfo(object):
             'Testldapserver': [],
             'Availablepatch': [],
             'Patch': [],
+            'FlashsystemGrid': [],
+            'FlashsystemGridMembers': [],
+            'FlashsystemGridSystem': [],
+            'FlashsystemGridPartition': [],
             'Systempatches': []
         }
 
@@ -1228,8 +1296,9 @@ class IBMSVCGatherInfo(object):
             'hostvdiskmap': ('HostVdiskMap', 'lshostvdiskmap', False, None),
             'vdiskhostmap': ('VdiskHostMap', 'lsvdiskhostmap', True, None),
             'hc': ('HostCluster', 'lshostcluster', False, '7.7.1.0'),
-            'fc': ('FCConnectivitie', 'lsfabric', False, None),
+            'fc': ('FCConnectivity', 'lsfabric', False, None),
             'fcport': ('FCPort', 'lsportfc', False, None),
+            'fabricport': ('FabricPort', 'lsfabricport', False, '8.6.0.0'),
             'iscsiport': ('iSCSIPort', 'lsportip', False, None),
             'fcmap': ('FCMap', 'lsfcmap', False, None),
             'rcrelationship': ('RemoteCopy', 'lsrcrelationship', False, None),
@@ -1287,7 +1356,11 @@ class IBMSVCGatherInfo(object):
             'testldapserver': ('Testldapserver', 'testldapserver', False, '6.3.0.0'),
             'availablepatch': ('Availablepatch', 'lsavailablepatch', False, '8.7.0.0'),
             'patch': ('Patch', 'lspatch', False, '8.5.4.0'),
-            'systempatches': ('Systempatches', 'lssystempatches', False, '8.5.4.0')
+            'systempatches': ('Systempatches', 'lssystempatches', False, '8.5.4.0'),
+            'flashgrid': ('FlashsystemGrid', 'lsflashgrid', False, '8..7.1.0'),
+            'flashgridmembers': ('FlashsystemGridMembers', 'lsflashgridmembers', False, '8.7.2.0'),
+            'flashgridsystem': ('FlashsystemGridSystem', 'lsflashgridsystem', False, '8.7.3.0'),
+            'flashgridpartition': ('FlashsystemGridPartition', 'lsflashgridpartition', False, '8.7.2.0')
         }
         if command_list:
             for cmd in command_list:

@@ -114,6 +114,11 @@ options:
 notes:
   - The parameters I(primary) and I(aux) are mandatory only when a remote copy relationship does not exist.
   - This module supports C(check_mode).
+  - Parameters copytype, cyclingperiod are not supported for update operation when the relationship is a part of consistency group.
+    In case these parameters are specified, Ansible will return the following error,
+    "CMMVC5951E Individual relationship cannot be updated while it is part of a consistency group."
+  - Only one update operation is supported in a single task for remote copy relationships, if multiple are detected, Ansible will return the following error,
+    "CMMVC5713E Only 1 update operation supported in one task"
 author:
     - rohit(@rohitk-github)
     - Shilpi Jain (@Shilpi-Jain1)
@@ -226,6 +231,9 @@ class IBMSVCManageReplication(object):
         if not self.name:
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
+        if self.consistgrp and self.noconsistgrp:
+            self.module.fail_json(msg='Mutually exclusive parameters: consistgrp and noconsistgrp')
+
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -313,14 +321,23 @@ class IBMSVCManageReplication(object):
     def rcrelationship_probe(self, data):
         props = {}
         propscv = {}
+        relationship_in_cg_error = "CMMVC5951E Individual relationship cannot be updated while it is part of a consistency group."
+        if data['consistency_group_name']:
+            if self.copytype == 'GMCV':
+                if (data['copy_type'] != 'global' or data['cycling_mode'] != 'multi'):
+                    self.module.fail_json(msg=relationship_in_cg_error)
+                if self.cyclingperiod and self.cyclingperiod != data['cycle_period_seconds']:
+                    self.module.fail_json(msg=relationship_in_cg_error)
+            elif (self.copytype and self.copytype != data['copy_type']):
+                self.module.fail_json(msg=relationship_in_cg_error)
         if data['consistency_group_name'] and self.noconsistgrp:
             props['noconsistgrp'] = self.noconsistgrp
         if self.consistgrp is not None and self.consistgrp != data['consistency_group_name']:
             props['consistgrp'] = self.consistgrp
         if self.master is not None and self.master != data['master_vdisk_name']:
-            props['master'] = self.master
+            self.module.fail_json(msg="Parameter not supported for update operation: master")
         if self.aux is not None and self.aux != data['aux_vdisk_name']:
-            props['aux'] = self.aux
+            self.module.fail_json(msg="Parameter not supported for update operation: aux")
         if self.copytype == 'global' and data['copy_type'] == 'metro':
             props['global'] = True
 
@@ -329,18 +346,19 @@ class IBMSVCManageReplication(object):
         elif (self.copytype == 'metro' or self.copytype is None) and data['copy_type'] == 'global':
             props['metro'] = True
 
-        if self.copytype == 'GMCV' and data['copy_type'] == 'global' and self.consistgrp is None:
+        if self.copytype == 'GMCV' and data['copy_type'] == 'global':
             if data['cycling_mode'] != 'multi':
                 propscv['cyclingmode'] = 'multi'
             if self.cyclingperiod is not None and self.cyclingperiod != int(data['cycle_period_seconds']):
                 propscv['cycleperiodseconds'] = self.cyclingperiod
-        if self.copytype == 'global' and (data['copy_type'] == 'global' and (data['master_change_vdisk_name'] or data['aux_change_vdisk_name'])):
+        if self.copytype == 'global' and (data['copy_type'] == 'global' and data['cycling_mode'] == 'multi'):
             propscv['cyclingmode'] = 'none'
         if self.copytype == 'GMCV' and data['copy_type'] == 'metro':
             self.module.fail_json(msg="Changing relationship type from metro to GMCV is not allowed")
         if self.copytype != 'metro' and self.copytype != 'global' and self.copytype != 'GMCV' and self.copytype is not None:
             self.module.fail_json(msg="Unsupported mirror type: %s. Only 'global', 'metro' and 'GMCV' are supported when modifying" % self.copytype)
-
+        if len(props) > 1:
+            self.module.fail_json(msg=f"CMMVC5713E Only 1 update operation supported in one task, {len(props)} operations detected: {props}")
         return props, propscv
 
     def rcrelationship_update(self, modify, modifycv):

@@ -135,14 +135,14 @@
                 clustername: "{{ primary_clustername }}"
                 username: "{{ primary_cluster_username }}"
                 password: "{{ primary_cluster_password }}"
-                command: "svctask chsystemcert -mkselfsigned"
+                command: "svctask chsystemcert -mksystemsigned"
                 log_path: "{{ logpath }}"
             - name: Generate certificate on aux
               ibm.storage_virtualize.ibm_svctask_command:
                 clustername: "{{ secondary_clustername }}"
                 username: "{{ secondary_cluster_username }}"
                 password: "{{ secondary_cluster_password }}"
-                command: "svctask chsystemcert -mkselfsigned"
+                command: "svctask chsystemcert -mksystemsigned"
                 log_path: "{{ logpath }}"
 
         - name: Export system certificate on primary
@@ -289,14 +289,14 @@
                 clustername: "{{ primary_clustername }}"
                 username: "{{ primary_cluster_username }}"
                 password: "{{ primary_cluster_password }}"
-                command: "svctask chsystemcert -mkselfsigned"
+                command: "svctask chsystemcert -mksystemsigned"
                 log_path: "{{ logpath }}"
             - name: Generate certificate on aux
               ibm.storage_virtualize.ibm_svctask_command:
                 clustername: "{{ secondary_clustername }}"
                 username: "{{ secondary_cluster_username }}"
                 password: "{{ secondary_cluster_password }}"
-                command: "svctask chsystemcert -mkselfsigned"
+                command: "svctask chsystemcert -mksystemsigned"
                 log_path: "{{ logpath }}"
 
         - name: Export system certificate on primary

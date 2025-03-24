@@ -93,6 +93,16 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/ansible.log
+- name: Generate and export system-signed root CA certificate
+  ibm.storage_virtualize.ibm_svctask_command:
+    command: [
+      "svctask chsystemcert -mksystemsigned",
+      "svctask chsystemcert -exportrootcacert"
+    ]
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/ansible.log
 '''
 
 RETURN = '''#'''

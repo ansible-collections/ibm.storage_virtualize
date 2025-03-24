@@ -70,19 +70,22 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_dnsserver_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    def test_module_with_no_input_params(self,
-                                         run_cmd_mock,
-                                         system_info_mock,
-                                         license_probe_mock,
-                                         dns_info_mock,
-                                         auth_mock):
+    def test_missing_mandatory_params(self,
+                                      run_cmd_mock,
+                                      system_info_mock,
+                                      license_info_mock,
+                                      dns_info_mock,
+                                      auth_mock):
+        """
+        Missing input parameters
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -90,7 +93,9 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             'password': 'password',
         })
 
-        license_probe_mock.return_value = []
+        license_info_mock.return_value = {
+            "license_physical_flash": "off"
+        }
 
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
@@ -99,7 +104,10 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_fail_with_mutually_exclusive_param(self, auth_mock):
+    def test_failure_mutually_exclusive_params_1(self, auth_mock):
+        '''
+        Mutually exclusive parameters: time, ntpip
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -117,7 +125,10 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_dns_validation_1(self, auth_mock):
+    def test_failure_dns_validation_1(self, auth_mock):
+        """
+        Missing required input parameter: dnsname
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -134,7 +145,10 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_dns_validation_2(self, auth_mock):
+    def test_failure_dns_validation_2(self, auth_mock):
+        """
+        Test for empty parameter value: dnsname
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -150,31 +164,54 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
         self.assertTrue(exc.value.args[0]['failed'])
 
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
-    def test_module_system_and_dns(self,
-                                   license_probe_mock,
-                                   auth_mock,
-                                   system_info_mock,
-                                   run_cmd_mock,
-                                   dns_info_mock):
+    def test_failure_license_key_validation(self, auth_mock):
+        """
+        Test for empty parameter values: license_key
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
+            'license_key': ['']
+        })
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleFailJson) as exc:
+            svc_is.apply()
+
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_dnsserver_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update1(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            dns_info_mock,
+                            system_info_mock):
+        '''
+        Test to update system with parameters: system_name, dns, time
+        '''
+        set_module_args({
+            'clustername': 'cluster_test_0',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
             'system_name': 'cluster_test_0',
-            'time': '101009142021',
+            'time': '020411552025',
             'timezone': 200,
-            'dnsname': ['test_dns'],
+            'dnsname': ['test_dns3'],
             'dnsip': ['1.1.1.1']
         })
 
@@ -187,24 +224,26 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "cluster_ntp_IP_address": "",
         }
 
-        license_probe_mock.return_value = []
-
         dns_info_mock.return_value = [
             {
                 "id": "0",
-                "name": "h",
+                "name": "test_dns1",
                 "type": "ipv4",
                 "IP_address": "9.20.136.11",
                 "status": "active"
             },
             {
                 "id": "1",
-                "name": "i",
+                "name": "test_dns2",
                 "type": "ipv4",
                 "IP_address": "9.20.136.25",
                 "status": "active"
             }
         ]
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
 
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
@@ -213,23 +252,25 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_dnsserver_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
-    def test_with_already_existed_system_and_dns(
+    def test_system_update1_idempotency(
             self,
-            license_probe_mock,
             auth_mock,
-            system_info_mock,
             run_cmd_mock,
-            dns_info_mock):
-
+            license_info_mock,
+            dns_info_mock,
+            system_info_mock):
+        """
+        Test to update the system with parameters, keeping the same values(idempotency): system_name, dns, and time.
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -237,7 +278,7 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             'password': 'password',
             'system_name': 'cluster_test_0',
             'ntpip': '9.9.9.9',
-            'timezone': 200,
+            'timezone': '200',
             'dnsname': ['test_dns'],
             'dnsip': ['1.1.1.1']
         })
@@ -251,8 +292,6 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "cluster_ntp_IP_address": "9.9.9.9",
         }
 
-        license_probe_mock.return_value = []
-
         dns_info_mock.return_value = [
             {
                 "id": "0",
@@ -263,28 +302,34 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             }
         ]
 
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
             svc_is.apply()
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_feature_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_license_key_update(self,
-                                       auth_mock,
-                                       system_info_mock,
-                                       run_cmd_mock,
-                                       license_probe_mock,
-                                       dns_info_mock):
-
+    def test_license_key_update(self,
+                                auth_mock,
+                                run_cmd_mock,
+                                license_key_info_mock,
+                                license_info_mock,
+                                system_info_mock):
+        '''
+        Test to update feature parameter: license_key
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -293,9 +338,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             'license_key': ['0123-4567-89AB-CDEF']
         })
 
-        license_probe_mock.return_value = []
+        system_info_mock.return_value = {
+            "id": "00000204ABE10050",
+            "name": "cluster_test_0",
+            "time_zone": "522 UTC",
+            "cluster_ntp_IP_address": "",
+            "iscsi_auth_method": "none",
+            "iscsi_chap_secret": "",
+            "vdisk_protection_time": "15",
+            "vdisk_protection_enabled": "yes",
+            "product_name": "IBM Storage FlashSystem 5300",
+            "flashcopy_default_grainsize": "256",
+            "storage_insights_control_access": "no",
+        }
 
-        run_cmd_mock.return_value = [
+        license_key_info_mock.return_value = [
             {
                 "id": "0",
                 "name": "encryption",
@@ -307,6 +364,10 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             }
         ]
 
+        license_info_mock.return_value = {
+            "license_physical_flash": "off"
+        }
+
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
             svc_is.apply()
@@ -314,22 +375,24 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_feature_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_with_existing_license_key_update(self,
-                                              auth_mock,
-                                              system_info_mock,
-                                              run_cmd_mock,
-                                              license_probe_mock,
-                                              dns_info_mock):
-
+    def test_license_key_update_idempotency(self,
+                                            auth_mock,
+                                            run_cmd_mock,
+                                            license_key_info_mock,
+                                            license_info_mock,
+                                            system_info_mock):
+        '''
+        Test to update feature parameter, keeping the same value(idempotency): license_key
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -338,9 +401,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             'license_key': ['0123-4567-89AB-CDEF']
         })
 
-        license_probe_mock.return_value = []
+        system_info_mock.return_value = {
+            "id": "00000204ABE10050",
+            "name": "cluster_test_0",
+            "time_zone": "522 UTC",
+            "cluster_ntp_IP_address": "",
+            "iscsi_auth_method": "none",
+            "iscsi_chap_secret": "",
+            "vdisk_protection_time": "15",
+            "vdisk_protection_enabled": "yes",
+            "product_name": "IBM Storage FlashSystem 5300",
+            "flashcopy_default_grainsize": "256",
+            "storage_insights_control_access": "no",
+        }
 
-        run_cmd_mock.return_value = [
+        license_key_info_mock.return_value = [
             {
                 "id": "0",
                 "name": "encryption",
@@ -352,27 +427,30 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             }
         ]
 
+        license_info_mock.return_value = {
+            "license_physical_flash": "off"
+        }
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
             svc_is.apply()
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.license_probe')
-    def test_module_empty_timezone(self,
-                                   license_probe_mock,
-                                   auth_mock,
-                                   system_info_mock,
-                                   run_cmd_mock,
-                                   dns_info_mock):
+    def test_system_update2(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            system_info_mock):
+        '''
+        Test to update system with parameter: timezone
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -385,16 +463,16 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
 
         system_info_mock.return_value = {
             "id": "0000010023806192",
-            "name": "",
+            "name": "cluster_test_0",
             "location": "local",
             "cluster_locale": "en_US",
             "time_zone": "",
             "cluster_ntp_IP_address": "",
         }
 
-        license_probe_mock.return_value = []
-
-        dns_info_mock.return_value = []
+        license_info_mock.return_value = {
+            "license_physical_flash": "off"
+        }
 
         svc_is = IBMSVCInitialSetup()
         with pytest.raises(AnsibleExitJson) as exc:
@@ -403,19 +481,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_license_update_storwize(self,
-                                     auth_mock,
-                                     system_info_mock,
-                                     run_cmd_mock,
-                                     dns_info_mock):
-
+    def test_license_update1(self,
+                             auth_mock,
+                             run_cmd_mock,
+                             license_info_mock,
+                             system_info_mock):
+        '''
+        Test to update license for storwise with 'compression' parameter
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -441,7 +521,7 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "product_name": "IBM Storwize V7000"
         }
 
-        run_cmd_mock.return_value = {
+        license_info_mock.return_value = {
             "license_flash": "0",
             "license_remote": "4",
             "license_virtualization": "0",
@@ -461,19 +541,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_update_existing_license_storwize(self,
-                                              auth_mock,
-                                              system_info_mock,
-                                              run_cmd_mock,
-                                              dns_info_mock):
-
+    def test_license_update1_idempotency(self,
+                                         auth_mock,
+                                         run_cmd_mock,
+                                         license_info_mock,
+                                         system_info_mock):
+        '''
+        Test to update license for storwise with 'compression' parameter, keeping the same value(idempotency)
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -499,7 +581,7 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "product_name": "IBM Storwize V7000"
         }
 
-        run_cmd_mock.return_value = {
+        license_info_mock.return_value = {
             "license_flash": "0",
             "license_remote": "5",
             "license_virtualization": "1",
@@ -519,19 +601,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_license_update_with_SVC(self,
-                                     auth_mock,
-                                     system_info_mock,
-                                     run_cmd_mock,
-                                     dns_info_mock):
-
+    def test_license_update2(self,
+                             auth_mock,
+                             run_cmd_mock,
+                             license_info_mock,
+                             system_info_mock):
+        '''
+        Test to update license for SVC with 'compression' parameter
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -557,7 +641,7 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "product_name": "SVC"
         }
 
-        run_cmd_mock.return_value = {
+        license_info_mock.return_value = {
             "license_flash": "0",
             "license_remote": "4",
             "license_virtualization": "0",
@@ -577,19 +661,21 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_license_update_existing_SVC(self,
+    def test_license_update2_idempotency(self,
                                          auth_mock,
-                                         system_info_mock,
                                          run_cmd_mock,
-                                         dns_info_mock):
-
+                                         license_info_mock,
+                                         system_info_mock):
+        '''
+        Test to update license for SVC with 'compression' parameter, keeping the same value(idempotency)
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -602,7 +688,6 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             'cloud': 1,
             'easytier': 1,
             'physical_flash': "on",
-            'encryption': True
         })
 
         system_info_mock.return_value = {
@@ -615,7 +700,7 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
             "product_name": "SVC"
         }
 
-        run_cmd_mock.return_value = {
+        license_info_mock.return_value = {
             "license_flash": "1",
             "license_remote": "5",
             "license_virtualization": "1",
@@ -635,33 +720,42 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_fcgrainsize_update(self,
-                                       auth_mock,
-                                       system_info_mock,
-                                       run_cmd_mock,
-                                       dns_info_mock):
-
+    def test_system_update3(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            system_info_mock):
+        '''
+        Test to update system with parameters: flashcopydefaultgrainsize, storageinsightscontrolaccess
+        '''
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'flashcopydefaultgrainsize': 256
+            'flashcopydefaultgrainsize': 256,
+            'storageinsightscontrolaccess': 'yes'
         })
 
         system_info_mock.return_value = {
             "id": "0000010023806192",
+            "name": "cluster_test_0",
             "flashcopy_default_grainsize": "64",
+            "storage_insights_control_access": "no",
             "location": "local",
             "cluster_locale": "en_US",
             "time_zone": "200 Asia/Calcutta"
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
         }
 
         svc_is = IBMSVCInitialSetup()
@@ -670,33 +764,251 @@ class TestIBMSVCInitialSetup(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_existing_dnsservers')
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_sicontrolaccess_update(self,
-                                           auth_mock,
-                                           system_info_mock,
-                                           run_cmd_mock,
-                                           dns_info_mock):
-
+    def test_system_update3_idempotency(self,
+                                        auth_mock,
+                                        run_cmd_mock,
+                                        license_info_mock,
+                                        system_info_mock):
+        """
+        Test to update the system with parameters, keeping the same values(idempotency): flashcopydefaultgrainsize, storageinsightscontrolaccess
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
+            'flashcopydefaultgrainsize': 256,
             'storageinsightscontrolaccess': 'yes'
         })
 
         system_info_mock.return_value = {
             "id": "0000010023806192",
-            "storage_insights_control_access": "no",
+            "name": "cluster_test_0",
+            "flashcopy_default_grainsize": "256",
+            "storage_insights_control_access": "yes",
             "location": "local",
             "cluster_locale": "en_US",
             "time_zone": "200 Asia/Calcutta"
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update4(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            system_info_mock):
+        """
+        Test to update the system with parameters: vdiskprotectiontime, vdiskprotectionenabled
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'vdiskprotectiontime': 20,
+            'vdiskprotectionenabled': 'yes',
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "name": "cluster_test_0",
+            "storage_insights_control_access": "no",
+            "location": "local",
+            "cluster_locale": "en_US",
+            "time_zone": "200 Asia/Calcutta",
+            'vdisk_protection_time': 15,
+            'vdisk_protection_enabled': 'no',
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update4_idempotency(self,
+                                        auth_mock,
+                                        run_cmd_mock,
+                                        license_info_mock,
+                                        system_info_mock):
+        """
+        Test to update the system with parameters, keeping the same values(idempotency): vdiskprotectiontime, vdiskprotectionenabled
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'vdiskprotectiontime': 15,
+            'vdiskprotectionenabled': 'no',
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "name": "cluster_test_0",
+            'vdisk_protection_time': 15,
+            'vdisk_protection_enabled': 'no',
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update5(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            system_info_mock):
+        """
+        Test to update the system with parameters: iscsiauthmethod, chapsecret
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'iscsiauthmethod' : 'chap',
+            'chapsecret': 'test1'
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "name": "cluster_test_0",
+            'iscsi_auth_method' : 'none',
+            'iscsi_chap_secret' : ''
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update5_idempotency(self,
+                                        auth_mock,
+                                        run_cmd_mock,
+                                        license_info_mock,
+                                        system_info_mock):
+        """
+        Test to update the system with parameters, keeping the same values(idempotency): iscsiauthmethod, chapsecret
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'iscsiauthmethod' : 'chap',
+            'chapsecret': 'test1'
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "name": "cluster_test_0",
+            'iscsi_auth_method' : 'chap',
+            'iscsi_chap_secret' : 'test1'
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
+        }
+
+        svc_is = IBMSVCInitialSetup()
+        with pytest.raises(AnsibleExitJson) as exc:
+            svc_is.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_system_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_initial_setup.IBMSVCInitialSetup.get_license_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_system_update6(self,
+                            auth_mock,
+                            run_cmd_mock,
+                            license_info_mock,
+                            system_info_mock):
+        """
+        Test to update the system with parameters: iscsiauthmethod, chapsecret
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'iscsiauthmethod' : 'none',
+            'chapsecret': ''
+        })
+
+        system_info_mock.return_value = {
+            "id": "0000010023806192",
+            "name": "cluster_test_0",
+            'iscsi_auth_method' : 'chap',
+            'iscsi_chap_secret' : 'test1'
+        }
+
+        license_info_mock.return_value = {
+            "license_physical_flash": "off",
         }
 
         svc_is = IBMSVCInitialSetup()

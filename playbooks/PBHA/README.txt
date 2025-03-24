@@ -4,6 +4,9 @@ Objective:
 Prerequisite:
   - IBM storage Virtualize ansible collection plugins must be installed.
   - FC partnership must be present between the clusters.
+  - Truststores with certificates of partnered system must be present on both clusters.
+  - Policy-based Replication must be enabled for the partnership. It can be done by running the below command on both clusters:
+    chpartnership -pbrinuse yes <partnership_name>.
   
 This playbook is designed to set up and configure PBHA Replication between a source cluster and destination cluster.
   - It uses storage virtualize ansible modules.

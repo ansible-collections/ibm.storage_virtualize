@@ -80,6 +80,30 @@ options:
         description:
             - Specifies the time zone to set for the system.
         type: str
+    vdiskprotectiontime:
+        description:
+            - Specifies the volume protection time (in minutes).
+        type: int
+        version_added: 2.7.0
+    vdiskprotectionenabled:
+        description:
+            - Specifies whether the volume protection is enabled or disabled.
+        type: str
+        version_added: 2.7.0
+        choices: [ 'yes', 'no' ]
+    iscsiauthmethod:
+        description:
+            - Specify the authentication method for iSCSI communications on the system.
+        type: str
+        version_added: 2.7.0
+        choices: [ 'none', 'chap' ]
+    chapsecret:
+        description:
+            - Specify the CHAP secret to authenticate the system using iSCSI.
+            - Required when I(iscsiauthmethod=chap), to modify a CHAP secret.
+            - If I(chapsecret) is specified as an empty string (""), it is treated as nochapsecret, which clears current chapsecret.
+        type: str
+        version_added: 2.7.0
     license_key:
         description:
             - Provides the license key to activate a feature that contains 16 hexadecimal characters organized in four groups
@@ -148,6 +172,10 @@ author:
     - Lavanya C R (@lavanyacr)
 notes:
     - This module supports C(check_mode).
+    - Error Considerations
+        - CMMVC5708E A parameter is missing a value.
+        - CMMVC5713E Some parameters are mutually exclusive.
+        - CMMVC7218E The provided license key is not valid.
 '''
 
 EXAMPLES = '''
@@ -193,20 +221,38 @@ EXAMPLES = '''
       - dns_01
     dnsip:
       - '1.1.1.1'
-- name: Change flashcopydefaultgrainsize to 64.
+- name: Change flashcopydefaultgrainsize to 64 and storageinsightscontrolaccess to no.
   ibm.storage_virtualize.ibm_svc_initial_setup:
     clustername: "{{ clustername }}"
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
     flashcopydefaultgrainsize: 64
-- name: Change storageinsightscontrolaccess to no.
+    storageinsightscontrolaccess: "no"
+- name: Change vdiskprotectiontime to 20 and vdiskprotectionenabled to yes.
   ibm.storage_virtualize.ibm_svc_initial_setup:
     clustername: "{{ clustername }}"
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    storageinsightscontrolaccess: "no"
+    vdiskprotectiontime: 20
+    vdiskprotectionenabled: "yes"
+- name: Change iscsiauthmethod to chap and set chapsecret.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    iscsiauthmethod: chap
+    chapsecret: "test_cs"
+- name: Change iscsiauthmethod to none and clear chapsecret.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    iscsiauthmethod: none
+    chapsecret: ""
 '''
 
 RETURN = '''#'''
@@ -224,22 +270,26 @@ class IBMSVCInitialSetup(object):
         argument_spec.update(
             dict(
                 system_name=dict(type='str'),
-                dnsname=dict(type='list', elements='str'),
-                dnsip=dict(type='list', elements='str'),
                 ntpip=dict(type='str'),
                 time=dict(type='str'),
                 timezone=dict(type='str'),
+                vdiskprotectiontime=dict(type='int'),
+                vdiskprotectionenabled=dict(type='str', choices=['yes', 'no']),
+                iscsiauthmethod=dict(type='str', choices=['none', 'chap']),
+                chapsecret=dict(type='str', no_log=True),
+                flashcopydefaultgrainsize=dict(type='int'),
+                storageinsightscontrolaccess=dict(type='str', choices=['yes', 'no']),
+                dnsname=dict(type='list', elements='str'),
+                dnsip=dict(type='list', elements='str'),
                 license_key=dict(type='list', elements='str', no_log=True),
+                flash=dict(type='int'),
                 remote=dict(type='int'),
                 virtualization=dict(type='int'),
-                flash=dict(type='int'),
                 compression=dict(type='int'),
-                cloud=dict(type='int'),
-                easytier=dict(type='int'),
                 physical_flash=dict(type='str', default='off', choices=['on', 'off']),
+                easytier=dict(type='int'),
                 encryption=dict(type='str', choices=['on', 'off']),
-                flashcopydefaultgrainsize=dict(type='int'),
-                storageinsightscontrolaccess=dict(type='str', choices=['yes', 'no'])
+                cloud=dict(type='int'),
             )
         )
 
@@ -251,29 +301,34 @@ class IBMSVCInitialSetup(object):
         log = get_logger(self.__class__.__name__, log_path)
         self.log = log.info
 
-        self.system_data = ""
         self.changed = False
         self.message = ""
 
-        # Optional
+        # system related parameters
         self.systemname = self.module.params.get('system_name', '')
-        self.dnsname = self.module.params.get('dnsname', '')
-        self.dnsip = self.module.params.get('dnsip', '')
         self.ntpip = self.module.params.get('ntpip', '')
         self.time = self.module.params.get('time', '')
         self.timezone = self.module.params.get('timezone', '')
+        self.vdiskprotectiontime = self.module.params.get('vdiskprotectiontime', '')
+        self.vdiskprotectionenabled = self.module.params.get('vdiskprotectionenabled', '')
+        self.iscsiauthmethod = self.module.params.get('iscsiauthmethod', '')
+        self.chapsecret = self.module.params.get('chapsecret', '')
         self.flashcopydefaultgrainsize = self.module.params.get('flashcopydefaultgrainsize', '')
         self.storageinsightscontrolaccess = self.module.params.get('storageinsightscontrolaccess', '')
 
+        # dns related parameter
+        self.dnsname = self.module.params.get('dnsname', '')
+        self.dnsip = self.module.params.get('dnsip', '')
+
         # license related parameters
         self.license_key = self.module.params.get('license_key', '')
+        self.flash = self.module.params.get('flash', '')
         self.remote = self.module.params.get('remote', '')
         self.virtualization = self.module.params.get('virtualization', '')
         self.compression = self.module.params.get('compression', '')
-        self.flash = self.module.params.get('flash', '')
-        self.cloud = self.module.params.get('cloud', '')
-        self.easytier = self.module.params.get('easytier', '')
         self.physical_flash = self.module.params.get('physical_flash', '')
+        self.easytier = self.module.params.get('easytier', '')
+        self.cloud = self.module.params.get('cloud', '')
         self.encryption = self.module.params.get('encryption', '')
 
         self.restapi = IBMSVCRestApi(
@@ -288,62 +343,100 @@ class IBMSVCInitialSetup(object):
         )
 
     def basic_checks(self):
-        if self.time and self.ntpip:
-            self.module.fail_json(msg='Either NTP or time should be given')
+
+        mutually_exclusive = (
+            ('time', 'ntpip'),
+        )
+        for param1, param2 in mutually_exclusive:
+            if getattr(self, param1) and getattr(self, param2):
+                self.module.fail_json(
+                    msg='CMMVC5713E Mutually exclusive parameters: [{0}, {1}]'.format(param1, param2)
+                )
+
+        if self.iscsiauthmethod == "chap" and not self.chapsecret:
+            self.module.fail_json(msg='CMMVC5708E Parameter [chapsecret] is missing a value.')
 
         if self.dnsname and self.dnsip:
             if len(self.dnsname) != len(self.dnsip):
-                self.module.fail_json(msg='To configure DNS, DNS IP and DNS server name must be given.')
+                self.module.fail_json(msg='To configure DNS, number of DNS IP(s) must match the number of DNS server name(s).')
+            for dnsname, dnsip in zip(self.dnsname, self.dnsip):
+                if dnsname == "":
+                    self.module.fail_json(msg='CMMVC5708E Parameter [dnsname] is missing a value.')
+                if dnsip == "":
+                    self.module.fail_json(msg='CMMVC5708E Parameter [dnsip] is missing a value.')
+
+        if self.license_key:
+            for key in self.license_key:
+                if key == "":
+                    self.module.fail_json(msg='CMMVC5708E Parameter [licensekey] is missing a value.')
+                if len(key) != 19:  # SVC throw
+                    self.module.fail_json(msg='CMMVC7218E An invalid license key was specified.')
 
     def get_system_info(self):
         self.log("Entering function get_system_info")
-        self.system_data = self.restapi.svc_obj_info(cmd='lssystem', cmdopts=None, cmdargs=None)
-        return self.system_data
+        system_data = self.restapi.svc_obj_info(cmd='lssystem', cmdopts=None, cmdargs=None)
+        return system_data
 
-    def systemname_update(self):
-        cmd = 'chsystem'
-        cmdopts = {}
-        cmdopts['name'] = self.systemname
+    def get_license_info(self):
+        self.log("Entering function get_license_info")
+        license_data = self.restapi.svc_obj_info(cmd='lslicense', cmdopts=None, cmdargs=None)
+        return license_data
 
-        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        self.changed = True
-        self.log("System Name: %s updated", cmdopts)
-        self.message += " System name [%s] updated." % self.systemname
+    def get_dnsserver_info(self):
+        self.log("Entering function get_dnsserver_info")
+        merged_result = []
 
-    def ntp_update(self, ip):
-        cmd = 'chsystem'
-        cmdopts = {}
-        cmdopts['ntpip'] = ip
+        dnsserver_data = self.restapi.svc_obj_info(cmd='lsdnsserver', cmdopts=None, cmdargs=None)
 
-        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        self.changed = True
-        self.log("NTP IP: %s updated", cmdopts)
-        if self.ntpip:
-            self.message += " NTP IP [%s] updated." % self.ntpip
+        if isinstance(dnsserver_data, list):
+            for d in dnsserver_data:
+                merged_result.append(d)
+        else:
+            merged_result = dnsserver_data
 
-    def fcgrainsize_update(self):
-        cmd = 'chsystem'
-        cmdopts = {}
-        cmdopts['flashcopydefaultgrainsize'] = self.flashcopydefaultgrainsize
+        return merged_result
 
-        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        self.changed = True
-        self.log("Properties: flashcopydefaultgrainsize %s updated", self.flashcopydefaultgrainsize)
-        self.message += "flashcopydefaultgrainsize [%s] updated." % self.flashcopydefaultgrainsize
+    def get_feature_info(self):
+        self.log("Entering function get_feature_info")
+        feature_data = self.restapi.svc_obj_info('lsfeature', cmdopts=None, cmdargs=None)
+        return feature_data
 
-    def sicontrolaccess_update(self):
-        cmd = 'chsystem'
-        cmdopts = {}
-        cmdopts['storageinsightscontrolaccess'] = self.storageinsightscontrolaccess
+    def system_probe(self, data):
+        props = []
 
-        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        self.changed = True
-        self.log("Properties: storageinsightscontrolaccess %s updated", self.storageinsightscontrolaccess)
-        self.message += "storageinsightscontrolaccess [%s] updated." % self.storageinsightscontrolaccess
+        field_mappings = (
+            ('systemname', data.get('name', '')),
+            ('ntpip', data.get('cluster_ntp_IP_address', '')),
+            ('vdiskprotectiontime', int(data.get('vdisk_protection_time', 0))),
+            ('vdiskprotectionenabled', data.get('vdisk_protection_enabled', '')),
+            ('iscsiauthmethod', data.get('iscsi_auth_method', '')),
+            ('flashcopydefaultgrainsize', int(data.get('flashcopy_default_grainsize', 0))),
+            ('storageinsightscontrolaccess', data.get('storage_insights_control_access', '')),
+        )
+
+        for field, existing_value in field_mappings:
+            new_value = getattr(self, field, None)
+            if new_value is not None and new_value != existing_value:
+                props.append(field)
+
+        if self.chapsecret is not None:
+            if self.chapsecret != "" and self.chapsecret != data['iscsi_chap_secret']:
+                props.append('chapsecret')
+            elif self.chapsecret == "" and data['iscsi_chap_secret'] != "":
+                self.nochapsecret = True
+                props.append('nochapsecret')
+
+        if self.time and data['cluster_ntp_IP_address'] != "":
+            props.append('ntpip')
+
+        if self.time:
+            props.append('time')
+
+        if self.timezone and (self.timezone != (data['time_zone'].split(" ", 1)[0] if data['time_zone'] else None)):
+            props.append('timezone')
+
+        self.log("system_probe props='%s'", props)
+        return props
 
     def systemtime_update(self):
         cmd = 'setsystemtime'
@@ -351,10 +444,7 @@ class IBMSVCInitialSetup(object):
         cmdopts['time'] = self.time
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        self.changed = True
-        self.log("Time: %s updated", self.time)
-        self.message += " Time [%s] updated." % self.time
+        self.log("Properties: Time %s updated", self.time)
 
     def timezone_update(self):
         cmd = 'settimezone'
@@ -362,85 +452,66 @@ class IBMSVCInitialSetup(object):
         cmdopts['timezone'] = self.timezone
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        # Any error will have been raised in svc_run_command
-        # chhost does not output anything when successful.
-        self.changed = True
         self.log("Properties: Time zone %s updated", self.timezone)
-        self.message += " Timezone [%s] updated." % self.timezone
 
-    def system_update(self, data):
-        name_change_required = False
-        ntp_change_required = False
-        fcgrainsize_change_required = False
-        si_controlaccess_required = False
-        time_change_required = False
-        timezone_change_required = False
-        tz = (None, None)
+    def system_update(self, modify, data):
 
+        self.log("updating system '%s'", self.systemname)
         if self.module.check_mode:
             self.changed = True
             return
 
-        if self.systemname and self.systemname != data['name']:
-            self.log("Name change detected")
-            name_change_required = True
-        if self.ntpip and self.ntpip != data['cluster_ntp_IP_address']:
-            self.log("NTP change detected")
-            ntp_change_required = True
-        if self.flashcopydefaultgrainsize and self.flashcopydefaultgrainsize != int(data['flashcopy_default_grainsize']):
-            self.log("fcgrainsize change detected")
-            fcgrainsize_change_required = True
-        if self.storageinsightscontrolaccess and self.storageinsightscontrolaccess != data['storage_insights_control_access']:
-            self.log("si change detected")
-            si_controlaccess_required = True
-        if self.time and data['cluster_ntp_IP_address'] is not None:
-            self.log("TIME change detected, clearing NTP IP")
-            ntp_change_required = True
-        if self.time:
-            self.log("TIME change detected")
+        cmd = 'chsystem'
+        cmdopts = {}
+
+        system_name_required = False
+        time_change_required = False
+
+        if 'systemname' in modify:
+            cmdopts['name'] = self.systemname
+            system_name_required = True
+            modify.remove('systemname')
+
+        if 'ntpip' in modify:
+            cmdopts['ntpip'] = self.ntpip if self.ntpip else '0.0.0.0'
+            modify.remove('ntpip')
+
+        if 'time' in modify:
             time_change_required = True
-        if data['time_zone']:
-            tz = data['time_zone'].split(" ", 1)
-        if self.timezone and (tz[0] != self.timezone):
-            timezone_change_required = True
+            modify.remove('time')
 
-        if name_change_required:
-            self.systemname_update()
-        if ntp_change_required:
-            self.log("updating system properties '%s, %s'", self.systemname, self.ntpip)
-            if self.ntpip:
-                ip = self.ntpip
-            if self.time and ntp_change_required:
-                ip = '0.0.0.0'
-            self.ntp_update(ip)
-        if fcgrainsize_change_required:
-            self.fcgrainsize_update()
+        if 'timezone' in modify:
+            self.timezone_update()
+            self.changed = True
+            modify.remove('timezone')
 
-        if si_controlaccess_required:
-            self.sicontrolaccess_update()
+        for param in modify:
+            cmdopts[param] = getattr(self, param)
+
+        if 'iscsiauthmethod' in modify and self.iscsiauthmethod == 'chap':
+            cmdopts['chapsecret'] = self.chapsecret if 'chapsecret' in modify else data['iscsi_chap_secret']
+
+        cmdoptsList = cmdopts.keys()
+        if cmdopts:
+            self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+            self.changed = True
+            self.log("Properties updated: %s", cmdoptsList)
 
         if time_change_required:
             self.systemtime_update()
+            self.changed = True
 
-        if timezone_change_required:
-            self.timezone_update()
+        if cmdopts:
+            if system_name_required:
+                self.message += "System [{0}] has been successfully renamed to [{1}]{2}".format(
+                    data['name'],
+                    self.systemname,
+                    ' and other parameters updated.' if (len(cmdoptsList) > 1) else '.'
+                )
+            else:
+                self.message += "System %s updated" % data['name']
 
-    def get_existing_dnsservers(self):
-        merged_result = []
-
-        data = self.restapi.svc_obj_info(cmd='lsdnsserver', cmdopts=None, cmdargs=None)
-
-        if isinstance(data, list):
-            for d in data:
-                merged_result.append(d)
-        else:
-            merged_result = data
-
-        return merged_result
-
-    def dns_configure(self):
-        dns_add_remove = False
-        modify = {}
+    def dns_configure(self, data):
         existing_dns = {}
         existing_dns_server = []
         existing_dns_ip = []
@@ -449,171 +520,127 @@ class IBMSVCInitialSetup(object):
             self.changed = True
             return
 
-        dns_data = self.get_existing_dnsservers()
-        self.log("dns_data=%s", dns_data)
-
-        if (self.dnsip and self.dnsname) or (self.dnsip == "" and self.dnsname == ""):
-            for server in dns_data:
+        if self.dnsip and self.dnsname:
+            for server in data:
                 existing_dns_server.append(server['name'])
                 existing_dns_ip.append(server['IP_address'])
                 existing_dns[server['name']] = server['IP_address']
-            for name, ip in zip(self.dnsname, self.dnsip):
-                if name == 'None':
-                    self.log(" Empty DNS configuration is provided.")
-                    return
-                if name in existing_dns:
-                    if existing_dns[name] != ip:
-                        self.log("update, diff IP.")
-                        modify[name] = ip
-                    else:
-                        self.log("no update, same IP.")
 
-            if (set(existing_dns_server)).symmetric_difference(set(self.dnsname)):
-                dns_add_remove = True
-
-        if modify:
-            for item in modify:
-                self.restapi.svc_run_command(
-                    'chdnsserver',
-                    {'ip': modify[item]}, [item]
-                )
-            self.changed = True
-            self.message += " DNS %s modified." % modify
-
-        if dns_add_remove:
-            to_be_added, to_be_removed = False, False
-            to_be_removed = list(set(existing_dns_server) - set(self.dnsname))
-            if to_be_removed:
-                for item in to_be_removed:
+            for name, ip in zip(self.dnsname, self.dnsip):  # To modify existing name or ip
+                if name in existing_dns and existing_dns[name] != ip:
+                    self.log("update, diff IP.")
                     self.restapi.svc_run_command(
-                        'rmdnsserver', None,
-                        [item]
+                        'chdnsserver', {'ip': ip}, [name]
                     )
                     self.changed = True
-                self.message += " DNS server %s removed." % to_be_removed
+                    self.message += "DNS %s modified." % name
 
-            to_be_added = list(set(self.dnsname) - set(existing_dns_server))
-            to_be_added_ip = list(set(self.dnsip) - set(existing_dns_ip))
-            if any(to_be_added):
-                for dns_name, dns_ip in zip(to_be_added, to_be_added_ip):
-                    if dns_name:
+            if (set(existing_dns_server)).symmetric_difference(set(self.dnsname)):
+
+                dnsserver_to_remove = list(set(existing_dns_server) - set(self.dnsname))
+                if dnsserver_to_remove:
+                    for item in dnsserver_to_remove:
+                        self.restapi.svc_run_command(
+                            'rmdnsserver', None,
+                            [item]
+                        )
+                    self.message += " DNS server %s removed." % dnsserver_to_remove
+
+                dnsservername_to_add = list(set(self.dnsname) - set(existing_dns_server))
+                dnsserverid_to_add = list(set(self.dnsip) - set(existing_dns_ip))
+                if dnsservername_to_add:
+                    for dns_name, dns_ip in zip(dnsservername_to_add, dnsserverid_to_add):
                         self.log('%s %s', dns_name, dns_ip)
                         self.restapi.svc_run_command(
                             'mkdnsserver',
                             {'name': dns_name, 'ip': dns_ip}, cmdargs=None
                         )
-                        self.changed = True
-                self.message += " DNS server %s added." % to_be_added
-        elif not modify:
-            self.log("No DNS Changes")
+                    self.message += " DNS server %s added." % dnsservername_to_add
+                self.changed = True
 
-    def license_probe(self):
+    def license_probe(self, data, sys_data):
         props = []
 
-        cmd = 'lslicense'
-        cmdopts = {}
-        data = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        field_mappings = (
+            ('flash', int(data.get('license_flash', 0))),
+            ('remote', int(data.get('license_remote', 0))),
+            ('virtualization', int(data.get('license_virtualization', 0))),
+            ('physical_flash', data.get('license_physical_flash', '')),
+            ('easytier', int(data.get('license_easy_tier', 0))),
+            ('cloud', int(data.get('license_cloud_enclosures', 0))),
+        )
 
-        if self.remote and int(data['license_remote']) != self.remote:
-            props += ['remote']
-        if self.virtualization and int(data['license_virtualization']) != self.virtualization:
-            props += ['virtualization']
+        for field, existing_value in field_mappings:
+            new_value = getattr(self, field, None)
+            if new_value is not None and new_value != existing_value:
+                props.append(field)
+
         if self.compression:
-            if (self.system_data['product_name'] == "IBM Storwize V7000") or (self.system_data['product_name'] == "IBM FlashSystem 7200"):
+            if (sys_data['product_name'] == "IBM Storwize V7000") or (sys_data['product_name'] == "IBM FlashSystem 7200"):
                 if (int(data['license_compression_enclosures']) != self.compression):
                     self.log("license_compression_enclosure=%d", int(data['license_compression_enclosures']))
-                    props += ['compression']
+                    props.append('compression')
             else:
                 if (int(data['license_compression_capacity']) != self.compression):
                     self.log("license_compression_capacity=%d", int(data['license_compression_capacity']))
-                    props += ['compression']
-        if self.flash and int(data['license_flash']) != self.flash:
-            props += ['flash']
-        if self.cloud and int(data['license_cloud_enclosures']) != self.cloud:
-            props += ['cloud']
-        if self.easytier and int(data['license_easy_tier']) != self.easytier:
-            props += ['easytier']
-        if self.physical_flash and data['license_physical_flash'] != self.physical_flash:
-            props += ['physical_flash']
+                    props.append('compression')
 
-        self.log("props: %s", props)
+        self.log("license_probe props: %s", props)
         return props
 
     def license_update(self, modify):
+        self.log("updating license of '%s'", self.systemname)
         if self.module.check_mode:
             self.changed = True
             return
-
-        cmd = 'chlicense'
 
         for license in modify:
             cmdopts = {}
             cmdopts[license] = getattr(self, license)
-            self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-
-        self.changed = True if modify else False
+            self.restapi.svc_run_command('chlicense', cmdopts, cmdargs=None)
 
         if self.encryption:
-            cmdopts = {}
-            cmdopts['encryption'] = self.encryption
-            self.changed = True
-            self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+            self.restapi.svc_run_command('chlicense', {'encryption': self.encryption}, cmdargs=None)
 
+        self.changed = True
         self.log("Licensed functions %s updated", modify)
         self.message += " Licensed functions %s updated." % modify
 
-    def license_key_update(self):
+    def license_key_update(self, data):
         existing_license_keys = []
-        license_id_pairs = {}
-        license_add_remove = False
+        existing_license_id_pairs = {}
 
         if self.module.check_mode:
             self.changed = True
             return
 
-        for key in self.license_key:
-            if key == 'None':
-                self.log(" Empty License key list provided")
-                return
-
-        cmd = 'lsfeature'
-        cmdopts = {}
-        feature_list = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        for feature in feature_list:
+        for feature in data:
             existing_license_keys.append(feature['license_key'])
-            license_id_pairs[feature['license_key']] = feature['id']
-        self.log("existing licenses=%s, license_id_pairs=%s", existing_license_keys, license_id_pairs)
+            existing_license_id_pairs[feature['license_key']] = feature['id']
+        self.log("existing licenses=%s, license_id_pairs=%s", existing_license_keys, existing_license_id_pairs)
 
         if (set(existing_license_keys)).symmetric_difference(set(self.license_key)):
-            license_add_remove = True
-
-        if license_add_remove:
-            deactivate_license_keys, activate_license_keys = False, False
+            activate_license_keys = list(set(self.license_key) - set(existing_license_keys))
             deactivate_license_keys = list(set(existing_license_keys) - set(self.license_key))
-            self.log('deactivate_license_keys %s ', deactivate_license_keys)
+
             if deactivate_license_keys:
-                for item in deactivate_license_keys:
-                    if not item:
-                        self.log('%s item', [license_id_pairs[item]])
+                for key in deactivate_license_keys:
+                    if key:
                         self.restapi.svc_run_command(
-                            'deactivatefeature',
-                            None, [license_id_pairs[item]]
+                            'deactivatefeature', None, [existing_license_id_pairs[key]]
                         )
                         self.changed = True
                         self.log('%s deactivated', deactivate_license_keys)
                 self.message += " License %s deactivated." % deactivate_license_keys
 
-            activate_license_keys = list(set(self.license_key) - set(existing_license_keys))
-            self.log('activate_license_keys %s ', activate_license_keys)
             if activate_license_keys:
-                for item in activate_license_keys:
-                    if item:
+                for key in activate_license_keys:
+                    if key:
                         self.restapi.svc_run_command(
-                            'activatefeature',
-                            {'licensekey': item}, None
+                            'activatefeature', {'licensekey': key}, None
                         )
                         self.changed = True
-                        self.log('%s activated', activate_license_keys)
+                        self.log('%s activated', key)
                 self.message += " License %s activated." % activate_license_keys
         else:
             self.message += " No license Changes."
@@ -624,21 +651,27 @@ class IBMSVCInitialSetup(object):
 
         self.basic_checks()
 
-        self.system_data = self.get_system_info()
-        if self.systemname or self.ntpip or self.flashcopydefaultgrainsize or self.storageinsightscontrolaccess or self.timezone or self.time:
-            self.system_update(self.system_data)
+        # System Configuration
+        system_data = self.get_system_info()
+        modify = self.system_probe(system_data)
+        if modify:
+            self.system_update(modify, system_data)
 
         # DNS configuration
-        self.dns_configure()
+        if self.dnsname and self.dnsip:
+            dns_data = self.get_dnsserver_info()
+            self.dns_configure(dns_data)
 
         # For honour based licenses
-        modify = self.license_probe()
+        license_data = self.get_license_info()
+        modify = self.license_probe(license_data, system_data)
         if modify:
             self.license_update(modify)
 
         # For key based licenses
         if self.license_key:
-            self.license_key_update()
+            feature_data = self.get_feature_info()
+            self.license_key_update(feature_data)
 
         if self.changed:
             if self.module.check_mode:

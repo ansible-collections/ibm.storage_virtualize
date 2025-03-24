@@ -128,6 +128,7 @@ notes:
     - Snapshots created by this Ansible module are not directly accessible from the hosts.
       To create a new group of host accessible volumes from a snapshot,
       use M(ibm.storage_virtualize.ibm_svc_manage_volumegroup) module.
+    - In case of restoring local snapshots present before establishing high availability (HA), HA sync will be stopped till the snapshots gets restored.
 '''
 
 EXAMPLES = '''
@@ -176,7 +177,6 @@ EXAMPLES = '''
    password: '{{ password }}'
    name: snapshot0
    src_volumegroup_name: volumegroup1
-   snapshot_pool: Pool0Childpool0
    state: restore
 - name: Restore subset of volumes of a volumegroup from snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
@@ -186,7 +186,6 @@ EXAMPLES = '''
    name: snapshot0
    src_volumegroup_name: volumegroup1
    src_volume_names: vdisk0:vdisk1
-   snapshot_pool: Pool0Childpool0
    state: restore
 - name: Create transient snapshot
   ibm.storage_virtualize.ibm_sv_manage_snapshot:
@@ -502,7 +501,7 @@ class IBMSVSnapshot:
         self.log('Snapshot (%s) created', self.name)
         self.changed = True
 
-    def restore_from_snapshot(self):
+    def restore_from_snapshot(self, snapshot_data):
         if self.module.check_mode:
             self.changed = True
             return
@@ -514,7 +513,16 @@ class IBMSVSnapshot:
         if self.volumegroup:
             cmdopts['volumegroup'] = self.volumegroup
         if self.volumes:
+            if snapshot_data.get("ha_state") == "highly_available":
+                vol_list = self.volumes.split(":")
+                if len(vol_list) > 1:
+                    self.module.fail_json(
+                        msg="CMMVC1301E The command failed because highly available snapshot restore is"
+                            " only permitted on the whole snapshot or specifying a single volume"
+                    )
             cmdopts['volumes'] = self.volumes
+        if snapshot_data.get("ha_state") == "local":
+            cmdopts['resyncrestoredvolumes'] = True
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.changed = True
@@ -550,7 +558,6 @@ class IBMSVSnapshot:
             cmdopts['volumegroup'] = self.volumegroup
         else:
             cmdopts['parentuid'] = self.parentuid
-
         self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=None)
         self.changed = True
 
@@ -580,7 +587,8 @@ class IBMSVSnapshot:
             self.msg = 'Snapshot ({0}) deleted.'.format(self.name)
 
     def apply(self):
-        if self.is_snapshot_exists(old_name=self.old_name):
+        snapshot_data = self.is_snapshot_exists(old_name=self.old_name)
+        if snapshot_data:
             if self.state == 'present':
                 modifications = self.snapshot_probe()
                 if any(modifications):
@@ -591,7 +599,7 @@ class IBMSVSnapshot:
                 else:
                     self.msg = 'Snapshot ({0}) already exists. No modifications done.'.format(self.name)
             elif self.state == 'restore':
-                self.restore_from_snapshot()
+                self.restore_from_snapshot(snapshot_data)
                 if self.volumes:
                     self.msg = 'Volumes ({0}) of Volumegroup ({1}) restored from Snapshot ({2}).'.\
                         format(self.volumes, self.volumegroup, self.name)
@@ -603,7 +611,9 @@ class IBMSVSnapshot:
             if self.state == 'absent':
                 self.msg = 'Snapshot ({0}) does not exist.'.format(self.name)
             elif self.state == 'restore':
-                self.module.fail_json(msg='Snapshot ({0}) does not exist.'.format(self.name))
+                self.module.fail_json(
+                    msg='Either snapshot ({0}) does not exist, or snapshot ({0}) is not related to the volumegroup ({1}).'.format(self.name, self.volumegroup)
+                )
             else:
                 self.create_snapshot()
                 self.msg = 'Snapshot ({0}) created.'.format(self.name)

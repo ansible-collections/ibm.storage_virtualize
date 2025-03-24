@@ -42,9 +42,9 @@
 
     - name: Get settable parameters from list
       ansible.builtin.set_fact:
-        settable_results: "{{ settable_results | default({}) | combine({item.value: sysinfo[item.key] | json_query(query)}) }}"
+        settable_results: "{{ settable_results | default({}) | combine({item.value: sysinfo[item.key] | json_query(req_query)}) }}"
       vars:
-        query: "[*].{ {% for field in settable_fields[item.key ~ '_fields'] %} {{ field }}: {{ field }}{% if not loop.last %},{% endif %}{% endfor %} }"
+        req_query: "[*].{ {% for field in settable_fields[item.key ~ '_fields'] %} {{ field }}: {{ field }}{% if not loop.last %},{% endif %}{% endfor %} }"
       loop: "{{ settable_info_tasks | dict2items }}"
       when: sysinfo[item.key] is defined
 

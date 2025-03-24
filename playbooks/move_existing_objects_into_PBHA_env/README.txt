@@ -9,7 +9,7 @@ Prerequisite:
 
 Tasks performed via this playbook:
   - Setup mTLS
-  - Setup FC partnership between 2 IO-groups
+  - Setup FC partnership between 2 clusters
   - Create a draft partition
   - Add a new or existing volumegroup in draft partition
   - Add a new or existing host in a draft partition

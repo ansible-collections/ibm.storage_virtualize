@@ -24,6 +24,9 @@ description:
   - This module can be used to set up mutual TLS (mTLS) for policy-based replication inter-system communication
     using cluster endpoint certificates (usually system-signed which are exported by the
     M(ibm.storage_virtualize.ibm_sv_manage_ssl_certificate) module).
+  - To create a truststore for flashsystem grid, a root CA certificate has to be created and exported first. It can be
+    achieved via ibm_svctask_command module via command I(chsystemcert -mksystemsigned) and
+    I(chsystemcert -exportrootcacert) currently.
 options:
     clustername:
         description:
@@ -103,6 +106,12 @@ options:
         choices: [ 'on', 'off' ]
         type: str
         version_added: 2.5.0
+    flashgrid:
+        description:
+            - Specifies the certificates in the store are used for the flashsystem grid.
+        choices: [ 'on', 'off' ]
+        type: str
+        version_added: 2.7.0
     remote_clustername:
         description:
             - Specifies the name of the partner remote cluster with which mTLS partnership needs to be setup.
@@ -155,6 +164,18 @@ EXAMPLES = '''
     name: "{{ name }}"
     log_path: "{{ log_path }}"
     restapi: "on"
+    state: "present"
+- name: Create truststore for flashsystem grid
+  ibm.storage_virtualize.ibm_sv_manage_truststore_for_replication:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "{{ name }}"
+    remote_clustername: "{{ remote_clustername }}"
+    remote_username: "{{ remote_username }}"
+    remote_password: "{{ remote_password }}"
+    log_path: "{{ log_path }}"
+    flashgrid: "on"
     state: "present"
 - name: Delete truststore
   ibm.storage_virtualize.ibm_sv_manage_truststore_for_replication:
@@ -218,6 +239,10 @@ class IBMSVTrustStore:
                     type='str',
                     choices=['on', 'off']
                 ),
+                flashgrid=dict(
+                    type='str',
+                    choices=['on', 'off']
+                ),
                 usesshkey=dict(
                     type='str',
                     default='no',
@@ -270,6 +295,7 @@ class IBMSVTrustStore:
         self.vasa = self.module.params.get('vasa', '')
         self.email = self.module.params.get('email', '')
         self.snmp = self.module.params.get('snmp', '')
+        self.flashgrid = self.module.params.get('flashgrid', '')
         self.remote_username = self.module.params.get('remote_username', '')
         self.remote_password = self.module.params.get('remote_password', '')
 
@@ -308,7 +334,7 @@ class IBMSVTrustStore:
     def basic_checks(self):
         if self.state == 'absent':
             unsupported = ('remote_clustername', 'remote_username', 'remote_password',
-                           'syslog', 'restapi', 'ipsec', 'vasa', 'email', 'snmp')
+                           'syslog', 'restapi', 'ipsec', 'vasa', 'email', 'snmp', 'flashgrid')
             unsupported_exists = ', '.join((field for field in unsupported if getattr(self, field)))
             if unsupported_exists:
                 self.module.fail_json(
@@ -356,11 +382,14 @@ class IBMSVTrustStore:
     def download_file(self):
         if self.module.check_mode:
             return
+        cert_file = "rootcacertificate.pem" if self.flashgrid == "on" else "certificate.pem"
 
-        cmd = 'scp -O -o stricthostkeychecking=no -o UserKnownHostsFile=/dev/null {0}@{1}:/dumps/certificate.pem /upgrade/'.format(
-            self.remote_username,
-            self.remote_clustername
-        )
+        # Assisted by watsonx Code Assistant
+        cmd = 'scp -O -o stricthostkeychecking=no -o UserKnownHostsFile=/dev/null {0}@{1}:/dumps/{2} /upgrade/'.format(
+              self.remote_username,
+              self.remote_clustername,
+              cert_file)
+
         self.log('Command to be executed: %s', cmd)
         stdin, stdout, stderr = self.ssh_client.client.exec_command(cmd, get_pty=True, timeout=60 * 1.5)
         result = ''
@@ -421,7 +450,9 @@ class IBMSVTrustStore:
             self.changed = True
             return
 
-        cmd = 'mktruststore -name {0} -file {1}'.format(self.name, '/upgrade/certificate.pem')
+        cert_file = "rootcacertificate.pem" if self.flashgrid == "on" else "certificate.pem"
+
+        cmd = 'mktruststore -name {0} -file /upgrade/{1}'.format(self.name, cert_file)
         if self.syslog:
             cmd += ' -syslog {0}'.format(self.syslog)
         if self.restapi:
@@ -434,6 +465,9 @@ class IBMSVTrustStore:
             cmd += ' -email {0}'.format(self.email)
         if self.snmp:
             cmd += ' -snmp {0}'.format(self.snmp)
+        if self.flashgrid:
+            cmd += ' -flashgrid {0}'.format(self.flashgrid)
+
         self.log('Command to be executed: %s', cmd)
         stdin, stdout, stderr = self.ssh_client.client.exec_command(cmd)
         result = stdout.read().decode('utf-8')
@@ -455,13 +489,22 @@ class IBMSVTrustStore:
             value = getattr(self, prop, None)
             if value and value != data.get(prop):
                 modified_props[prop] = value
-
+        if data.get("flash_grid_references"):
+            if self.flashgrid == "off":
+                self.module.fail_json(msg="Invalid parameter for update: (flashgrid)")
+        elif self.flashgrid:
+            self.module.fail_json(msg="Invalid parameter for update: (flashgrid)")
         return modified_props
 
     def update_validation(self):
         # Test missing parameters for updating truststore
         if not self.name:
             self.module.fail_json(msg="Missing mandatory parameter: name")
+        # Even though probe_truststore() throws error for flashgrid attribute,
+        # self.flashgrid has to be checked here for supporting check_mode=True
+        if self.flashgrid:
+            self.log("Flashgrid parameter cannot be modified.")
+            self.module.fail_json(msg="Invalid parameter for update: flashgrid")
 
     def update_truststore(self, modified_props):
         self.update_validation()

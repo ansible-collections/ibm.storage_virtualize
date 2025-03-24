@@ -98,14 +98,14 @@
             clustername: "{{ master_clustername }}"
             username: "{{ master_username }}"
             password: "{{ master_password }}"
-            command: "svctask chsystemcert -mkselfsigned"
+            command: "svctask chsystemcert -mksystemsigned"
             log_path: "{{ logpath }}"
         - name: Generate certificate on aux
           ibm.storage_virtualize.ibm_svctask_command:
             clustername: "{{ aux_clustername }}"
             username: "{{ aux_username }}"
             password: "{{ aux_password }}"
-            command: "svctask chsystemcert -mkselfsigned"
+            command: "svctask chsystemcert -mksystemsigned"
             log_path: "{{ logpath }}"
     # ------------
     # Export certificates locally to make them available to transfer to partnered system

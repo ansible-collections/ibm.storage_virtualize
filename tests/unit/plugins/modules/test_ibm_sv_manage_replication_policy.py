@@ -488,6 +488,139 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
             rp.apply()
         self.assertTrue(exc.value.args[0]['failed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_ha_replication_policy_with_ha_snapshots(self,
+                                                            svc_authorize_mock,
+                                                            svc_run_command_mock,
+                                                            rp_exists_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': '2-site-ha',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'state': 'present',
+            'ha_snapshots': 'yes'
+        })
+
+        rp_exists_mock.return_value = {}
+        rp = IBMSVReplicationPolicy()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_ha_replication_policy_with_ha_snapshots_idempotency(self,
+                                                                        svc_authorize_mock,
+                                                                        rp_exists_mock):
+
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': '2-site-ha',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'state': 'present',
+            'ha_snapshots': 'yes'
+        })
+
+        rp_exists_mock.return_value = {
+            'id': 0,
+            'name': 'rp0',
+            'topology': '2-site-ha',
+            'location1_system_name': 'cluster_A',
+            'location1_iogrp_id': '0',
+            'location2_system_name': 'cluster_B',
+            'location2_iogrp_id': '0',
+            'snapshots': 'yes'
+        }
+        rp = IBMSVReplicationPolicy()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            rp.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_dr_replication_policy_with_ha_snapshots(self,
+                                                                    svc_authorize_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': '2-site-async-dr',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'state': 'present',
+            'rpoalert': '60',
+            'ha_snapshots': 'yes'
+        })
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            rp = IBMSVReplicationPolicy()
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_update_ha_snapshots(self,
+                                         svc_authorize_mock,
+                                         rp_exists_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': '2-site-ha',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'state': 'present',
+            'ha_snapshots': 'no'
+        })
+
+        rp_exists_mock.return_value = {
+            'id': 0,
+            'name': 'rp0',
+            'topology': '2-site-ha',
+            'location1_system_name': 'cluster_A',
+            'location1_iogrp_id': '0',
+            'location2_system_name': 'cluster_B',
+            'location2_iogrp_id': '0',
+            'snapshots': 'yes'
+        }
+        with pytest.raises(AnsibleFailJson) as exc:
+            rp = IBMSVReplicationPolicy()
+            rp.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+
 
 if __name__ == '__main__':
     unittest.main()

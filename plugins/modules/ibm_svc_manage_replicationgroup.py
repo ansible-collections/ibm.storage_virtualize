@@ -299,10 +299,6 @@ class IBMSVCRCCG(object):
             self.changed = False
 
     def rccg_delete(self):
-        rccg_data = self.get_existing_rccg()
-        if not rccg_data:
-            self.module.exit_json(msg="rc consistgrp '%s' did not exist" %
-                                      self.name, changed=False)
         if self.module.check_mode:
             self.changed = True
             return

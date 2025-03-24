@@ -104,6 +104,12 @@ options:
       - Applies when I(state=present).
     type: str
     version_added: '2.0.0'
+  tier:
+    description:
+      - Specifies the new tier of the MDisk.
+    type: str
+    choices: ['tier0_flash', 'tier1_flash', 'tier_enterprise', 'tier_nearline', 'tier_scm']
+    version_added: '2.7.0'
   old_name:
     description:
       - Specifies the old name of an existing pool.
@@ -129,6 +135,16 @@ EXAMPLES = '''
     drive: '5:6'
     encrypt: 'no'
     mdiskgrp: pool20
+- name: Change tier of MDisk to tier1_flash
+  ibm.storage_virtualize.ibm_svc_mdisk:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: mdisk20
+    state: present
+    mdiskgrp: pool20
+    tier: tier1_flash
 - name: Delete MDisk named mdisk20
   ibm.storage_virtualize.ibm_svc_mdisk:
     clustername: "{{ clustername }}"
@@ -165,6 +181,7 @@ class IBMSVCmdisk(object):
                 driveclass=dict(type='str'),
                 drivecount=dict(type='str'),
                 stripewidth=dict(type='str'),
+                tier=dict(type='str', choices=['tier0_flash', 'tier1_flash', 'tier_enterprise', 'tier_nearline', 'tier_scm']),
                 old_name=dict(type='str')
             )
         )
@@ -191,6 +208,7 @@ class IBMSVCmdisk(object):
         self.driveclass = self.module.params.get('driveclass', '')
         self.drivecount = self.module.params.get('drivecount', '')
         self.stripewidth = self.module.params.get('stripewidth', '')
+        self.tier = self.module.params.get('tier', '')
         self.old_name = self.module.params.get('old_name', '')
 
         # internal variable
@@ -219,7 +237,7 @@ class IBMSVCmdisk(object):
                 self.module.fail_json(msg="The parameters 'drive' and "
                                       "'driveclass, drivecount, stripewidth' are mutually exclusive.")
         elif self.state == 'absent':
-            invalids = ('drive', 'driveclass', 'level', 'drivecount', 'old_name', 'stripewidth')
+            invalids = ('drive', 'driveclass', 'level', 'drivecount', 'old_name', 'stripewidth', 'tier')
             invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None}))
 
             if invalid_exists:
@@ -341,36 +359,37 @@ class IBMSVCmdisk(object):
         self.changed = True
 
     def mdisk_update(self, modify):
-        # update the mdisk
-        self.log("updating mdisk '%s'", self.name)
+        cmd = 'chmdisk'
+        cmdopts = {}
 
-        # cmd = 'chmdisk'
-        # cmdopts = {}
-        # chmdisk does not like mdisk arrays.
-        # cmdargs = [self.name]
+        if 'tier' in modify:
+            cmdopts['tier'] = self.tier
 
-        # TBD: Implement changed logic.
-        # result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
-
-        # Any error will have been raised in svc_run_command
-        # chmkdiskgrp does not output anything when successful.
-        self.changed = True
+        if cmdopts:
+            cmdargs = [self.name]
+            self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+            # Any error will have been raised in svc_run_command
+            # chhost does not output anything when successful.
+            self.changed = True
 
     # TBD: Implement a more generic way to check for properties to modify.
     def mdisk_probe(self, data):
-        ns = []
+        props = []
 
         field_mappings = (
-            ('drivecount', data['drive_count']),
-            ('level', data['raid_level']),
-            ('encrypt', data['encrypt'])
+            ('drivecount', data.get('drive_count')),
+            ('level', data.get('raid_level')),
+            ('encrypt', data.get('encrypt')),
+            ('tier', data.get('tier'))
         )
 
         for field, existing_value in field_mappings:
-            ns.append(existing_value != getattr(self, field))
+            new_value = getattr(self, field, None)
+            if new_value is not None and new_value != existing_value:
+                props.append(field)
 
-        self.log("mdisk_probe props='%s'", ns)
-        return ns
+        self.log("mdisk_probe props='%s'", props)
+        return props
 
     def apply(self):
         changed = False
@@ -391,8 +410,9 @@ class IBMSVCmdisk(object):
                 elif self.state == 'present':
                     # This is where we detect if chmdisk should be called.
                     modify = self.mdisk_probe(mdisk_data)
-                    if any(modify):
-                        self.log("Modification is not supported")
+                    if modify:
+                        changed = True
+
             else:
                 if self.state == 'present':
                     self.log("CHANGED: mdisk does not exist, "

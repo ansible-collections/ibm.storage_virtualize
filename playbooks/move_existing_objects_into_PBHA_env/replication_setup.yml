@@ -25,13 +25,13 @@
   ansible.builtin.set_fact:
     clusterid1: "{{ item.id }}"
   loop: "{{ partnership_info.Partnership }}"
-  when: item.name == 'clusters[0].cluster_name'
+  when: item.name == clusters[0].cluster_name
 
 - name: Set secondary cluster's cluster id
   ansible.builtin.set_fact:
     clusterid2: "{{ item.id }}"
   loop: "{{ partnership_info.Partnership }}"
-  when: item.name == 'clusters[1].cluster_name'
+  when: item.name == clusters[1].cluster_name
 
 - name: Set replication pool link UID on primary cluster
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
