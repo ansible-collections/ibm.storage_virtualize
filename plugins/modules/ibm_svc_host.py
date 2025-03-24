@@ -8,6 +8,7 @@
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
 #            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #            Lavanya C R <Lavanya.c.r1@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -87,7 +88,7 @@ options:
         description:
             - Specifies the protocol used by the host to communicate with the storage system. Only 'scsi' protocol is supported.
             - Valid when I(state=present), to create a host.
-        choices: [scsi, rdmanvme, tcpnvme, fcnvme]
+        choices: [scsi, rdmanvme, tcpnvme, fcnvme, iscsi, fcscsi]
         type: str
     type:
         description:
@@ -142,20 +143,28 @@ options:
        type : bool
        version_added: '2.1.0'
     draftpartition:
-       description:
+        description:
            - Specifies the name of the draft partition to be assigned to the host.
            - Valid when I(state=present), to modify a host.
            - Supported from Storage Virtualize family systems 8.6.3.0 or later.
-       type : str
-       version_added: '2.5.0'
+        type : str
+        version_added: '2.5.0'
     nodraftpartition:
-       description:
+        description:
            - If specified as C(True), the host object is removed from the draft partition.
            - Parameters I(draftpartition) and I(nodraftpartition) are mutually exclusive.
            - Valid when I(state=present), to modify an existing host.
            - Supported from Storage Virtualize family systems 8.6.3.0 or later.
-       type : bool
-       version_added: '2.5.0'
+        type : bool
+        version_added: '2.5.0'
+    suppressofflinealert:
+        description:
+           - If specified as C(yes), an event will not be generated if host is offline.
+           - Valid when I(state=present), to modify an existing host.
+           - Supported from Storage Virtualize family systems 8.7.2.0 or later.
+        choices: ['yes', 'no']
+        type : str
+        version_added: '2.7.0'
     log_path:
         description:
             - Path of debug log file.
@@ -165,6 +174,24 @@ options:
             - Validates certification.
         default: false
         type: bool
+    fdminame:
+        description:
+            - Host object to be created from the fdminame. The valid fdminame should be provided for host creation.
+            - The parameters I(fcwwpn) and I(fdminame) are mutually exclusive.
+            - Parameter is mutually exlusive with other parameters saswwpn,fcwwpn,iscsiname and nqn.
+            - Valid when I(state=present), to create host.
+        type: str
+        version_added: '2.7.0'
+    location:
+        description:
+           - Specifies the system ID or system name that is co-located with this host.
+           - If set to blank (""), the host will normally submit I/O operations to the storage partition's preferred system.
+           - Valid when I(state=present), to modify an existing host.
+           - Supported from Storage Virtualize family systems 8.7.0.0 or later.
+           - Creating a host with a location, or changing the location of a host, is only permitted if the host is associated with
+             a storage partition configured for high availability.
+        type : str
+        version_added: '2.7.0'
 author:
     - Sreshtant Bohidar (@Sreshtant-Bohidar)
     - Rohit Kumar (@rohitk-github)
@@ -172,6 +199,7 @@ author:
     - Lavanya C R(@Lavanya-C-R1)
 notes:
     - This module supports C(check_mode).
+    - scsi option is deprecated from 8.5.0.0. Instead of scsi, use iscsi and fcscsi as the case may be.
 '''
 
 EXAMPLES = '''
@@ -285,6 +313,33 @@ EXAMPLES = '''
     nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
     portset: portset_name
     state: present
+- name: Create an fdmi host
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: ansible_host
+    fdminame: Ansible-Host-1
+    state: present
+- name: Create a host with preferred location.
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: '{{ clustername }}'
+    username: '{{ username }}'
+    password: '{{ password }}'
+    state: present
+    name: host0
+    location: fs9500cl-2
+    partition: ha-partition-0
+- name: Remove the currently set location from host.
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: '{{ clustername }}'
+    username: '{{ username }}'
+    password: '{{ password }}'
+    state: present
+    name: host0
+    location: ""
 '''
 
 RETURN = '''#'''
@@ -310,7 +365,9 @@ class IBMSVChost(object):
                 protocol=dict(type='str', required=False, choices=['scsi',
                                                                    'rdmanvme',
                                                                    'tcpnvme',
-                                                                   'fcnvme']),
+                                                                   'fcnvme',
+                                                                   'fcscsi',
+                                                                   'iscsi']),
                 type=dict(type='str'),
                 site=dict(type='str'),
                 hostcluster=dict(type='str'),
@@ -321,7 +378,10 @@ class IBMSVChost(object):
                 partition=dict(type='str', required=False),
                 nopartition=dict(type='bool', required=False),
                 draftpartition=dict(type='str', required=False),
-                nodraftpartition=dict(type='bool', required=False)
+                nodraftpartition=dict(type='bool', required=False),
+                fdminame=dict(type='str', required=False),
+                suppressofflinealert=dict(type='str', required=False, choices=['yes', 'no']),
+                location=dict(type='str')
             )
         )
 
@@ -353,6 +413,9 @@ class IBMSVChost(object):
         self.nopartition = self.module.params.get('nopartition', '')
         self.draftpartition = self.module.params.get('draftpartition', '')
         self.nodraftpartition = self.module.params.get('nodraftpartition', '')
+        self.fdminame = self.module.params.get('fdminame', '')
+        self.suppressofflinealert = self.module.params.get('suppressofflinealert', '')
+        self.location = self.module.params.get('location', '')
 
         self.basic_checks()
 
@@ -384,7 +447,7 @@ class IBMSVChost(object):
             self.module.fail_json(msg='Missing mandatory parameter: name')
         # Handling for parameter protocol
         if self.protocol:
-            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme', 'fcnvme'):
+            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme', 'fcnvme', 'iscsi', 'fcscsi'):
                 self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi', 'rdmanvme', 'tcpnvme', and 'fcnvme' "
                                           "protocols are supported.".format(self.protocol))
 
@@ -405,7 +468,8 @@ class IBMSVChost(object):
                 ('hostcluster', 'nohostcluster'),
                 ('partition', 'nopartition'),
                 ('draftpartition', 'nodraftpartition'),
-                ('draftpartition', 'partition')
+                ('draftpartition', 'partition'),
+                ('nqn', 'partition')
             )
             for param1, param2 in mutually_exclusive:
                 if getattr(self, param1) and getattr(self, param2):
@@ -417,13 +481,14 @@ class IBMSVChost(object):
                 self.module.fail_json(msg='nqn can only be entered when protocol has been entered')
 
         if self.state == 'absent':
-            fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition'] if getattr(self, f)]
+            fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition',
+                                  'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'iogrp'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a host'.format(', '.join(fields)))
 
-    # for validating parameter while renaming a volume
     def parameter_handling_while_renaming(self):
+        # for validating parameter while renaming a host
         parameters = {
             "fcwwpn": self.fcwwpn,
             "iscsiname": self.iscsiname,
@@ -434,7 +499,9 @@ class IBMSVChost(object):
             "hostcluster": self.hostcluster,
             "nohostcluster": self.nohostcluster,
             "partition": self.partition,
-            "nopartition": self.nopartition
+            "nopartition": self.nopartition,
+            "fdminame": self.fdminame,
+            "suppressofflinealert": self.suppressofflinealert
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -451,7 +518,7 @@ class IBMSVChost(object):
         merged_result = {}
 
         data = self.restapi.svc_obj_info(cmd='lshost', cmdopts=None,
-                                         cmdargs=[host_name])
+                                         cmdargs=['-gui', host_name])
 
         if isinstance(data, list):
             for d in data:
@@ -460,6 +527,18 @@ class IBMSVChost(object):
             merged_result = data
 
         return merged_result
+
+    def validate_iogrps(self, all_iogrps_map):
+
+        valid_names = set(all_iogrps_map.keys())
+        valid_ids = set(all_iogrps_map.values())
+
+        for iogrp in self.iogrp.split(":"):
+            if iogrp.isdigit():
+                if iogrp not in valid_ids:
+                    self.module.fail_json(msg="CMMVC5754E The value %d is not a valid IO group ID" % int(iogrp))
+            elif iogrp not in valid_names:
+                self.module.fail_json(msg="CMMVC5754E The value [%s] is not a valid IO group name" % iogrp)
 
     # TBD: Implement a more generic way to check for properties to modify.
     def host_probe(self, data):
@@ -487,6 +566,46 @@ class IBMSVChost(object):
             self.input_iscsiname = self.iscsiname.split(",")
             if set(self.existing_iscsiname).symmetric_difference(set(self.input_iscsiname)):
                 props += ['iscsiname']
+
+        if self.fdminame:
+            lsfabric_data = self.restapi.svc_obj_info(cmd='lsfabric', cmdopts={'host': self.name}, cmdargs=None)
+            if self.fdminame != lsfabric_data[0]['fdmi_host_name']:
+                self.module.fail_json(msg="Host already exist, Parameter fdminame is not supported for updation.")
+
+        if self.iogrp:
+            all_iogrps = self.restapi.svc_obj_info(cmd='lsiogrp', cmdopts=None, cmdargs=None)
+            all_iogrps_map = {iog['name'] : iog['id'] for iog in all_iogrps}
+
+            self.validate_iogrps(all_iogrps_map)
+
+            existing_host_iogrps = self.restapi.svc_obj_info(cmd='lshostiogrp', cmdopts=None, cmdargs=[self.name])
+            existing_host_iogrps_id = {node["id"] for node in existing_host_iogrps}
+
+            parsed_input_iogrp = []
+
+            for iogrp in self.iogrp.split(":"):
+                if iogrp.isdigit():
+                    parsed_input_iogrp.append(iogrp)
+                elif iogrp in all_iogrps_map:
+                    parsed_input_iogrp.append(all_iogrps_map[iogrp])
+
+            input_iogrps_id = set(parsed_input_iogrp)
+            existing_host_iogrps_id = set(existing_host_iogrps_id)
+
+            if input_iogrps_id.symmetric_difference(existing_host_iogrps_id):  # Symmetric difference finds elements that are in either set but not both.
+                iogrps_to_add = input_iogrps_id.difference(existing_host_iogrps_id)  # IO_Grps in input but not in existing
+                iogrps_to_remove = existing_host_iogrps_id.difference(input_iogrps_id)  # IO_Grps in existing but not in input
+
+                if iogrps_to_add:
+                    self.iogrps_to_add = list(iogrps_to_add)
+                else:
+                    self.iogrps_to_add = None
+                if iogrps_to_remove:
+                    self.iogrps_to_remove = list(iogrps_to_remove)
+                else:
+                    self.iogrps_to_remove = None
+                if iogrps_to_add or iogrps_to_remove:
+                    props += ['iogrp']
 
         if self.nqn:
             self.existing_nqn = [node["nqn"] for node in data['nodes'] if "nqn" in node]
@@ -528,16 +647,25 @@ class IBMSVChost(object):
             if data['draft_partition_name'] != '':
                 props += ['nodraftpartition']
 
+        if self.suppressofflinealert:
+            if data['offline_alert_suppressed'] != self.suppressofflinealert:
+                props += ['suppressofflinealert']
+
+        if self.location is not None:
+            if data['location_system_name'] != self.location and data['location_system_id'] != self.location:
+                props += ["location"]
+
         self.log("host_probe props='%s'", props)
         return props
 
     def host_create(self):
-        if (not self.fcwwpn) and (not self.iscsiname) and (not self.nqn):
-            self.module.fail_json(msg="One of fcwwpn, iscsiname or nqn must be provided to create a new host.")
+        if (not self.fcwwpn) and (not self.iscsiname) and (not self.nqn) and (not self.fdminame):
+            self.module.fail_json(msg="One of fcwwpn, iscsiname, nqn or fdminame must be provided to create a new host.")
 
-        if (self.fcwwpn and self.iscsiname) or (self.nqn and self.iscsiname) or (self.fcwwpn and self.nqn):
-            self.module.fail_json(msg="You have to pass only one parameter among fcwwpn, nqn and "
-                                      "iscsiname to the module.")
+        if (self.fcwwpn and self.iscsiname) or (self.nqn and self.iscsiname) or (
+            self.fcwwpn and self.nqn) or (self.fcwwpn and self.fdminame) or (
+                self.iscsiname and self.fdminame) or (self.nqn and self.fdminame):
+            self.module.fail_json(msg="You have to pass only one parameter among fcwwpn, nqn, iscsiname and fdminame to the module.")
 
         if self.hostcluster and self.partition:
             self.module.fail_json(msg='Mutually exclusive parameters: hostcluster and partition')
@@ -546,8 +674,8 @@ class IBMSVChost(object):
             self.module.fail_json(msg='CMMVC5709E [draftpartition] is not a supported parameter while creating host')
         elif self.nodraftpartition:
             self.module.fail_json(msg='CMMVC5709E [nodraftpartition] is not a supported parameter while creating host')
-        # CMMVC5709E [value] is not a supported parameter
-
+        if self.location and not self.partition:
+            self.module.fail_json(msg='Parameter location can only be entered when partition has been entered.')
         if self.module.check_mode:
             self.changed = True
             return
@@ -561,8 +689,10 @@ class IBMSVChost(object):
             cmdopts['fcwwpn'] = self.fcwwpn
         elif self.iscsiname:
             cmdopts['iscsiname'] = self.iscsiname
-        else:
+        elif self.nqn:
             cmdopts['nqn'] = self.nqn
+        else:
+            cmdopts['fdminame'] = self.fdminame
 
         cmdopts['protocol'] = self.protocol if self.protocol else 'scsi'
         if self.iogrp:
@@ -575,9 +705,9 @@ class IBMSVChost(object):
             cmdopts['portset'] = self.portset
         if self.partition:
             cmdopts['partition'] = self.partition
-
-        self.log("creating host command '%s' opts '%s'",
-                 self.fcwwpn, self.type)
+        if self.location:
+            cmdopts['location'] = self.location
+        self.log("Command options for creating host: '%s'", cmdopts)
 
         # Run command
         result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
@@ -626,6 +756,20 @@ class IBMSVChost(object):
             )
             self.log('%s added to %s', to_be_added, self.name)
 
+    def host_iogrp_update(self):
+        if self.iogrps_to_add is not None:
+            self.restapi.svc_run_command(
+                'addhostiogrp',
+                {'iogrp': ':'.join(self.iogrps_to_add)},
+                [self.name]
+            )
+        if self.iogrps_to_remove is not None:
+            self.restapi.svc_run_command(
+                'rmhostiogrp',
+                {'iogrp': ':'.join(self.iogrps_to_remove)},
+                [self.name]
+            )
+
     def host_nqn_update(self):
         to_be_removed = ','.join(list(set(self.existing_nqn) - set(self.input_nqn)))
         if to_be_removed:
@@ -662,6 +806,10 @@ class IBMSVChost(object):
             self.host_iscsiname_update()
             self.changed = True
             self.log("iscsiname of %s updated", self.name)
+        if 'iogrp' in modify:
+            self.host_iogrp_update()
+            self.changed = True
+            self.log("io_grp of %s updated", self.name)
         if 'nqn' in modify:
             self.host_nqn_update()
             self.changed = True
@@ -680,6 +828,13 @@ class IBMSVChost(object):
             cmdopts['draftpartition'] = self.draftpartition
         if 'nodraftpartition' in modify:
             cmdopts['nodraftpartition'] = self.nodraftpartition
+        if 'suppressofflinealert' in modify:
+            cmdopts['suppressofflinealert'] = self.suppressofflinealert
+        if 'location' in modify:
+            if self.location == "":
+                cmdopts['nolocation'] = True
+            else:
+                cmdopts['location'] = self.location
         if cmdopts:
             cmdargs = [self.name]
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)

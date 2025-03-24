@@ -109,6 +109,13 @@ options:
               copy operations. This is a numeric value from 0 through 100. The default value is 50.
             - Valid when I(state=present).
         type: int
+    pbrinuse:
+        description:
+            - Specifies whether policy-based replication will be used on the partnership.
+            - Valid when I(state=present) to update a partnership.
+        type: str
+        choices: [ 'yes', 'no' ]
+        version_added: 2.7.0
     link1:
         description:
             - Specifies the portset name to be used for WAN link 1 of the Storage Virtualize system.
@@ -227,6 +234,7 @@ class IBMSVCIPPartnership(object):
                 remote_password=dict(type='str', no_log=True),
                 remote_token=dict(type='str', no_log=True),
                 remote_validate_certs=dict(type='bool', default=False),
+                pbrinuse=dict(type='str', choices=['yes', 'no']),
                 remote_link1=dict(type='str', required=False),
                 remote_link2=dict(type='str', required=False)
             )
@@ -248,6 +256,7 @@ class IBMSVCIPPartnership(object):
         self.compressed = self.module.params.get('compressed', '')
         self.linkbandwidthmbits = self.module.params.get('linkbandwidthmbits', '')
         self.backgroundcopyrate = self.module.params.get('backgroundcopyrate', '')
+        self.pbrinuse = self.module.params.get('pbrinuse', '')
         self.link1 = self.module.params.get('link1', '')
         self.link2 = self.module.params.get('link2', '')
         self.remote_domain = self.module.params.get('remote_domain', '')
@@ -295,6 +304,8 @@ class IBMSVCIPPartnership(object):
                 self.module.fail_json(msg="At least one is required during creation: link1 or link2")
             if not (self.remote_link1 or self.remote_link2):
                 self.module.fail_json(msg="At least one is required during creation: remote_link1 or remote_link2")
+            if self.pbrinuse:
+                self.module.fail_json(msg="Following parameter not supported during creation: pbrinuse")
 
     # Parameter validation for deleting IP partnership
     def delete_parameter_validation(self):
@@ -311,7 +322,8 @@ class IBMSVCIPPartnership(object):
                 'link1': self.link1,
                 'link2': self.link2,
                 'remote_link1': self.remote_link1,
-                'remote_link2': self.remote_link2
+                'remote_link2': self.remote_link2,
+                'pbrinuse': self.pbrinuse
             }
             self.log('%s', check_list)
             for key, value in check_list.items():
@@ -490,6 +502,11 @@ class IBMSVCIPPartnership(object):
         if self.remote_clusterip:
             if local_data and self.remote_clusterip != local_data['cluster_ip']:
                 modify_local['clusterip'] = self.remote_clusterip
+        if self.pbrinuse:
+            if local_data and local_data['pbr_in_use'] != self.pbrinuse:
+                modify_local['pbrinuse'] = self.pbrinuse
+            if remote_data and remote_data['pbr_in_use'] != self.pbrinuse:
+                modify_remote['pbrinuse'] = self.pbrinuse
         return modify_local, modify_remote
 
     # start a partnership
@@ -525,12 +542,13 @@ class IBMSVCIPPartnership(object):
             rest_object = self.restapi_local
         if location == 'remote':
             rest_object = self.restapi_remote
-        if 'compressed' in modify_data or 'clusterip' in modify_data:
+        stop_before_update_params = ("compressed", "clusterip")
+        operations_needing_stop = {parameter : value for parameter, value in modify_data.items() if parameter in stop_before_update_params}
+        operations_not_needing_stop = {parameter : value for parameter, value in modify_data.items() if parameter not in stop_before_update_params}
+        if operations_needing_stop:
             cmd_opts = {}
-            if 'compressed' in modify_data:
-                cmd_opts['compressed'] = modify_data['compressed']
-            if 'clusterip' in modify_data and location == 'local':
-                cmd_opts['clusterip'] = modify_data['clusterip']
+            for parameter, value in operations_needing_stop.items():
+                cmd_opts[parameter] = value
             if cmd_opts:
                 # stop the partnership
                 self.stop_partnership(rest_object, id)
@@ -539,12 +557,10 @@ class IBMSVCIPPartnership(object):
                 # start the partnership
                 self.start_partnership(rest_object, id)
                 self.changed = True
-        if 'linkbandwidthmbits' in modify_data or 'backgroundcopyrate' in modify_data:
+        if operations_not_needing_stop:
             cmd_opts = {}
-            if 'linkbandwidthmbits' in modify_data:
-                cmd_opts['linkbandwidthmbits'] = modify_data['linkbandwidthmbits']
-            if 'backgroundcopyrate' in modify_data:
-                cmd_opts['backgroundcopyrate'] = modify_data['backgroundcopyrate']
+            for parameter, value in operations_not_needing_stop.items():
+                cmd_opts[parameter] = value
             if cmd_opts:
                 # perform the update operation
                 rest_object.svc_run_command(cmd, cmd_opts, cmd_args)

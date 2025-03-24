@@ -99,11 +99,22 @@ options:
             - Supported from Storage Virtualize family systems 8.7.1.0 or later.
         type: str
         version_added: 2.6.0
+    ha_snapshots:
+        description:
+            - When specified as I(yes), snapshots created for volumes and volume groups associated with the policy will be replicated to the remote system.
+            - Applies when I(state=present) and I(topology=2-site-ha).
+            - Supported from Storage Virtualize family systems 8.7.3.0 or later.
+        type: str
+        choices: ['yes', 'no']
+        version_added: 2.7.0
 author:
     - Sanjaikumaar M (@sanjaikumaar)
     - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
+    - If both systems support HA snapshots, ha_snapshots will be enabled implicitly while creating replication policy with topology "2-site-ha".
+    - Error Considerations
+        - CMMVC1255E The command failed because the specified topology does not support highly-available snapshots
 '''
 
 EXAMPLES = '''
@@ -137,6 +148,19 @@ EXAMPLES = '''
     partition: partition0
     rpoalert: 60
     state: present
+- name: Create replication policy with HA snapshots enabled
+  ibm.storage_virtualize.ibm_sv_manage_replication_policy:
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: replication_policy0
+    topology: 2-site-ha
+    location1system: x.x.x.x
+    location1iogrp: 0
+    location2system: x.x.x.x
+    location2iogrp: 0
+    state: present
+    ha_snapshots: "yes"
 '''
 
 RETURN = '''#'''
@@ -186,6 +210,10 @@ class IBMSVReplicationPolicy:
                 ),
                 partition=dict(
                     type='str',
+                ),
+                ha_snapshots=dict(
+                    type='str',
+                    choices=['yes', 'no']
                 )
             )
         )
@@ -205,6 +233,7 @@ class IBMSVReplicationPolicy:
         self.location2iogrp = self.module.params.get('location2iogrp', '')
         self.rpoalert = self.module.params.get('rpoalert', '')
         self.partition = self.module.params.get('partition', '')
+        self.ha_snapshots = self.module.params.get('ha_snapshots', '')
 
         # logging setup
         self.log_path = self.module.params['log_path']
@@ -236,7 +265,8 @@ class IBMSVReplicationPolicy:
             )
 
         if self.state == 'absent':
-            invalids = ('topology', 'location1system', 'location1iogrp', 'location2system', 'location2iogrp', 'rpoalert', 'partition')
+            invalids = ('topology', 'location1system', 'location1iogrp', 'location2system', 'location2iogrp', 'rpoalert',
+                        'partition', 'ha_snapshots')
             invalid_exists = ', '.join((var for var in invalids if not getattr(self, var) in {'', None}))
 
             if invalid_exists:
@@ -253,6 +283,10 @@ class IBMSVReplicationPolicy:
                 self.module.fail_json(
                     msg="For topology 'async-dr' these parameters are invalid {0}".format(invalid_exists)
                 )
+        if self.ha_snapshots and getattr(self, "topology", None) != "2-site-ha":
+            self.module.fail_json(
+                msg="CMMVC1255E The command failed because the specified topology does not support highly-available snapshots"
+            )
 
     def is_replication_policy_present(self):
         result = {}
@@ -283,7 +317,8 @@ class IBMSVReplicationPolicy:
             'location2system': self.location2system,
             'location2iogrp': self.location2iogrp,
             'rpoalert': self.rpoalert,
-            'partition': self.partition
+            'partition': self.partition,
+            'snapshots': self.ha_snapshots
         }
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
@@ -306,7 +341,8 @@ class IBMSVReplicationPolicy:
             ('topology', data.get('topology')),
             ('partition', data.get('partition_name')),
             ('location1iogrp', data.get('location1_iogrp_id')),
-            ('location2iogrp', data.get('location2_iogrp_id'))
+            ('location2iogrp', data.get('location2_iogrp_id')),
+            ('ha_snapshots', data.get('snapshots'))
         )
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
         if self.rpoalert and self.rpoalert != int(data.get('rpo_alert')):

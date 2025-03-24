@@ -128,6 +128,14 @@ options:
       - Parameters 'novolumegroup' and 'volumegroup' are mutually exclusive.
       - Valid when I(state=present), to modify a volume.
     type: bool
+  unmap:
+    description:
+      - Removes specified objects associated with the volume which is to be deleted.
+      - Valid when I(state=absent), to delete a volume.
+    type: list
+    elements: str
+    choices: [ host_mappings, remotecopy_relationships, flashcopy_mappings ]
+    version_added: 2.7.0
   old_name:
     description:
       - Specifies the old name of the volume during renaming.
@@ -166,6 +174,7 @@ author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
 notes:
     - This module supports C(check_mode).
+    - For unmap parameter, the option remotecopy_relationships has been deprecated from 8.7.1.0 onwards.
     - CMMVC9855E The command failed because one of more of the specified volumes does not exist.
       This error occurs when the user-provided volume(s) do not exist.
 '''
@@ -309,6 +318,16 @@ EXAMPLES = r'''
     log_path: "{{ log_path }}"
     name: "new_volume_name"
     state: "absent"
+- name: Delete a volume and remove associated host mappings, remote copy relationships, and flashcopy mappings
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "new_volume_name"
+    state: "absent"
+    unmap: ['host_mappings', 'remotecopy_relationships', 'flashcopy_mappings']
 '''
 
 RETURN = '''#'''
@@ -342,6 +361,9 @@ class IBMSVCvolume(object):
                 iogrp=dict(type='str', required=False),
                 volumegroup=dict(type='str', required=False),
                 novolumegroup=dict(type='bool', required=False),
+                unmap=dict(type='list', elements='str', required=False, choices=['host_mappings',
+                                                                                 'remotecopy_relationships',
+                                                                                 'flashcopy_mappings']),
                 thin=dict(type='bool', required=False),
                 compressed=dict(type='bool', required=False),
                 deduplicated=dict(type='bool', required=False),
@@ -382,6 +404,7 @@ class IBMSVCvolume(object):
         self.allow_hs = self.module.params['allow_hs']
         self.type = self.module.params['type']
         self.fromsourcevolume = self.module.params['fromsourcevolume']
+        self.unmap = self.module.params['unmap']
 
         # internal variable
         self.changed = False
@@ -427,6 +450,8 @@ class IBMSVCvolume(object):
             self.module.fail_json(msg='Missing mandatory parameter: [{0}]'.format(', '.join(missing)))
         if self.volumegroup and self.novolumegroup:
             self.module.fail_json(msg='Mutually exclusive parameters detected: [volumegroup] and [novolumegroup]')
+        if self.state == 'present' and self.unmap is not None:
+            self.module.fail_json(msg='Parameter [unmap] cannot be specified when creating or updating a volume.')
 
     # for validating parameter while removing an existing volume
     def volume_deletion_parameter_validation(self):
@@ -627,11 +652,21 @@ class IBMSVCvolume(object):
     # function to remove an existing volume
     def remove_volume(self):
         self.volume_deletion_parameter_validation()
+        cmdopts = {}
         if self.module.check_mode:
             self.changed = True
             return
+        name_params_map = {
+            'host_mappings': 'removehostmappings',
+            'remotecopy_relationships': 'removercrelationships',
+            'flashcopy_mappings': 'removefcmaps'
+        }
+        if self.unmap:
+            for name in self.unmap:
+                cmdopts[name_params_map[name]] = True
+
         self.restapi.svc_run_command(
-            'rmvolume', None, [self.name]
+            'rmvolume', cmdopts, [self.name]
         )
         self.changed = True
 

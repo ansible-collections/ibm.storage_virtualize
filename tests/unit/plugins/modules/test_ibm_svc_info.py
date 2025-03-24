@@ -330,7 +330,7 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_deafault_gather_subset_all(self, mock_svc_authorize, mock_svc_obj_info, mock_get_list):
+    def test_default_gather_subset_all(self, mock_svc_authorize, mock_svc_obj_info, mock_get_list):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -346,7 +346,7 @@ class TestIBMSVCGatherInfo(unittest.TestCase):
             'HostVdiskMap': [],
             'VdiskHostMap': [],
             'HostCluster': [],
-            'FCConnectivitie': [],
+            'FCConnectivity': [],
             'FCConsistgrp': [],
             'RCConsistgrp': [],
             'VdiskCopy': [],

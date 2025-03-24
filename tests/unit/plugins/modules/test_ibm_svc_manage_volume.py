@@ -478,6 +478,29 @@ class TestIBMSVCvolume(unittest.TestCase):
         v.create_volume()
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_volume_state_present_with_unmap(self, svc_authorize_mock):
+        """
+        Parameter [unmap] cannot be specified when creating or updating a volume.
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'novolumegroup': True,
+            'state': 'present',
+            'unmap': ['host_mappings']
+        })
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            v = IBMSVCvolume()
+            v.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Parameter [unmap] cannot be specified when creating or updating a volume.')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -493,6 +516,42 @@ class TestIBMSVCvolume(unittest.TestCase):
         svc_run_command_mock.return_value = None
         v = IBMSVCvolume()
         v.remove_volume()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_volume_with_unmap(self,
+                                      svc_authorize_mock,
+                                      svc_obj_info_mock,
+                                      svc_run_command_mock):
+        """
+        Remove a volume and unmap it from host mappings, remote copy relationships, and flashcopy mappings.
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'state': 'absent',
+            'unmap': ['host_mappings', 'remotecopy_relationships', 'flashcopy_mappings']
+        })
+        svc_obj_info_mock.return_value = [  # lsvdisk detailed mock object
+            {
+                "name:": "test_volume",
+                "type": "striped",
+                "RC_name": ""
+            },
+            {}
+        ]
+        with pytest.raises(AnsibleExitJson) as exc:
+            v = IBMSVCvolume()
+            v.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'volume [test_volume] has been deleted.')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')

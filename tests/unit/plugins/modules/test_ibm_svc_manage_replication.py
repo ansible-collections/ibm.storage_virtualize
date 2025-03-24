@@ -242,11 +242,10 @@ class TestIBMSVCManageReplication(unittest.TestCase):
             'password': 'password',
             'name': 'test_name',
             'remotecluster': 'test_remotecluster',
-            'master': 'test_master',
-            'aux': 'test_aux',
+            'master': 'test_master_1',
+            'aux': 'test_aux_1',
             'copytype': 'metro',
             'sync': 'true',
-            'consistgrp': 'test_consistency_group',
         })
         arg_data = {
             'id': '157',
@@ -261,7 +260,7 @@ class TestIBMSVCManageReplication(unittest.TestCase):
             'aux_vdisk_name': 'test_aux_1',
             'primary': 'aux',
             'consistency_group_id': '8',
-            'consistency_group_name': 'test_consistency_group_1',
+            'consistency_group_name': '',
             'state': 'consistent_synchronized',
             'bg_copy_priority': '50',
             'progress': '',
@@ -278,10 +277,122 @@ class TestIBMSVCManageReplication(unittest.TestCase):
         }
         obj = IBMSVCManageReplication()
         probe_return = obj.rcrelationship_probe(arg_data)
-        self.assertEqual('test_consistency_group', probe_return[0]['consistgrp'])
-        self.assertEqual('test_master', probe_return[0]['master'])
-        self.assertEqual('test_aux', probe_return[0]['aux'])
         self.assertEqual(True, probe_return[0]['metro'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_rcrelationship_probe_multiple(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_name',
+            'remotecluster': 'test_remotecluster',
+            'consistgrp': 'consistency_group',
+            'master': 'test_master_1',
+            'aux': 'test_aux_1',
+            'copytype': 'metro',
+            'sync': 'true',
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                'id': '157',
+                'name': 'test_name',
+                'master_cluster_id': '0000020321E04566',
+                'master_cluster_name': 'FlashSystem V9000',
+                'master_vdisk_id': '157',
+                'master_vdisk_name': 'test_master_1',
+                'aux_cluster_id': '0000020321E04566',
+                'aux_cluster_name': 'FlashSystem V9000',
+                'aux_vdisk_id': '161',
+                'aux_vdisk_name': 'test_aux_1',
+                'primary': 'aux',
+                'consistency_group_id': '8',
+                'consistency_group_name': '',
+                'state': 'consistent_synchronized',
+                'bg_copy_priority': '50',
+                'progress': '',
+                'freeze_time': '',
+                'status': 'online',
+                'sync': '',
+                'copy_type': 'global',
+                'cycling_mode': '',
+                'cycle_period_seconds': '300',
+                'master_change_vdisk_id': '',
+                'master_change_vdisk_name': '',
+                'aux_change_vdisk_id': '',
+                'aux_change_vdisk_name': ''
+            }
+        ]
+        with pytest.raises(AnsibleFailJson) as exc:
+            obj = IBMSVCManageReplication()
+            obj.apply()
+        self.assertEqual(True, exc.value.args[0]['failed'])
+        self.assertEqual("CMMVC5713E Only 1 update operation supported in one task, 2 operations detected: {'consistgrp': 'consistency_group', 'metro': True}",
+                         exc.value.args[0]['msg'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_rcrelationship_probe_metro_in_cg(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_name',
+            'remotecluster': 'test_remotecluster',
+            'master': 'test_master_1',
+            'aux': 'test_aux_1',
+            'copytype': 'metro',
+            'sync': 'true',
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                'id': '157',
+                'name': 'test_name',
+                'master_cluster_id': '0000020321E04566',
+                'master_cluster_name': 'FlashSystem V9000',
+                'master_vdisk_id': '157',
+                'master_vdisk_name': 'test_master_1',
+                'aux_cluster_id': '0000020321E04566',
+                'aux_cluster_name': 'FlashSystem V9000',
+                'aux_vdisk_id': '161',
+                'aux_vdisk_name': 'test_aux_1',
+                'primary': 'aux',
+                'consistency_group_id': '8',
+                'consistency_group_name': 'consistency_group',
+                'state': 'consistent_synchronized',
+                'bg_copy_priority': '50',
+                'progress': '',
+                'freeze_time': '',
+                'status': 'online',
+                'sync': '',
+                'copy_type': 'global',
+                'cycling_mode': '',
+                'cycle_period_seconds': '300',
+                'master_change_vdisk_id': '',
+                'master_change_vdisk_name': '',
+                'aux_change_vdisk_id': '',
+                'aux_change_vdisk_name': ''
+            }
+        ]
+        with pytest.raises(AnsibleFailJson) as exc:
+            obj = IBMSVCManageReplication()
+            obj.apply()
+        self.assertEqual(True, exc.value.args[0]['failed'])
+        self.assertEqual("CMMVC5951E Individual relationship cannot be updated while it is part of a consistency group.",
+                         exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_replication.IBMSVCManageReplication.cyclemode_update')
@@ -740,14 +851,12 @@ class TestIBMSVCManageReplication(unittest.TestCase):
         self.assertEqual(True, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_replication.IBMSVCManageReplication.create')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_replication.IBMSVCManageReplication.existing_rc')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_existing_relationship(self, svc_authorize_mock, svc_run_command_mock, existing_rc_mock, create_mock):
+    def test_create_existing_relationship_idempotency(self, svc_authorize_mock, svc_run_command_mock, existing_rc_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -796,14 +905,50 @@ class TestIBMSVCManageReplication(unittest.TestCase):
         self.assertEqual(False, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_replication.IBMSVCManageReplication.create')
+           'ibm_svc_manage_replication.IBMSVCManageReplication.existing_rc')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_existing_gmcv_relationship_idempotency(self, svc_authorize_mock, svc_run_command_mock, existing_rc_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_name',
+            'remotecluster': 'test_remotecluster',
+            'master': 'test_master',
+            'aux': 'test_aux',
+            'copytype': 'GMCV',
+            'sync': 'true',
+            'consistgrp': 'test_consistency_group',
+        })
+        existing_rc_mock.return_value = {
+            'name': 'test_name',
+            'master_vdisk_name': 'test_master',
+            'aux_vdisk_name': 'test_aux',
+            'consistency_group_name': 'test_consistency_group',
+            'copy_type': 'global',
+            'cycling_mode': 'multi',
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            obj = IBMSVCManageReplication()
+            obj.apply()
+        self.assertEqual(False, exc.value.args[0]['changed'])
+
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_replication.IBMSVCManageReplication.existing_rc')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_existing_relationship(self, svc_authorize_mock, svc_run_command_mock, existing_rc_mock, create_mock):
+    def test_failure_update_relationship(self, svc_authorize_mock, svc_run_command_mock, existing_rc_mock):
+        """
+            Parameter not supported for update operation: master
+            Parameter not supported for update operation: aux
+        """
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -846,10 +991,10 @@ class TestIBMSVCManageReplication(unittest.TestCase):
             'aux_change_vdisk_id': '',
             'aux_change_vdisk_name': ''
         }
-        with pytest.raises(AnsibleExitJson) as exc:
+        with pytest.raises(AnsibleFailJson) as exc:
             obj = IBMSVCManageReplication()
             obj.apply()
-        self.assertEqual(True, exc.value.args[0]['changed'])
+        self.assertTrue(exc.value.args[0]['failed'])
 
 
 if __name__ == "__main__":

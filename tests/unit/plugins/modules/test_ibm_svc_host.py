@@ -3,6 +3,7 @@
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Sudheesh Reddy Satti<Sudheesh.Reddy.Satti@ibm.com>
 #            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -318,7 +319,7 @@ class TestIBMSVChost(unittest.TestCase):
            'ibm_svc_host.IBMSVChost.get_existing_host')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_fcwwpn_update_when_existing_removes_and_new_added(self, svc_authorize_mock, get_existing_host_mock, host_fcwwpn_update_mock):
+    def test_fcwwpn_update_when_existing_removed_and_new_added(self, svc_authorize_mock, get_existing_host_mock, host_fcwwpn_update_mock):
         set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -341,6 +342,106 @@ class TestIBMSVChost(unittest.TestCase):
         with pytest.raises(AnsibleExitJson) as exc:
             host_created.apply()
         self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_iogrp_update_when_existing_removed_and_new_added(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        """
+        Tests IO group update by adding some new IO groups and removing some existing ones
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test',
+            'state': 'present',
+            'iogrp': '1:2:3',
+            'protocol': 'scsi',
+            'type': 'generic'
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                "id": "2", "name": "test", "port_count": "1", "type": "generic", "iogrp_count": "3", "status": "degraded",
+                "site_id": "", "site_name": "", "host_cluster_id": "", "host_cluster_name": "", "protocol": "scsi",
+                "status_policy": "redundant", "status_site": "all", "io_activity_status": "inactive", "discovery_status": "offline",
+                "nodes": [{"WWPN": "10000090FAA0BA49", "node_logged_in_count": "1", "state": "inactive"}], "owner_id": "",
+                "owner_name": "", "portset_id": "64", "portset_name": "portset64", "partition_id": "", "partition_name": "",
+                "location1_status": "", "location2_status": "", "draft_partition_id": "", "draft_partition_name": "",
+                "ungrouped_volume_mapping": "no", "auto_storage_discovery": "no", "location_system_name": "", "auth_method": "",
+                "host_username": "", "storage_username": "", "host_secret": "no", "storage_secret": "no", "offline_alert_suppressed": "no"
+            },
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"},
+                {"id": "3", "name": "io_grp3"},
+                {"id": "4", "name": "recovery_io_grp"}
+            ],
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"}
+            ]
+        ]
+        host_created = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_created.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_iogrp_update_when_existing_removed_and_new_added_idempotency(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        """
+        Tests IO group update idempotency by assigning same IO groups as existing host IO group configuration
+        """
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test',
+            'state': 'present',
+            'iogrp': '0:io_grp1:io_grp2',
+            'protocol': 'scsi',
+            'type': 'generic'
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                "id": "2", "name": "test", "port_count": "1", "type": "generic", "iogrp_count": "3", "status": "degraded",
+                "site_id": "", "site_name": "", "host_cluster_id": "", "host_cluster_name": "", "protocol": "scsi",
+                "status_policy": "redundant", "status_site": "all", "io_activity_status": "inactive", "discovery_status": "offline",
+                "nodes": [{"WWPN": "10000090FAA0BA49", "node_logged_in_count": "1", "state": "inactive"}], "owner_id": "",
+                "owner_name": "", "portset_id": "64", "portset_name": "portset64", "partition_id": "", "partition_name": "",
+                "location1_status": "", "location2_status": "", "draft_partition_id": "", "draft_partition_name": "",
+                "ungrouped_volume_mapping": "no", "auto_storage_discovery": "no", "location_system_name": "", "auth_method": "",
+                "host_username": "", "storage_username": "", "host_secret": "no", "storage_secret": "no", "offline_alert_suppressed": "no"
+            },
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"},
+                {"id": "3", "name": "io_grp3"},
+                {"id": "4", "name": "recovery_io_grp"}
+            ],
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"}
+            ]
+        ]
+        host_created = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_created.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -920,6 +1021,332 @@ class TestIBMSVChost(unittest.TestCase):
             nqn_host_obj = IBMSVChost()
             nqn_host_obj.apply()
         self.assertTrue(exc.value.args[0]['failed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_fdmihost_successfully(self, svc_authorize_mock, svc_run_command_mock, get_existing_host_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'protocol': 'fcscsi',
+            'fdminame': '78F1CV1-1'
+        })
+        host = {u'message': u'Host, id [0], '
+                            u'successfully created', u'id': u'0'}
+        svc_run_command_mock.return_value = host
+        get_existing_host_mock.return_value = []
+        fdmi_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            fdmi_host_obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_suppressofflinealert_update(self, svc_authorize_mock, svc_obj_info_mock,
+                                         svc_run_command_mock):
+        '''
+        Test to update suppressofflinealert, should pass
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test',
+            'state': 'present',
+            'suppressofflinealert': 'yes'
+        })
+        svc_obj_info_mock.return_value = {
+            'id': '24',
+            'name': 'test',
+            'iogrp_count': '4',
+            'status': 'offline',
+            'site_name': 'site2',
+            'offline_alert_suppressed': 'no'
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            obj = IBMSVChost()
+            obj.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_iscsihost(self, svc_authorize_mock,
+                              svc_run_command_mock,
+                              get_existing_host_mock):
+        '''
+        Test to create iscsi host, should pass
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'iscsiname': 'iqn.localhost.hostid.7f000001',
+            'protocol': 'iscsi',
+            'portset': 'ipportset'
+        })
+        host = {u'message': u'Host, id [0], '
+                            u'successfully created', u'id': u'0'}
+        svc_run_command_mock.return_value = host
+        get_existing_host_mock.return_value = []
+        iscsi_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            iscsi_host_obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.host_probe')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_iscsihost_idempotency(self, svc_authorize_mock,
+                                          host_probe_mock,
+                                          get_existing_host_mock):
+        '''
+        Test to create iscsi host with same config, should pass
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'iscsiname': 'iqn.localhost.hostid.7f000001',
+            'protocol': 'iscsi'
+        })
+
+        get_existing_host_mock.return_value = [{"id": "0", "name": "ansible_host", "port_count": "1",
+                                                "iogrp_count": "4", "status": "offline",
+                                                "site_id": "", "site_name": "", 'iscsi_name': 'iqn.localhost.hostid.7f000001',
+                                                "host_cluster_id": "", "host_cluster_name": "",
+                                                "protocol": "iscsi", "owner_id": "",
+                                                "owner_name": ""}]
+        host_probe_mock.return_value = []
+        iscsi_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            iscsi_host_obj.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_fcscsihost(self, svc_authorize_mock,
+                               svc_run_command_mock,
+                               get_existing_host_mock):
+        '''
+        Test to create fcscsi host, should pass
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_host',
+            'fcwwpn': '5005076812113196',
+            'protocol': 'fcscsi',
+            'portset': 'fcportset'
+        })
+        host = {u'message': u'Host, id [0], '
+                            u'successfully created', u'id': u'0'}
+        svc_run_command_mock.return_value = host
+        get_existing_host_mock.return_value = []
+        iscsi_host_obj = IBMSVChost()
+        with pytest.raises(AnsibleExitJson) as exc:
+            iscsi_host_obj.apply()
+        self.assertEqual(True, exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_host_specifying_location(self, svc_authorize_mock,
+                                             get_existing_host_mock,
+                                             svc_run_command_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': 'fs9500cl-2',
+            'partition': 'ha-partition-0',
+            'fcwwpn': '21000024FF7D9505'
+        })
+        svc_run_command_mock.return_value = {
+            'message': "success"
+        }
+        get_existing_host_mock.return_value = {}
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_host_specifying_location_idempotency(self, svc_authorize_mock,
+                                                         get_existing_host_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': 'fs9500cl-2',
+            'partition': 'ha-partition-0',
+            'fcwwpn': '21000024FF7D9505'
+        })
+        lshost_data = {'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+                       'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+                       'site_id': '', 'site_name': '', 'host_cluster_id': '', 'host_cluster_name': '',
+                       'protocol': 'scsi', 'nodes': [{'WWPN': '21000024FF7D9505', 'node_logged_in_count': '0', 'state': 'online'}],
+                       'partition_name': 'ha-partition-0', 'location_system_id': '0000020438007A94', 'location_system_name': 'fs9500cl-2'}
+        get_existing_host_mock.return_value = lshost_data
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_missing_dependent_param_1(self, svc_authorize_mock,
+                                               get_existing_host_mock):
+        '''
+        Test for failure while missing dependent parameter partition needed with parameter location
+        '''
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': 'fs9500cl-2',
+            'fcwwpn': '21000024FF7D9505'
+        })
+        get_existing_host_mock.return_value = {}
+        with pytest.raises(AnsibleFailJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], "Parameter location can only be entered when partition has been entered.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_modify_host_specifying_location(self, svc_authorize_mock,
+                                             get_existing_host_mock,
+                                             svc_run_command_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': 'fs9500cl-2',
+        })
+        get_existing_host_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '', 'site_name': 'site2', 'partition_name': 'ha-partition-0', 'location_system_id': '0000020438007A94',
+            'location_system_name': 'cluster123'
+        }
+        svc_run_command_mock.return_value = {
+            "message": "Success"
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_location_from_host(self, svc_authorize_mock,
+                                       get_existing_host_mock,
+                                       svc_run_command_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': '',
+        })
+        get_existing_host_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '', 'site_name': 'site2', 'partition_name': 'ha-partition-0', 'location_system_id': '0000020438007A94',
+            'location_system_name': 'cluster123'
+        }
+        svc_run_command_mock.return_value = {
+            "message": "Success"
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_location_from_host_idempotency(self, svc_authorize_mock,
+                                                   get_existing_host_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'location': '',
+        })
+        get_existing_host_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '', 'site_name': 'site2', 'partition_name': 'ha-partition-0', 'location_system_id': '',
+            'location_system_name': ''
+        }
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

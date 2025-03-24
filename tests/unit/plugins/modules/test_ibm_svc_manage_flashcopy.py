@@ -418,7 +418,7 @@ class TestIBMSVCFlashcopy(unittest.TestCase):
         obj = IBMSVCFlashcopy()
         data = obj.fcmap_probe(data_arg)
         self.assertEqual('test_consistgrp', data['consistgrp'])
-        self.assertEqual('50', data['copyrate'])
+        self.assertEqual(50, data['copyrate'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -506,6 +506,7 @@ class TestIBMSVCFlashcopy(unittest.TestCase):
             'mdiskgrp': 'test_mdiskgrp',
             'consistgrp': 'test_consistgrp',
             'copyrate': 50,
+            'cleanrate': 60,
             'grainsize': 64,
         })
         sdata = {
@@ -604,6 +605,7 @@ class TestIBMSVCFlashcopy(unittest.TestCase):
             'mdiskgrp': 'test_mdiskgrp',
             'consistgrp': 'test_consistgrp',
             'copyrate': 50,
+            'cleanrate': 60,
             'grainsize': 64,
         })
         fdata = {

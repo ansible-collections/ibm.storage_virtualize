@@ -571,26 +571,27 @@ class IBMSVCmdiskgrp(object):
 
         self.changed = True
 
-    # TBD: Implement a more generic way to check for properties to modify.
     def mdiskgrp_probe(self, data):
         props = {}
 
-        if self.noprovisioningpolicy and data.get('provisioning_policy_name', ''):
-            props['noprovisioningpolicy'] = self.noprovisioningpolicy
-        if self.provisioningpolicy and self.provisioningpolicy != data.get('provisioning_policy_name', ''):
-            props['provisioningpolicy'] = self.provisioningpolicy
-        if self.noownershipgroup and data.get('owner_name', ''):
-            props['noownershipgroup'] = self.noownershipgroup
-        if self.ownershipgroup and self.ownershipgroup != data.get('owner_name', ''):
-            props['ownershipgroup'] = self.ownershipgroup
-        if self.vdiskprotectionenabled and self.vdiskprotectionenabled != data.get('vdisk_protectionenabled', ''):
-            props['vdiskprotectionenabled'] = self.vdiskprotectionenabled
-        if self.warning and self.warning != data.get('warning', ''):
-            props['warning'] = str(self.warning) + "%"
-        if self.replicationpoollinkuid and self.replicationpoollinkuid != data.get('replication_pool_link_uid', ''):
-            props['replicationpoollinkuid'] = self.replicationpoollinkuid
+        field_mappings = (
+            ('noprovisioningpolicy', not bool(data.get('provisioning_policy_name', ''))),
+            ('provisioningpolicy', data.get('provisioning_policy_name', '')),
+            ('noownershipgroup', not bool(data.get('owner_name', ''))),
+            ('ownershipgroup', data.get('owner_name', '')),
+            ('vdiskprotectionenabled', data.get('vdisk_protection_enabled', '')),
+            ('replicationpoollinkuid', data.get('replication_pool_link_uid', '')),
+        )
+
+        for field, existing_value in field_mappings:
+            new_value = getattr(self, field, None)
+            if new_value is not None and new_value != existing_value:
+                props[field] = getattr(self, field, None)
+
         if self.resetreplicationpoollinkuid:
             props['resetreplicationpoollinkuid'] = self.resetreplicationpoollinkuid
+        if self.warning and self.warning != data.get('warning', ''):
+            props['warning'] = str(self.warning) + "%"
         if self.etfcmoverallocationmax:
             if "%" not in self.etfcmoverallocationmax and self.etfcmoverallocationmax != "off":
                 self.etfcmoverallocationmax += "%"

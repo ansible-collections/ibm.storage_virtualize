@@ -580,6 +580,45 @@ class TestIBMSVCIPPartnership(unittest.TestCase):
         self.assertEqual(data, None)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_partnership_invalid_params(self, mock_auth, mock_soi):
+        """
+        Following parameters not supported during creation: pbrinuse
+        """
+        set_module_args({
+            'clustername': 'x.x.x.x',
+            'domain': '',
+            'username': 'username',
+            'password': 'password',
+            'remote_clustername': 'y.y.y.y',
+            'remote_domain': '',
+            'remote_username': 'remote username',
+            'remote_password': 'remote_password',
+            'log_path': 'playbook.log',
+            'state': 'present',
+            'remote_clusterip': 'y.y.y.y',
+            'type': 'ipv4',
+            'linkbandwidthmbits': 100,
+            'backgroundcopyrate': 50,
+            'compressed': 'yes',
+            'link1': 'portset2',
+            'remote_link1': 'portset1',
+            'pbrinuse': 'yes'
+        })
+        mock_soi.side_effect = [
+            {'console_IP': 'x.x.x.x:'},  # lssystem mock object
+            {},  # lspartnership detail mock object
+            {}  # lspartnership all mock object
+        ]
+        with pytest.raises(AnsibleFailJson) as exc:
+            ip = IBMSVCIPPartnership()
+            ip.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'Following parameter not supported during creation: pbrinuse')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -601,6 +640,39 @@ class TestIBMSVCIPPartnership(unittest.TestCase):
         ip = IBMSVCIPPartnership()
         data = ip.remove_partnership('local', 'y.y.y.y')
         self.assertEqual(data, None)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_remove_partnership_invalid_params(self, mock_auth, mock_soi):
+        """
+        Unsupported parameter during deletion: ['pbrinuse']
+        """
+        set_module_args({
+            'clustername': 'x.x.x.x',
+            'domain': '',
+            'username': 'username',
+            'password': 'password',
+            'remote_clustername': 'y.y.y.y',
+            'remote_domain': '',
+            'remote_username': 'remote username',
+            'remote_password': 'remote_password',
+            'log_path': 'playbook.log',
+            'state': 'absent',
+            'remote_cluster_id': 'ABCD',
+            'pbrinuse': 'yes'
+        })
+        mock_soi.side_effect = [
+            {'console_IP': 'x.x.x.x:'},  # lssystem mock object
+            {},  # lspartnership detail mock object
+            {}  # lspartnership all mock object
+        ]
+        with pytest.raises(AnsibleFailJson) as exc:
+            ip = IBMSVCIPPartnership()
+            ip.apply()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], "Unsupported parameter during deletion: ['pbrinuse']")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -715,7 +787,7 @@ class TestIBMSVCIPPartnership(unittest.TestCase):
             'test.log',
             ''
         )
-        mock_src.return_value = ''
+        mock_src.return_value = [{}]
         ip = IBMSVCIPPartnership()
         data = ip.start_partnership(restapi_local, '0000020428A03B90')
         self.assertEqual(data, None)

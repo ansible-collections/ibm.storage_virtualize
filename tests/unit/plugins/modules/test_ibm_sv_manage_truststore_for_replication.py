@@ -303,6 +303,147 @@ class TestIBMSVTrustStore(unittest.TestCase):
         self.assertTrue(exc.value.args[0]['changed'])
         self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
+           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
+    def test_create_truststore_for_flashsystem_grid(self, svc_connect_mock, ssh_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'name': 'truststore1',
+            'remote_clustername': 'x.x.x.x',
+            'remote_username': 'remote_username',
+            'remote_password': 'remote_password',
+            'state': 'present',
+            'flashgrid': 'on'
+        })
+        con_mock = Mock()
+        svc_connect_mock.return_value = True
+        ssh_mock.return_value = con_mock
+        stdin = Mock()
+        stdout = Mock()
+        stderr = Mock()
+        con_mock.exec_command.return_value = (stdin, stdout, stderr)
+        stdout.read.side_effect = iter([br'{}', b'', b''])
+        stdout.channel.recv_exit_status.return_value = 0
+
+        ts = IBMSVTrustStore()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            ts.apply()
+
+        self.assertTrue(exc.value.args[0]['changed'])
+        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
+           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
+    def test_create_truststore_for_flashsystem_grid_idempotency(self, svc_connect_mock, ssh_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'name': 'truststore1',
+            'remote_clustername': 'x.x.x.x',
+            'remote_username': 'remote_username',
+            'remote_password': 'remote_password',
+            'state': 'present',
+            'flashgrid': 'on'
+        })
+        con_mock = Mock()
+        svc_connect_mock.return_value = True
+        ssh_mock.return_value = con_mock
+        stdin = Mock()
+        stdout = Mock()
+        stderr = Mock()
+        con_mock.exec_command.return_value = (stdin, stdout, stderr)
+        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": "0"}', b'', b''])
+        stdout.channel.recv_exit_status.return_value = 0
+
+        ts = IBMSVTrustStore()
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            ts.apply()
+
+        self.assertFalse(exc.value.args[0]['changed'])
+        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
+           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
+    def test_failure_update_existing_truststore_for_flashsystem_grid(self, svc_connect_mock, ssh_mock):
+        '''
+        Test failure while trying to update a truststore that was created for flashsystem grid.
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'name': 'truststore1',
+            'remote_clustername': 'x.x.x.x',
+            'remote_username': 'remote_username',
+            'remote_password': 'remote_password',
+            'state': 'present',
+            'email': 'on'
+        })
+        con_mock = Mock()
+        svc_connect_mock.return_value = True
+        ssh_mock.return_value = con_mock
+        stdin = Mock()
+        stdout = Mock()
+        stderr = Mock()
+        con_mock.exec_command.return_value = (stdin, stdout, stderr)
+        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": "0"}', b''])
+        stdout.channel.recv_exit_status.side_effect = iter([0, 1])
+        stderr.read.return_value = br'CMMVC1274E The command failed as the trust store entry is being used for another member of the Flash Grid.'
+
+        ts = IBMSVTrustStore()
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            ts.apply()
+
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'],
+                         'CMMVC1274E The command failed as the trust store entry is being used for another member of the Flash Grid.')
+
+    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.'
+           'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
+    def test_failure_update_truststore_flashgrid_attr(self, svc_connect_mock, ssh_mock):
+        '''
+        Test failure while trying to update a truststore attribute flashgrid=on.
+        '''
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'name': 'truststore1',
+            'remote_clustername': 'x.x.x.x',
+            'remote_username': 'remote_username',
+            'remote_password': 'remote_password',
+            'state': 'present',
+            'flashgrid': 'on'
+        })
+        con_mock = Mock()
+        svc_connect_mock.return_value = True
+        ssh_mock.return_value = con_mock
+        stdin = Mock()
+        stdout = Mock()
+        stderr = Mock()
+        con_mock.exec_command.return_value = (stdin, stdout, stderr)
+        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": ""}', b'', b''])
+        stdout.channel.recv_exit_status.return_value = 0
+
+        ts = IBMSVTrustStore()
+
+        with pytest.raises(AnsibleFailJson) as exc:
+            ts.apply()
+
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'],
+                         'Invalid parameter for update: (flashgrid)')
+
 
 if __name__ == '__main__':
     unittest.main()
