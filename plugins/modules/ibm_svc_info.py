@@ -1357,7 +1357,7 @@ class IBMSVCGatherInfo(object):
             'availablepatch': ('Availablepatch', 'lsavailablepatch', False, '8.7.0.0'),
             'patch': ('Patch', 'lspatch', False, '8.5.4.0'),
             'systempatches': ('Systempatches', 'lssystempatches', False, '8.5.4.0'),
-            'flashgrid': ('FlashsystemGrid', 'lsflashgrid', False, '8..7.1.0'),
+            'flashgrid': ('FlashsystemGrid', 'lsflashgrid', False, '8.7.1.0'),
             'flashgridmembers': ('FlashsystemGridMembers', 'lsflashgridmembers', False, '8.7.2.0'),
             'flashgridsystem': ('FlashsystemGridSystem', 'lsflashgridsystem', False, '8.7.3.0'),
             'flashgridpartition': ('FlashsystemGridPartition', 'lsflashgridpartition', False, '8.7.2.0')
