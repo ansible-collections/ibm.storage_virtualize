@@ -72,7 +72,7 @@ options:
             - Specifies the type for the portset.
             - Applies only during creation of portset.
             - If not specified, I(portset_type=host) will be used.
-        choices: [ host, replication, highspeedreplication ]
+        choices: [ host, replication, highspeedreplication, management]
         type: str
     ownershipgroup:
         description:
@@ -195,6 +195,15 @@ EXAMPLES = '''
    password: "{{ password }}"
    name: portset1
    state: absent
+- name: Create a portset of type management
+  ibm.storage_virtualize.ibm_svc_manage_portset:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: portset1
+   portset_type: management
+   ownershipgroup: owner1
+   state: present
 '''
 
 RETURN = '''#'''
@@ -225,7 +234,7 @@ class IBMSVCPortset:
                 ),
                 portset_type=dict(
                     type='str',
-                    choices=['host', 'replication', 'highspeedreplication']
+                    choices=['host', 'replication', 'highspeedreplication', 'management']
                 ),
                 ownershipgroup=dict(
                     type='str',
