@@ -871,9 +871,6 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
 from ansible.module_utils._text import to_native
-from time import time, sleep
-
-MAX_API_ENDPOINT_CALLS_PER_SECOND = 10
 
 
 class IBMSVCGatherInfo(object):
@@ -1112,24 +1109,10 @@ class IBMSVCGatherInfo(object):
                                     list_object.append(obj[id_name])
                                 if len(list_object) == len(set(list_object)):  # Those commands in which all ids are unique (ex. lsmdisk, lsvdisk etc)
                                     cnt = 0
-                                    current_cmd_endpoint_calls_cnt = 0
-                                    start_time_cmd_endpoint_hit = time()
                                     for object_id in list_object:
-                                        current_time = time()
-                                        elapsed_time = current_time - start_time_cmd_endpoint_hit
-                                        # Adjust the request speed to keep command endpoints well within throttling limit
-                                        # Current limit is 10 APIs per limit. Let's leave 50% quota for other applications
-                                        # So, let's keep it limited to 5 requests per second from ansible.
-                                        if (current_cmd_endpoint_calls_cnt >= MAX_API_ENDPOINT_CALLS_PER_SECOND / 2) and\
-                                           (elapsed_time < 1):
-                                            self.log.info("API rate limit reached. Sleeping for a fraction of second.")
-                                            sleep(1 - elapsed_time)
-                                            current_cmd_endpoint_calls_cnt = 0
-
                                         op_key_list.append(self.restapi.svc_obj_info(cmd=cmd,
                                                                                      cmdopts=None,
                                                                                      cmdargs=[object_id]))
-                                        current_cmd_endpoint_calls_cnt += 1
                                         if cnt == 0:
                                             cnt += 1
                                             '''

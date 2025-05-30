@@ -323,21 +323,25 @@ class IBMSVCManageReplication(object):
         propscv = {}
         relationship_in_cg_error = "CMMVC5951E Individual relationship cannot be updated while it is part of a consistency group."
         if data['consistency_group_name']:
-            if self.copytype == 'GMCV':
-                if (data['copy_type'] != 'global' or data['cycling_mode'] != 'multi'):
-                    self.module.fail_json(msg=relationship_in_cg_error)
-                if self.cyclingperiod and self.cyclingperiod != data['cycle_period_seconds']:
-                    self.module.fail_json(msg=relationship_in_cg_error)
-            elif (self.copytype and self.copytype != data['copy_type']):
+            if self.cyclingperiod and self.cyclingperiod != data['cycle_period_seconds']:
                 self.module.fail_json(msg=relationship_in_cg_error)
-        if data['consistency_group_name'] and self.noconsistgrp:
-            props['noconsistgrp'] = self.noconsistgrp
-        if self.consistgrp is not None and self.consistgrp != data['consistency_group_name']:
-            props['consistgrp'] = self.consistgrp
+            if self.copytype:
+                if self.copytype == 'GMCV':
+                    if (data['copy_type'] != 'global' or data['cycling_mode'] != 'multi'):
+                        self.module.fail_json(msg=(relationship_in_cg_error))
+                elif self.copytype == 'global':
+                    if (data['copy_type'] != 'global' or data['cycling_mode'] != 'none'):
+                        self.module.fail_json(msg=relationship_in_cg_error)
+                elif self.copytype and self.copytype != data['copy_type']:
+                    self.module.fail_json(msg=relationship_in_cg_error)
         if self.master is not None and self.master != data['master_vdisk_name']:
             self.module.fail_json(msg="Parameter not supported for update operation: master")
         if self.aux is not None and self.aux != data['aux_vdisk_name']:
             self.module.fail_json(msg="Parameter not supported for update operation: aux")
+        if data['consistency_group_name'] and self.noconsistgrp:
+            props['noconsistgrp'] = self.noconsistgrp
+        if self.consistgrp is not None and self.consistgrp != data['consistency_group_name']:
+            props['consistgrp'] = self.consistgrp
         if self.copytype == 'global' and data['copy_type'] == 'metro':
             props['global'] = True
 

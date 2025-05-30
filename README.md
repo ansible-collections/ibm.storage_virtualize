@@ -17,7 +17,7 @@ For more information about communication, see the [Ansible communication guide](
 
 ## Requirements
 
-- Ansible version 2.16 or higher
+- Ansible version 2.15 or higher
 - Python 3.10 or higher for controller nodes
 
 ## Installation

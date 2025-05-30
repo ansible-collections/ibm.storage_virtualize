@@ -4,6 +4,27 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v2.7.4
+======
+
+Release Summary
+---------------
+
+Added fix for nginx timeout, playbooks for host rescan during partition migration, changed requirements as per ansible collection guidlelines and converted README files to README.md format.
+
+Minor Changes
+-------------
+
+- ibm_svc_host.py - Added support for adding and removing preferred location, and IO Groups
+- ibm_svc_hostcluster.py - Added support for adding site
+- ibm_svc_manage_volume - Added support for warning parameter
+
+Bugfixes
+--------
+
+- ibm_svc_ssh - Added fix for nginx timeout
+- ibm_svc_utils - Added fix for nginx timeout
+
 v2.7.3
 ======
 

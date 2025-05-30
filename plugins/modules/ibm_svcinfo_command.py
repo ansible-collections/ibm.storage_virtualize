@@ -43,6 +43,11 @@ options:
       storage Virtualize system.
     type: str
     required: true
+  domain:
+    description:
+    - Domain for the Storage Virtualize storage system.
+    - Valid when hostname is used for the parameter I(clustername).
+    type: str
   username:
     description:
     - Username for the Storage Virtualize system.
@@ -51,7 +56,6 @@ options:
   password:
     description:
     - Password for the Storage Virtualize system.
-    required: true
     type: str
   log_path:
     description:
@@ -73,7 +77,6 @@ EXAMPLES = '''
     usesshkey: "yes"
     clustername: "{{ clustername }}"
     username: "{{ username }}"
-    password:
     log_path: /tmp/ansible.log
 - name: Run sainfo CLI command
   ibm.storage_virtualize.ibm_svcinfo_command:
@@ -106,6 +109,7 @@ class IBMSVCsshClient(object):
 
         argument_spec.update(
             dict(
+                password=dict(type='str', required=False, no_log=True),
                 command=dict(type='str', required=False),
                 usesshkey=dict(type='str', required=False, default='no', choices=['yes', 'no']),
                 key_filename=dict(type='str', required=False)
@@ -130,14 +134,17 @@ class IBMSVCsshClient(object):
         # Required
         self.clustername = self.module.params['clustername']
         self.username = self.module.params['username']
-        self.password = self.module.params['password']
         self.log_path = log_path
+
+        # Optional
+        self.domain = self.module.params.get('domain', '')
+        self.password = self.module.params.get('password', '')
 
         # Handling missing mandatory parameter command
         if not self.command:
             self.module.fail_json(msg='Missing mandatory parameter: command')
 
-        if self.password is None:
+        if not self.password:
             if self.usesshkey == 'yes':
                 self.log("password is none and use ssh private key. Check for its path")
                 if self.key_filename:
@@ -154,8 +161,9 @@ class IBMSVCsshClient(object):
         self.ssh_client = IBMSVCssh(
             module=self.module,
             clustername=self.module.params['clustername'],
+            domain=self.domain,
             username=self.module.params['username'],
-            password=self.module.params['password'],
+            password=self.password,
             look_for_keys=self.look_for_keys,
             key_filename=self.key_filename,
             log_path=log_path

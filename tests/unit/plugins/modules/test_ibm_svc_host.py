@@ -365,6 +365,13 @@ class TestIBMSVChost(unittest.TestCase):
             'type': 'generic'
         })
         svc_obj_info_mock.side_effect = [
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"},
+                {"id": "3", "name": "io_grp3"},
+                {"id": "4", "name": "recovery_io_grp"}
+            ],
             {
                 "id": "2", "name": "test", "port_count": "1", "type": "generic", "iogrp_count": "3", "status": "degraded",
                 "site_id": "", "site_name": "", "host_cluster_id": "", "host_cluster_name": "", "protocol": "scsi",
@@ -375,13 +382,6 @@ class TestIBMSVChost(unittest.TestCase):
                 "ungrouped_volume_mapping": "no", "auto_storage_discovery": "no", "location_system_name": "", "auth_method": "",
                 "host_username": "", "storage_username": "", "host_secret": "no", "storage_secret": "no", "offline_alert_suppressed": "no"
             },
-            [
-                {"id": "0", "name": "io_grp0"},
-                {"id": "1", "name": "io_grp1"},
-                {"id": "2", "name": "io_grp2"},
-                {"id": "3", "name": "io_grp3"},
-                {"id": "4", "name": "recovery_io_grp"}
-            ],
             [
                 {"id": "0", "name": "io_grp0"},
                 {"id": "1", "name": "io_grp1"},
@@ -415,6 +415,13 @@ class TestIBMSVChost(unittest.TestCase):
             'type': 'generic'
         })
         svc_obj_info_mock.side_effect = [
+            [
+                {"id": "0", "name": "io_grp0"},
+                {"id": "1", "name": "io_grp1"},
+                {"id": "2", "name": "io_grp2"},
+                {"id": "3", "name": "io_grp3"},
+                {"id": "4", "name": "recovery_io_grp"}
+            ],
             {
                 "id": "2", "name": "test", "port_count": "1", "type": "generic", "iogrp_count": "3", "status": "degraded",
                 "site_id": "", "site_name": "", "host_cluster_id": "", "host_cluster_name": "", "protocol": "scsi",
@@ -425,13 +432,6 @@ class TestIBMSVChost(unittest.TestCase):
                 "ungrouped_volume_mapping": "no", "auto_storage_discovery": "no", "location_system_name": "", "auth_method": "",
                 "host_username": "", "storage_username": "", "host_secret": "no", "storage_secret": "no", "offline_alert_suppressed": "no"
             },
-            [
-                {"id": "0", "name": "io_grp0"},
-                {"id": "1", "name": "io_grp1"},
-                {"id": "2", "name": "io_grp2"},
-                {"id": "3", "name": "io_grp3"},
-                {"id": "4", "name": "recovery_io_grp"}
-            ],
             [
                 {"id": "0", "name": "io_grp0"},
                 {"id": "1", "name": "io_grp1"},
@@ -1258,7 +1258,7 @@ class TestIBMSVChost(unittest.TestCase):
             host_obj = IBMSVChost()
             host_obj.apply()
         self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Parameter location can only be entered when partition has been entered.")
+        self.assertEqual(exc.value.args[0]['msg'], "Parameter [location] can only be entered when [partition] has been entered.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -1340,6 +1340,63 @@ class TestIBMSVChost(unittest.TestCase):
             'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
             'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
             'site_id': '', 'site_name': 'site2', 'partition_name': 'ha-partition-0', 'location_system_id': '',
+            'location_system_name': ''
+        }
+
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_site_from_host(self, svc_authorize_mock,
+                                   get_existing_host_mock,
+                                   svc_run_command_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'site': '',
+        })
+        get_existing_host_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '2', 'site_name': 'site2', 'partition_name': 'ha-partition-0', 'location_system_id': '0000020438007A94',
+            'location_system_name': 'cluster123'
+        }
+        svc_run_command_mock.return_value = {
+            "message": "Success"
+        }
+        with pytest.raises(AnsibleExitJson) as exc:
+            host_obj = IBMSVChost()
+            host_obj.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_site_from_host_idempotency(self, svc_authorize_mock,
+                                               get_existing_host_mock):
+        set_module_args({
+            'clustername': '{{clustername}}',
+            'username': '{{username}}',
+            'password': '{{password}}',
+            'state': 'present',
+            'name': 'host0',
+            'site': '',
+        })
+        get_existing_host_mock.return_value = {
+            'id': '24', 'name': 'test', 'port_count': '5', 'type': 'generic',
+            'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+            'site_id': '', 'site_name': '', 'partition_name': 'ha-partition-0', 'location_system_id': '',
             'location_system_name': ''
         }
 

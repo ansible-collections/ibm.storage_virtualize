@@ -33,6 +33,11 @@ options:
             - The hostname or management IP of the Storage Virtualize system.
         required: true
         type: str
+    domain:
+        description:
+            - Domain for the Storage Virtualize storage system.
+            - Valid when hostname is used for the parameter I(clustername).
+        type: str
     username:
         description:
             - Username for the Storage Virtualize system.
@@ -115,6 +120,11 @@ options:
     remote_clustername:
         description:
             - Specifies the name of the partner remote cluster with which mTLS partnership needs to be setup.
+        type: str
+    remote_domain:
+        description:
+            - Domain for the Storage Virtualize storage system.
+            - Valid when hostname is used for the parameter I(remote_clustername).
         type: str
     remote_username:
         description:
@@ -259,6 +269,9 @@ class IBMSVTrustStore:
                 remote_clustername=dict(
                     type='str'
                 ),
+                remote_domain=dict(
+                    type='str'
+                ),
                 remote_username=dict(
                     type='str'
                 ),
@@ -287,6 +300,7 @@ class IBMSVTrustStore:
         self.key_filename = self.module.params['key_filename']
 
         # Optional parameters
+        self.domain = self.module.params.get('domain', '')
         self.password = self.module.params.get('password', '')
         self.name = self.module.params.get('name', '')
         self.syslog = self.module.params.get('syslog', '')
@@ -296,6 +310,7 @@ class IBMSVTrustStore:
         self.email = self.module.params.get('email', '')
         self.snmp = self.module.params.get('snmp', '')
         self.flashgrid = self.module.params.get('flashgrid', '')
+        self.remote_domain = self.module.params.get('remote_domain', '')
         self.remote_username = self.module.params.get('remote_username', '')
         self.remote_password = self.module.params.get('remote_password', '')
 
@@ -324,6 +339,7 @@ class IBMSVTrustStore:
         self.ssh_client = IBMSVCssh(
             module=self.module,
             clustername=self.module.params['clustername'],
+            domain=self.domain,
             username=self.module.params['username'],
             password=self.password,
             look_for_keys=self.look_for_keys,
@@ -382,12 +398,14 @@ class IBMSVTrustStore:
     def download_file(self):
         if self.module.check_mode:
             return
+
+        self.remote_hostname = f"{self.remote_clustername}.{self.remote_domain}" if self.remote_domain else self.remote_clustername
         cert_file = "rootcacertificate.pem" if self.flashgrid == "on" else "certificate.pem"
 
         # Assisted by watsonx Code Assistant
         cmd = 'scp -O -o stricthostkeychecking=no -o UserKnownHostsFile=/dev/null {0}@{1}:/dumps/{2} /upgrade/'.format(
               self.remote_username,
-              self.remote_clustername,
+              self.remote_hostname,
               cert_file)
 
         self.log('Command to be executed: %s', cmd)

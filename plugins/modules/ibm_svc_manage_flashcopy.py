@@ -288,14 +288,7 @@ class IBMSVCFlashcopy(object):
         self.force = self.module.params.get('force', False)
         self.old_name = self.module.params.get('old_name', '')
 
-        # Handline for mandatory parameter name
-        if not self.name:
-            self.module.fail_json(msg="Missing mandatory parameter: name")
-
-        # Handline for mandatory parameter state
-        if not self.state:
-            self.module.fail_json(msg="Missing mandatory parameter: state")
-
+        self.basic_checks()
         self.changed = False
 
         self.restapi = IBMSVCRestApi(
@@ -308,6 +301,15 @@ class IBMSVCFlashcopy(object):
             log_path=log_path,
             token=self.module.params['token']
         )
+
+    def basic_checks(self):
+        if self.state == 'absent':
+            invalids = ('copytype', 'source', 'target', 'mdiskgrp', 'consistgrp', 'noconsistgrp', 'copyrate', 'cleanrate', 'grainsize')
+            invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None}))
+            if invalid_exists:
+                self.module.fail_json(
+                    msg='state=absent but following parameters have been passed: {0}'.format(invalid_exists)
+                )
 
     def run_command(self, cmd):
         return self.restapi.svc_obj_info(cmd=cmd[0], cmdopts=cmd[1], cmdargs=cmd[2])

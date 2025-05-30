@@ -23,6 +23,11 @@ options:
     - The hostname or management IP of the Storage Virtualize system.
     type: str
     required: true
+  domain:
+    description:
+    - Domain for the Storage Virtualize storage system.
+    - Valid when hostname is used for the parameter I(clustername).
+    type: str
   username:
     description:
     - Username for the Storage Virtualize system.
@@ -67,6 +72,8 @@ class IBMSVCCompleteSetup(object):
         self.module = AnsibleModule(argument_spec=argument_spec,
                                     supports_check_mode=True)
 
+        self.domain = self.module.params.get('domain', '')
+
         # logging setup
         log_path = self.module.params['log_path']
         log = get_logger(self.__class__.__name__, log_path)
@@ -75,6 +82,7 @@ class IBMSVCCompleteSetup(object):
         self.ssh_client = IBMSVCssh(
             module=self.module,
             clustername=self.module.params['clustername'],
+            domain=self.domain,
             username=self.module.params['username'],
             password=self.module.params['password'],
             look_for_keys=None,

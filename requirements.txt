@@ -1,2 +1,2 @@
-cryptography>=44.0.2
-paramiko>=3.5.1
+cryptography
+paramiko

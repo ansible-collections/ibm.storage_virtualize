@@ -376,8 +376,11 @@ class IBMSVCmdiskgrp(object):
                 )
 
         elif self.state == 'absent':
-            invalids = ('warning', 'ownershipgroup', 'noownershipgroup', 'vdiskprotectionenabled', 'etfcmoverallocationmax', 'old_name')
-            invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None}))
+            invalids = ('datareduction', 'easytier', 'encrypt', 'ext', 'parentmdiskgrp',
+                        'safeguarded', 'noquota', 'unit', 'provisioningpolicy', 'noprovisioningpolicy',
+                        'replicationpoollinkuid', 'resetreplicationpoollinkuid', 'replication_partner_clusterid', 'size', 'warning',
+                        'ownershipgroup', 'noownershipgroup', 'vdiskprotectionenabled', 'etfcmoverallocationmax', 'old_name')
+            invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None, 'no', 'off'}))
 
             if invalid_exists:
                 self.module.fail_json(

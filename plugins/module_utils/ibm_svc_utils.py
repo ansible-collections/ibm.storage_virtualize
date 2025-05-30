@@ -14,12 +14,13 @@ import json
 import logging
 import uuid
 import inspect
+from time import sleep
 
 from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.7.3"
+COLLECTION_VERSION = "2.7.4"
 TIMEOUT = 600
 
 
@@ -51,6 +52,7 @@ def svc_ssh_argument_spec():
     """
     return dict(
         clustername=dict(type='str', required=True),
+        domain=dict(type='str', required=False),
         username=dict(type='str', required=True),
         password=dict(type='str', required=True, no_log=True),
         log_path=dict(type='str')
@@ -231,27 +233,35 @@ class IBMSVCRestApi(object):
             'X-Auth-Password': self.password
         }
 
-        rest = self._svc_rest(method='POST', headers=headers, cmd='auth',
-                              cmdopts=None, cmdargs=None)
+        max_retries = 3
 
-        rp_cmdopts = self.register_plugin_cmdopts()
+        for attempt in range(max_retries):
+            rest = self._svc_rest(method='POST', headers=headers, cmd='auth',
+                                  cmdopts=None, cmdargs=None)
 
-        if rest['err']:
+            if rest.get('code') != 429:
+                break
+
+            self.log("Authorization attempt failed with 429. Retrying... (%d/%d)", attempt + 1, max_retries)
+            sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+            attempt += 1
+
+        if rest.get('err'):
             return None
 
         out = rest['out']
-        if out:
-            if 'token' in out:
-                try:
-                    rp_headers = {
-                        'Content-Type': 'application/json',
-                        'X-Auth-Token': out['token']
-                    }
-                    self._svc_rest(method='POST', headers=rp_headers, cmd="registerplugin",
-                                   cmdopts=rp_cmdopts, cmdargs=None)
-                except Exception as e:
-                    pass
-                return out['token']
+        if out and ('token' in out):
+            try:
+                rp_headers = {
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': out['token']
+                }
+                rp_cmdopts = self.register_plugin_cmdopts()
+                self._svc_rest(method='POST', headers=rp_headers, cmd="registerplugin",
+                               cmdopts=rp_cmdopts, cmdargs=None)
+            except Exception:
+                pass
+            return out['token']
 
         return None
 
@@ -277,8 +287,20 @@ class IBMSVCRestApi(object):
             'X-Auth-Token': self.token
         }
 
-        return self._svc_rest(method='POST', headers=headers, cmd=cmd,
-                              cmdopts=cmdopts, cmdargs=cmdargs, timeout=timeout)
+        max_retries = 3
+        attempt = 0
+        rest = None
+
+        while attempt < max_retries:
+            rest = self._svc_rest(method='POST', headers=headers, cmd=cmd,
+                                  cmdopts=cmdopts, cmdargs=cmdargs, timeout=timeout)
+
+            if rest['code'] != 429:
+                break  # Exit the loop if not rate-limited
+            self.log("REST API failed with 429. Retrying... (%d/%d)", attempt + 1, max_retries)
+            sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+            attempt += 1
+        return rest
 
     def svc_run_command(self, cmd, cmdopts, cmdargs, timeout=TIMEOUT):
         """ Generic execute a SVC command

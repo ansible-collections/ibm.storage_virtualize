@@ -61,7 +61,6 @@ options:
     description:
       - The storage pool (mdiskgrp) to which you want to add the MDisk.
     type: str
-    required: true
   log_path:
     description:
       - Path of debug log file.
@@ -177,7 +176,7 @@ class IBMSVCmdisk(object):
                                                 'raid6', 'raid10']),
                 drive=dict(type='str', default=None),
                 encrypt=dict(type='str', default='no', choices=['yes', 'no']),
-                mdiskgrp=dict(type='str', required=True),
+                mdiskgrp=dict(type='str'),
                 driveclass=dict(type='str'),
                 drivecount=dict(type='str'),
                 stripewidth=dict(type='str'),
@@ -237,6 +236,8 @@ class IBMSVCmdisk(object):
                 self.module.fail_json(msg="The parameters 'drive' and "
                                       "'driveclass, drivecount, stripewidth' are mutually exclusive.")
         elif self.state == 'absent':
+            if not self.mdiskgrp:
+                self.module.fail_json(msg="Parameter [mdiskgrp] is required when deleting an MDisk.")
             invalids = ('drive', 'driveclass', 'level', 'drivecount', 'old_name', 'stripewidth', 'tier')
             invalid_exists = ', '.join((var for var in invalids if getattr(self, var) not in {'', None}))
 
@@ -298,8 +299,7 @@ class IBMSVCmdisk(object):
         if not self.level:
             self.module.fail_json(msg="You must pass in level to the module.")
         if not self.mdiskgrp:
-            self.module.fail_json(msg="You must pass in "
-                                      "mdiskgrp to the module.")
+            self.module.fail_json(msg="You must pass in mdiskgrp to the module.")
 
         if self.module.check_mode:
             self.changed = True

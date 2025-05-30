@@ -411,6 +411,27 @@ class TestIBMSVCmdisk(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_mdisk_parameter_missing(self, svc_authorize_mock,
+                                            get_existing_mdisk_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'absent',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_delete_mdisk_invalid_parameter',
+        })
+        get_existing_mdisk_mock.return_value = []
+        with pytest.raises(AnsibleFailJson) as exc:
+            obj = IBMSVCmdisk()
+            obj.apply()
+        self.assertEqual(True, exc.value.args[0]["failed"])
+        self.assertEqual(exc.value.args[0]["msg"], "Parameter [mdiskgrp] is required when deleting an MDisk.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_delete')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -457,8 +478,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'mdisk1',
-            'tier': 'tier1_flash',
-            'mdiskgrp': 'Pool',
+            'tier': 'tier1_flash'
         })
         get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
                                                 "status": "online", "mode": "array", "mdisk_grp_id": "0",
@@ -489,7 +509,6 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'mdisk1',
             'tier': 'tier0_flash',
-            'mdiskgrp': 'Pool',
         })
         get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
                                                 "status": "online", "mode": "array", "mdisk_grp_id": "0",

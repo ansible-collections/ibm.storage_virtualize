@@ -827,10 +827,6 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'ansible_pool',
-            'datareduction': 'no',
-            'easytier': 'auto',
-            'encrypt': 'no',
-            'ext': '1024',
         })
         get_existing_pool_mock.return_value = []
         pool_deleted = IBMSVCmdiskgrp()
@@ -888,6 +884,56 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             pool_deleted.apply()
         self.assertTrue(exc.value.args[0]['changed'])
         get_existing_pool_mock.assert_called_with("ansible_pool")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_pool_invalid_params(self,
+                                        svc_authorize_mock,
+                                        get_existing_pool_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'absent',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_pool',
+            'datareduction': 'no',
+            'easytier': 'auto',
+            'encrypt': 'no',
+            'ext': '1024',
+        })
+        pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
+                    "status": "online", "mdisk_count": "1",
+                    "vdisk_count": "1",
+                    "capacity": "5.23TB", "extent_size": "1024",
+                    "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
+                    "used_capacity": "4.00GB", "real_capacity": "4.00GB",
+                    "overallocation": "0", "warning": "0", "easy_tier": "on",
+                    "easy_tier_status": "balanced",
+                    "compression_active": "no",
+                    "compression_virtual_capacity": "0.00MB",
+                    "compression_compressed_capacity": "0.00MB",
+                    "compression_uncompressed_capacity": "0.00MB",
+                    "parent_mdisk_grp_id": "0",
+                    "parent_mdisk_grp_name": "Pool_Ansible_collections",
+                    "child_mdisk_grp_count": "0",
+                    "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
+                    "encrypt": "no", "owner_type": "none", "owner_id": "",
+                    "owner_name": "", "site_id": "", "site_name": "",
+                    "data_reduction": "no",
+                    "used_capacity_before_reduction": "0.00MB",
+                    "used_capacity_after_reduction": "0.00MB",
+                    "overhead_capacity": "0.00MB",
+                    "deduplication_capacity_saving": "0.00MB",
+                    "reclaimable_capacity": "0.00MB",
+                    "easy_tier_fcm_over_allocation_max": "100%"}
+        get_existing_pool_mock.return_value = pool_ret
+        with pytest.raises(AnsibleFailJson) as exc:
+            pool_deleted = IBMSVCmdiskgrp()
+        self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'], 'state=absent but following parameters have been passed: easytier, ext')
 
 
 if __name__ == '__main__':

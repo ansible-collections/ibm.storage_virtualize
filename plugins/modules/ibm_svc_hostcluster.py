@@ -72,6 +72,12 @@ options:
             - Specifies that all hosts in the host cluster and the associated host cluster object be deleted.
             - Applies when I(state=absent).
         type: bool
+    site:
+        description:
+            - Specifies the site name of the all hosts in the hostcluster.
+            - Valid when I(state=present), to modify an existing hostcluster.
+        type: str
+        version_added: '2.7.0'
     log_path:
         description:
             - Path of debug log file.
@@ -139,7 +145,8 @@ class IBMSVChostcluster(object):
                                                                'present']),
                 ownershipgroup=dict(type='str'),
                 noownershipgroup=dict(type='bool'),
-                removeallhosts=dict(type='bool')
+                removeallhosts=dict(type='bool'),
+                site=dict(type='str')
             )
         )
 
@@ -161,10 +168,7 @@ class IBMSVChostcluster(object):
         self.ownershipgroup = self.module.params.get('ownershipgroup', '')
         self.noownershipgroup = self.module.params.get('noownershipgroup', '')
         self.removeallhosts = self.module.params.get('removeallhosts', '')
-
-        # Handling missing mandatory parameter name
-        if not self.name:
-            self.module.fail_json(msg='Missing mandatory parameter: name')
+        self.site = self.module.params.get('site', '')
 
         self.restapi = IBMSVCRestApi(
             module=self.module,
@@ -177,45 +181,51 @@ class IBMSVChostcluster(object):
             token=self.module.params['token']
         )
 
+    def basic_checks(self):
+        if not self.name:
+            self.module.fail_json(msg='Missing mandatory parameter: [name]')
+
+        if self.state == 'present' and self.removeallhosts:
+            self.module.fail_json(msg="Parameter [removeallhosts] can be used only while deleting hostcluster")
+
+        if self.ownershipgroup and self.noownershipgroup:
+            self.module.fail_json(msg='Mutually exclusive parameters: [ownershipgroup, noownershipgroup]')
+
     def get_existing_hostcluster(self):
-        merged_result = {}
-
-        data = self.restapi.svc_obj_info(cmd='lshostcluster', cmdopts=None,
-                                         cmdargs=[self.name])
-
-        if isinstance(data, list):
-            for d in data:
-                merged_result.update(d)
-        else:
-            merged_result = data
-
-        return merged_result
+        return self.restapi.svc_obj_info(cmd='lshostcluster', cmdopts=None, cmdargs=[self.name]) or {}
 
     def hostcluster_probe(self, data):
         props = []
-        if self.removeallhosts:
-            self.module.fail_json(msg="Parameter 'removeallhosts' can be used only while deleting hostcluster")
 
-        if self.ownershipgroup and self.noownershipgroup:
-            self.module.fail_json(msg="You must not pass in both 'ownershipgroup' and "
-                                      "'noownershipgroup' to the module.")
+        if self.ownershipgroup and self.ownershipgroup != data['owner_name']:
+            props.append('ownershipgroup')
 
-        if data['owner_name'] and self.noownershipgroup:
-            props += ['noownershipgroup']
+        if self.noownershipgroup and data['owner_name'] != "":
+            props.append('noownershipgroup')
 
-        if self.ownershipgroup and (not data['owner_name'] or self.ownershipgroup != data['owner_name']):
-            props += ['ownershipgroup']
+        if self.site:
+            site_update_required = False
+            existing_hosts = self.restapi.svc_obj_info(cmd='lshost', cmdopts={'filtervalue' : 'host_cluster_name={0}'.format(self.name)}, cmdargs=None)
 
-        if props is []:
-            props = None
+            conflict_hosts = []
+            for host in existing_hosts:
+                if host['site_name'] == "":
+                    site_update_required = True
+                elif self.site != host['site_name'] and self.site != host['site_id']:
+                    conflict_hosts.append(f"{host['name']} (Current site: {host['site_name']})")
 
-        self.log("hostcluster_probe props='%s'", data)
+            if conflict_hosts:
+                self.module.fail_json(
+                    msg=f"Cannot update host cluster site to [{self.site}]. "
+                        f"The following hosts already have a different site: {', '.join(conflict_hosts)}"
+                )
+            if site_update_required:
+                props.append('site')
+
+        self.log("hostcluster_probe props='%s'", props)
         return props
 
     def hostcluster_create(self):
-        if self.removeallhosts:
-            self.module.fail_json(msg="Parameter 'removeallhosts' cannot be passed while creating hostcluster")
-
         if self.module.check_mode:
             self.changed = True
             return
@@ -227,8 +237,7 @@ class IBMSVChostcluster(object):
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup
 
-        self.log("creating host cluster command opts '%s'",
-                 self.ownershipgroup)
+        self.log("creating host cluster command opts '%s'", self.ownershipgroup)
 
         # Run command
         result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
@@ -238,8 +247,7 @@ class IBMSVChostcluster(object):
             self.changed = True
             self.log("create host cluster result message '%s'", (result['message']))
         else:
-            self.module.fail_json(
-                msg="Failed to create host cluster [%s]" % self.name)
+            self.module.fail_json(msg="Failed to create host cluster [%s]" % self.name)
 
     def hostcluster_update(self, modify):
         if self.module.check_mode:
@@ -249,14 +257,12 @@ class IBMSVChostcluster(object):
         self.log("updating host cluster '%s'", self.name)
         cmd = 'chhostcluster'
         cmdopts = {}
-        if 'ownershipgroup' in modify:
-            cmdopts['ownershipgroup'] = self.ownershipgroup
-        elif 'noownershipgroup' in modify:
-            cmdopts['noownershipgroup'] = self.noownershipgroup
+
+        for param in modify:
+            cmdopts[param] = getattr(self, param)
 
         if cmdopts:
-            cmdargs = [self.name]
-            self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+            self.restapi.svc_run_command(cmd, cmdopts, cmdargs=[self.name])
             # Any error will have been raised in svc_run_command
             # chhost does not output anything when successful.
             self.changed = True
@@ -288,6 +294,7 @@ class IBMSVChostcluster(object):
         msg = None
         modify = []
 
+        self.basic_checks()
         hc_data = self.get_existing_hostcluster()
 
         if hc_data:

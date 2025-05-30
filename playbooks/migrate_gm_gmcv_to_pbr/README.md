@@ -1,4 +1,7 @@
-# Automated migration of Global Mirror & GMCV (Global Mirror with change volumes) relationships & consistency groups to PBR (Policy-based Replication)
+<a id="readme-top"></a>
+
+# Automated Migration of Global Mirror & GMCV (Global Mirror with Change Volumes) Relationships & Consistency Groups to PBR (Policy-based Replication)
+
 This document runs through the Ansible playbooks required for the migration of Global Mirror and GMCV (Global Mirror with change volumes) relationships and consistency groups to PBR (Policy-based Replication).
 
 ## Table of Contents
@@ -12,7 +15,7 @@ This document runs through the Ansible playbooks required for the migration of G
 Migrate Global Mirror & GMCV (Global Mirror with Change Volumes) relationships and consistency groups to PBR (Policy-based Replication) while maintaining a consistent secondary copy.
 
 ## Prerequisites
-- IBM Storage Virtualize Ansible Collection must be installed (v1.5.0+).
+- IBM Storage Virtualize Ansible Collection v2.5.0 or later must be installed.
 - Both systems should support PBR. Supported builds are - 8.6.0.x or 8.7.0.x.
 - Both systems must have working GM/GMCV relationships and/or consistency groups (implying working partnerships).
 - Global Mirror relationships/consistency groups must be in `Consistent Synchronized` state while GMCV relationships/consistency groups must be in `Consistent Copying` state, if the state is `Inconsistent Copying` or `Inconsistent Stopped`, the playbook will try to bring these relationships/consistency groups into the required states, but may fail to do so if the state does not change in a pre-defined time interval.
@@ -42,6 +45,8 @@ Migrating Global Mirror, GMCV to PBR currently has 6 executable playbooks -
 >[!NOTE]
 > Only the .yaml files which do not begin with an underscore are meant to be executed as Ansible Playbooks.
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 These playbooks can be found in the repository as - 
 ```
 ibm.storage_virtualize    
@@ -68,11 +73,14 @@ ibm.storage_virtualize
     │ └─inventory.yaml
     │ └─...
     │
-    └─GM_GMCV_to_PBR.md
+    └─README.md
 ...
 ```
 >[!NOTE]
-> For delayed cleanup, a file named inventory_cleanup_[ir/prefix/cg]_master_system_name_aux_system_name.ini will be created which will contain the necessary information to clean up the GM/GMCV setup. Due to security concerns, security credentials will not be added to this file. Thus, before running the cleanup playbook, these credentials should be added to the file, and the name of the inventory file should be added to the vars_files section of the cleanup playbook.
+> For delayed cleanup, a file named `inventory_cleanup_[ir/prefix/cg]_master_system_name_aux_system_name.ini` will be created which will contain the necessary information to clean up the GM/GMCV setup. Due to security concerns, security credentials will not be added to this file. Thus, before running the cleanup playbook, these credentials should be added to the file, and the name of the inventory file should be added to the vars_files section of the cleanup playbook.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 ## Variables
 
 ### Common Variables
@@ -125,3 +133,5 @@ ibm.storage_virtualize
 ## Authors
 - Sumit Kumar Gupta (SUMIT.GUPTA16@ibm.com)
 - Prathamesh Deshpande (prathamesh.deshpande@ibm.com)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
