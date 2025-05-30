@@ -2,7 +2,7 @@
 
 namespace: ibm
 name: storage_virtualize
-version: 2.7.3
+version: 2.7.4
 readme: README.md
 authors:
   - Sumit Kumar Gupta (github.com/sumitguptaibm)

@@ -15,19 +15,21 @@ import uuid
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
-COLLECTION_VERSION = "2.7.3"
+COLLECTION_VERSION = "2.7.4"
 
 
 class IBMSVCssh(object):
     """ Communicate with SVC through SSH
-        The module use paramiko to connect SVC
+        The module uses paramiko to connect SVC
     """
 
-    def __init__(self, module, clustername, username, password,
+    def __init__(self, module, clustername, domain, username, password,
                  look_for_keys, key_filename, log_path):
         """ Initialize module with what we need for initial connection
         :param clustername: name of the SVC cluster
         :type clustername: string
+        :param domain: domain to create FQDN of SVC system
+        :type domain: string
         :param username: SVC username
         :type username: string
         :param password: Password for user
@@ -41,6 +43,7 @@ class IBMSVCssh(object):
         """
         self.module = module
         self.clustername = clustername
+        self.domain = domain
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
@@ -70,9 +73,14 @@ class IBMSVCssh(object):
         """
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.hostname = self.clustername
+        self.log(self.domain)
+        if self.domain:
+            self.hostname = f"{self.clustername}.{self.domain}"
+        self.log(self.hostname)
         try:
             self.client.connect(
-                hostname=self.clustername,
+                hostname=self.hostname,
                 username=self.username,
                 password=self.password,
                 look_for_keys=self.look_for_keys,

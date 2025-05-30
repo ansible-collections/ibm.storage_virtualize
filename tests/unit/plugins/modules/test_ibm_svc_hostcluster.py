@@ -93,10 +93,10 @@ class TestIBMSVChostcluster(unittest.TestCase):
             'password': 'password',
             'name': 'ansible_hostcluster',
         })
-        hostcluster_ret = [{"id": "1", "name": "ansible_hostcluster", "port_count": "1",
-                            "mapping_count": "4", "status": "offline", "host_count": "1",
-                            "protocol": "nvme", "owner_id": "",
-                            "owner_name": ""}]
+        hostcluster_ret = {
+            "id": "1", "name": "ansible_hostcluster", "port_count": "1", "mapping_count": "4", "status": "offline", "host_count": "1", "protocol": "nvme",
+            "owner_id": "", "owner_name": ""
+        }
         svc_obj_info_mock.return_value = hostcluster_ret
         host = IBMSVChostcluster().get_existing_hostcluster()
         self.assertEqual('ansible_hostcluster', host['name'])
@@ -337,6 +337,89 @@ class TestIBMSVChostcluster(unittest.TestCase):
             h = IBMSVChostcluster()
             h.apply()
         self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_modify_site(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'state': 'present',
+            'name': 'test_hostcluster_0',
+            'site': 'site1',
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                "id": "0", "name": "test_hostcluster_0", "status": "online", "host_count": "2", "mapping_count": "0",
+                "port_count": "2", "protocol": "scsi", "owner_id": "", "owner_name": ""
+            },
+            [
+                {
+                    "id": "0", "name": "test_host_0", "port_count": "1", "iogrp_count": "2", "status": "online", "site_id": "", "site_name": "",
+                    "host_cluster_id": "0", "host_cluster_name": "test_hostcluster_0", "protocol": "scsi", "owner_id": "", "owner_name": "", "portset_id": "0",
+                    "portset_name": "portset0", "partition_id": "", "partition_name": "", "draft_partition_id": "", "draft_partition_name": "",
+                    "ungrouped_volume_mapping": "no", "location_system_name": ""
+                },
+                {
+                    "id": "1", "name": "test_host_1", "port_count": "1", "iogrp_count": "2", "status": "online", "site_id": "", "site_name": "",
+                    "host_cluster_id": "0", "host_cluster_name": "test_hostcluster_0", "protocol": "scsi", "owner_id": "", "owner_name": "", "portset_id": "0",
+                    "portset_name": "portset0", "partition_id": "", "partition_name": "", "draft_partition_id": "", "draft_partition_name": "",
+                    "ungrouped_volume_mapping": "no", "location_system_name": ""
+                }
+            ]
+        ]
+        hostcluster_update = IBMSVChostcluster()
+        with pytest.raises(AnsibleExitJson) as exc:
+            hostcluster_update.apply()
+        self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_modify_site(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'password': 'password',
+            'state': 'present',
+            'name': 'test_hostcluster_0',
+            'site': 'site2',
+        })
+        svc_obj_info_mock.side_effect = [
+            {
+                "id": "0", "name": "test_hostcluster_0", "status": "online", "host_count": "2", "mapping_count": "0",
+                "port_count": "2", "protocol": "scsi", "owner_id": "", "owner_name": ""
+            },
+            [
+                {
+                    "id": "0", "name": "test_host_0", "port_count": "1", "iogrp_count": "2", "status": "online", "site_id": "", "site_name": "",
+                    "host_cluster_id": "0", "host_cluster_name": "test_hostcluster_0", "protocol": "scsi", "owner_id": "", "owner_name": "", "portset_id": "0",
+                    "portset_name": "portset0", "partition_id": "", "partition_name": "", "draft_partition_id": "", "draft_partition_name": "",
+                    "ungrouped_volume_mapping": "no", "location_system_name": ""
+                },
+                {
+                    "id": "1", "name": "test_host_1", "port_count": "1", "iogrp_count": "2", "status": "online", "site_id": "1", "site_name": "site1",
+                    "host_cluster_id": "0", "host_cluster_name": "test_hostcluster_0", "protocol": "scsi", "owner_id": "", "owner_name": "", "portset_id": "0",
+                    "portset_name": "portset0", "partition_id": "", "partition_name": "", "draft_partition_id": "", "draft_partition_name": "",
+                    "ungrouped_volume_mapping": "no", "location_system_name": ""
+                }
+            ]
+        ]
+        hostcluster_update = IBMSVChostcluster()
+        with pytest.raises(AnsibleFailJson) as exc:
+            hostcluster_update.apply()
+        # self.assertTrue(exc.value.args[0]['failed'])
+        self.assertEqual(exc.value.args[0]['msg'],
+                         "Cannot update host cluster site to [site2]. The following hosts already have a different site: test_host_1 (Current site: site1)"
+                         )
 
 
 if __name__ == '__main__':

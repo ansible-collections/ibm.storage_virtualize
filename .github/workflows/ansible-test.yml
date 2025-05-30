@@ -55,6 +55,7 @@ jobs:
           # around creation of a new stable branch, this might cause a problem
           # that two different versions of ansible-test use the same sanity test
           # ignore.txt file.
+          - stable-2.15
           - stable-2.16
           - stable-2.17
           - stable-2.18
@@ -114,6 +115,7 @@ jobs:
         ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
+          - stable-2.15
           - stable-2.16
           - stable-2.17
           - stable-2.18
@@ -124,6 +126,10 @@ jobs:
           - '3.13'
         exclude:
           # Python 3.10 will not be supported in ansible 2.18 and later. Python 3.13 support started with ansible 2.18.
+          - ansible: stable-2.15
+            python: '3.12'
+          - ansible: stable-2.15
+            python: '3.13'
           - ansible: stable-2.16
             python: '3.13'
           - ansible: stable-2.17
@@ -185,6 +191,7 @@ jobs:
         ansible:
           # The commented branches below are EOL,
           # do you really need your collection to support them if it still does?
+          - stable-2.15
           - stable-2.16
           - stable-2.17
           - stable-2.18
@@ -197,6 +204,10 @@ jobs:
           - '3.13'
         exclude:
           # Python 3.10 will not be supported in ansible 2.18 and later. Python 3.13 support started with ansible 2.18.
+          - ansible: stable-2.15
+            python: '3.12'
+          - ansible: stable-2.15
+            python: '3.13'
           - ansible: stable-2.16
             python: '3.13'
           - ansible: stable-2.17

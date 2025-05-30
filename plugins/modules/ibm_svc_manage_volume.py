@@ -62,6 +62,14 @@ options:
       - Defines the size of the volume. This parameter can also be used to resize an existing volume.
       - Required when I(state=present), to create or modify a volume.
     type: str
+  warning:
+    description:
+      - Raises a warning when the used disk capacity on the thin-provisioned copy first exceeds the specified threshold.
+      - The value is specified as a percentage of the total capacity of the thin-provisioned volume, hence it must be between 0 and 100.
+      - When not specified, the default value is 80%.
+      - Valid when I(state=present), to create or modify a thin-provisioned or compressed volume.
+    type: int
+    version_added: '2.7.0'
   unit:
     description:
       - Specifies the data units to use with the capacity that is specified by the 'size' parameter.
@@ -354,6 +362,7 @@ class IBMSVCvolume(object):
                 state=dict(type='str', required=True, choices=['absent', 'present']),
                 pool=dict(type='str', required=False),
                 size=dict(type='str', required=False),
+                warning=dict(type='int', required=False),
                 unit=dict(type='str', default='mb', choices=['b', 'kb',
                                                              'mb', 'gb',
                                                              'tb', 'pb']),
@@ -390,6 +399,7 @@ class IBMSVCvolume(object):
         # Optional Parameters
         self.pool = self.module.params['pool']
         self.size = self.module.params['size']
+        self.warning = self.module.params['warning']
         self.unit = self.module.params['unit']
         self.iogrp = self.module.params['iogrp']
         self.buffersize = self.module.params['buffersize']
@@ -450,6 +460,8 @@ class IBMSVCvolume(object):
             self.module.fail_json(msg='Missing mandatory parameter: [{0}]'.format(', '.join(missing)))
         if self.volumegroup and self.novolumegroup:
             self.module.fail_json(msg='Mutually exclusive parameters detected: [volumegroup] and [novolumegroup]')
+        if self.thin and self.compressed:
+            self.module.fail_json(msg='Mutually exclusive parameters detected: [thin] and [compressed]')
         if self.state == 'present' and self.unmap is not None:
             self.module.fail_json(msg='Parameter [unmap] cannot be specified when creating or updating a volume.')
 
@@ -457,7 +469,7 @@ class IBMSVCvolume(object):
     def volume_deletion_parameter_validation(self):
         invalids = ('pool', 'size', 'iogrp', 'buffersize', 'volumegroup', 'novolumegroup',
                     'thin', 'compressed', 'deduplicated', 'old_name', 'enable_cloud_snapshot',
-                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume')
+                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume', 'warning')
 
         invalid_params = ', '.join((param for param in invalids if getattr(self, param)))
 
@@ -479,6 +491,9 @@ class IBMSVCvolume(object):
 
         if (self.type and not self.fromsourcevolume) or (self.fromsourcevolume and not self.type):
             self.module.fail_json(msg='Parameters [type] and [fromsourcevolume] parameters must be used together')
+
+        if (self.warning) and not self.thin and not self.compressed:
+            self.module.fail_json(msg='Parameter [warning] is invalid without [thin] or [compressed]')
 
         missing = []
         if self.type and self.fromsourcevolume:
@@ -634,6 +649,8 @@ class IBMSVCvolume(object):
             cmdopts['buffersize'] = self.buffersize
         if self.name:
             cmdopts['name'] = self.name
+        if self.warning:
+            cmdopts['warning'] = str(self.warning) + '%'
         if self.type:
             cmdopts['type'] = self.type
             snapshot_id = self.create_transient_snapshot()
@@ -705,6 +722,14 @@ class IBMSVCvolume(object):
                     props['size'] = {
                         'shrink': existing_size - input_size
                     }
+        if self.warning:
+            # Check for standard or compressed volume
+            if (data[0]['capacity'] != data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'yes'):
+                if (int(data[1]['warning']) != (self.warning)):
+                    props['warning'] = str(self.warning) + '%'
+            else:
+                self.module.fail_json(msg='Parameter [warning] is applicable only for thin-provisioned and compressed volumes.')
+
         # check for changes in volumegroup
         if self.volumegroup:
             if self.volumegroup != data[0]['volume_group_name']:
@@ -881,12 +906,13 @@ class IBMSVCvolume(object):
         if 'cloud_backup' in modify:
             self.update_cloud_backup()
 
-        # updating volumegroup, novolumegroup of a volume
         cmdopts = {}
         if 'volumegroup' in modify:
             cmdopts['volumegroup'] = modify['volumegroup']['name']
         if 'novolumegroup' in modify:
             cmdopts['novolumegroup'] = modify['novolumegroup']['status']
+        if 'warning' in modify:
+            cmdopts['warning'] = modify['warning']
         if cmdopts:
             self.restapi.svc_run_command(
                 'chvdisk',

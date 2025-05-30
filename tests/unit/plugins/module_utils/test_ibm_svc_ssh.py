@@ -55,7 +55,7 @@ class TestIBMSVModuleUtilsSsh(unittest.TestCase):
         self.mock_module_helper.start()
         self.addCleanup(self.mock_module_helper.stop)
         self.sshclient = IBMSVCssh(self.mock_module_helper, '1.2.3.4',
-                                   'username', 'password',
+                                   'domain', 'username', 'password',
                                    False, '', 'test.log')
 
     def set_default_args(self):
@@ -91,7 +91,7 @@ class TestIBMSVModuleUtilsSsh(unittest.TestCase):
             print("paramiko is not installed")
 
         self.sshclient = IBMSVCssh(self.mock_module_helper, '1.2.3.4',
-                                   'username', 'password',
+                                   'domain', 'username', 'password',
                                    False, '', 'test.log')
         ssh_mock.exec_command.return_value = None
         result = self.sshclient.register_plugin()

@@ -99,6 +99,7 @@ options:
         description:
             - Specifies the site name of the host.
             - Valid when I(state=present), to create or modify a host.
+            - If I(site) is specified as an empty string (""), it is treated as nosite, indicating the removal of the existing site.
         type: str
     hostcluster:
         description:
@@ -340,6 +341,14 @@ EXAMPLES = '''
     state: present
     name: host0
     location: ""
+- name: Remove the currently set site from host.
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: '{{ clustername }}'
+    username: '{{ username }}'
+    password: '{{ password }}'
+    state: present
+    name: host0
+    site: ""
 '''
 
 RETURN = '''#'''
@@ -348,6 +357,8 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
 from ansible.module_utils._text import to_native
+
+CMMVC5737E_MESSAGE = 'CMMVC5737E The parameter {0} has been entered multiple times. Enter the parameter only one time.'
 
 
 class IBMSVChost(object):
@@ -417,8 +428,6 @@ class IBMSVChost(object):
         self.suppressofflinealert = self.module.params.get('suppressofflinealert', '')
         self.location = self.module.params.get('location', '')
 
-        self.basic_checks()
-
         # internal variable
         self.changed = False
 
@@ -426,21 +435,19 @@ class IBMSVChost(object):
         if self.fcwwpn:
             dup_fcwwpn = self.duplicate_checker(self.fcwwpn.split(':'))
             if dup_fcwwpn:
-                self.module.fail_json(msg='The parameter {0} has been entered multiple times. Enter the parameter only one time.'.format(dup_fcwwpn))
+                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_fcwwpn))
 
         # Handling duplicate iscsiname
         if self.iscsiname:
             dup_iscsiname = self.duplicate_checker(self.iscsiname.split(','))
             if dup_iscsiname:
-                self.module.fail_json(msg='The parameter {0} has been entered multiple times. Enter the parameter only one time.'.format(dup_iscsiname))
+                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_iscsiname))
 
         # Handling duplicate nqn
         if self.nqn:
             dup_nqn = self.duplicate_checker(self.nqn.split(','))
             if dup_nqn:
-                self.module.fail_json(
-                    msg='The parameter {0} has been entered multiple times. Enter the parameter only one time.'.format(
-                        dup_nqn))
+                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_nqn))
 
         # Handling for missing mandatory parameter name
         if not self.name:
@@ -473,16 +480,39 @@ class IBMSVChost(object):
             )
             for param1, param2 in mutually_exclusive:
                 if getattr(self, param1) and getattr(self, param2):
-                    self.module.fail_json(
-                        msg='Mutually exclusive parameters: {0}, {1}'.format(param1, param2)
-                    )
+                    self.module.fail_json(msg='Mutually exclusive parameters: {0}, {1}'.format(param1, param2))
 
             if self.nqn and not self.protocol:
-                self.module.fail_json(msg='nqn can only be entered when protocol has been entered')
+                self.module.fail_json(msg='Parameter [nqn] can only be entered when [protocol] has been entered.')
+
+            if self.iogrp:
+                all_iogrps = self.restapi.svc_obj_info(cmd='lsiogrp', cmdopts=None, cmdargs=None)
+                all_iogrps_map = {iog['name']: iog['id'] for iog in all_iogrps if iog['name'] != 'recovery_io_grp'}
+
+                valid_names = set(all_iogrps_map.keys())
+                valid_ids = set(all_iogrps_map.values())
+
+                input_iogrps = self.iogrp.split(":")
+                parsed_input_iogrp = set()
+
+                for iogrp in input_iogrps:
+                    if iogrp.isdigit():
+                        if iogrp not in valid_ids:
+                            self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group id")
+                        parsed_input_iogrp.add(iogrp)
+                    else:
+                        if iogrp not in valid_names:
+                            self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group name")
+                        parsed_input_iogrp.add(all_iogrps_map[iogrp])
+
+                if len(parsed_input_iogrp) != len(input_iogrps):
+                    self.module.fail_json(msg='Duplicate iogrp detected.')
+
+                self.input_iogrps_id = parsed_input_iogrp
 
         if self.state == 'absent':
             fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition',
-                                  'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'iogrp'] if getattr(self, f)]
+                                  'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'iogrp', 'site'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a host'.format(', '.join(fields)))
@@ -517,8 +547,7 @@ class IBMSVChost(object):
     def get_existing_host(self, host_name):
         merged_result = {}
 
-        data = self.restapi.svc_obj_info(cmd='lshost', cmdopts=None,
-                                         cmdargs=['-gui', host_name])
+        data = self.restapi.svc_obj_info(cmd='lshost', cmdopts=None, cmdargs=['-gui', host_name])
 
         if isinstance(data, list):
             for d in data:
@@ -527,18 +556,6 @@ class IBMSVChost(object):
             merged_result = data
 
         return merged_result
-
-    def validate_iogrps(self, all_iogrps_map):
-
-        valid_names = set(all_iogrps_map.keys())
-        valid_ids = set(all_iogrps_map.values())
-
-        for iogrp in self.iogrp.split(":"):
-            if iogrp.isdigit():
-                if iogrp not in valid_ids:
-                    self.module.fail_json(msg="CMMVC5754E The value %d is not a valid IO group ID" % int(iogrp))
-            elif iogrp not in valid_names:
-                self.module.fail_json(msg="CMMVC5754E The value [%s] is not a valid IO group name" % iogrp)
 
     # TBD: Implement a more generic way to check for properties to modify.
     def host_probe(self, data):
@@ -573,37 +590,16 @@ class IBMSVChost(object):
                 self.module.fail_json(msg="Host already exist, Parameter fdminame is not supported for updation.")
 
         if self.iogrp:
-            all_iogrps = self.restapi.svc_obj_info(cmd='lsiogrp', cmdopts=None, cmdargs=None)
-            all_iogrps_map = {iog['name'] : iog['id'] for iog in all_iogrps}
-
-            self.validate_iogrps(all_iogrps_map)
-
             existing_host_iogrps = self.restapi.svc_obj_info(cmd='lshostiogrp', cmdopts=None, cmdargs=[self.name])
-            existing_host_iogrps_id = {node["id"] for node in existing_host_iogrps}
+            existing_host_iogrps_id = set({node["id"] for node in existing_host_iogrps})
 
-            parsed_input_iogrp = []
+            if self.input_iogrps_id.symmetric_difference(existing_host_iogrps_id):  # Symmetric difference finds elements that are in either set but not both.
+                iogrps_to_add = self.input_iogrps_id.difference(existing_host_iogrps_id)  # IO_Grps in input but not in existing
+                iogrps_to_remove = existing_host_iogrps_id.difference(self.input_iogrps_id)  # IO_Grps in existing but not in input
 
-            for iogrp in self.iogrp.split(":"):
-                if iogrp.isdigit():
-                    parsed_input_iogrp.append(iogrp)
-                elif iogrp in all_iogrps_map:
-                    parsed_input_iogrp.append(all_iogrps_map[iogrp])
+                self.iogrps_to_add = list(iogrps_to_add) if iogrps_to_add else None
+                self.iogrps_to_remove = list(iogrps_to_remove) if iogrps_to_remove else None
 
-            input_iogrps_id = set(parsed_input_iogrp)
-            existing_host_iogrps_id = set(existing_host_iogrps_id)
-
-            if input_iogrps_id.symmetric_difference(existing_host_iogrps_id):  # Symmetric difference finds elements that are in either set but not both.
-                iogrps_to_add = input_iogrps_id.difference(existing_host_iogrps_id)  # IO_Grps in input but not in existing
-                iogrps_to_remove = existing_host_iogrps_id.difference(input_iogrps_id)  # IO_Grps in existing but not in input
-
-                if iogrps_to_add:
-                    self.iogrps_to_add = list(iogrps_to_add)
-                else:
-                    self.iogrps_to_add = None
-                if iogrps_to_remove:
-                    self.iogrps_to_remove = list(iogrps_to_remove)
-                else:
-                    self.iogrps_to_remove = None
                 if iogrps_to_add or iogrps_to_remove:
                     props += ['iogrp']
 
@@ -613,9 +609,12 @@ class IBMSVChost(object):
             if set(self.existing_nqn).symmetric_difference(set(self.input_nqn)):
                 props += ['nqn']
 
-        if self.site:
-            if self.site != data['site_name']:
-                props += ['site']
+        if self.site is not None:
+            if self.site != "" and self.site != data['site_name'] and self.site != data['site_id']:
+                props.append('site')
+            elif self.site == "" and data['site_name'] != "":
+                self.nosite = True
+                props.append('nosite')
 
         if self.nohostcluster:
             if data['host_cluster_name'] != '':
@@ -652,8 +651,11 @@ class IBMSVChost(object):
                 props += ['suppressofflinealert']
 
         if self.location is not None:
-            if data['location_system_name'] != self.location and data['location_system_id'] != self.location:
+            if self.location != "" and self.location != data['location_system_name'] and self.location != data['location_system_id']:
                 props += ["location"]
+            elif self.location == "" and data['location_system_name'] != "":
+                self.nolocation = True
+                props += ['nolocation']
 
         self.log("host_probe props='%s'", props)
         return props
@@ -671,11 +673,11 @@ class IBMSVChost(object):
             self.module.fail_json(msg='Mutually exclusive parameters: hostcluster and partition')
 
         if self.draftpartition:
-            self.module.fail_json(msg='CMMVC5709E [draftpartition] is not a supported parameter while creating host')
+            self.module.fail_json(msg='[draftpartition] is not a supported parameter while creating host')
         elif self.nodraftpartition:
-            self.module.fail_json(msg='CMMVC5709E [nodraftpartition] is not a supported parameter while creating host')
+            self.module.fail_json(msg='[nodraftpartition] is not a supported parameter while creating host')
         if self.location and not self.partition:
-            self.module.fail_json(msg='Parameter location can only be entered when partition has been entered.')
+            self.module.fail_json(msg='Parameter [location] can only be entered when [partition] has been entered.')
         if self.module.check_mode:
             self.changed = True
             return
@@ -685,28 +687,19 @@ class IBMSVChost(object):
         # Make command
         cmd = 'mkhost'
         cmdopts = {'name': self.name, 'force': True}
-        if self.fcwwpn:
-            cmdopts['fcwwpn'] = self.fcwwpn
-        elif self.iscsiname:
-            cmdopts['iscsiname'] = self.iscsiname
-        elif self.nqn:
-            cmdopts['nqn'] = self.nqn
-        else:
-            cmdopts['fdminame'] = self.fdminame
+
+        for field in ['fcwwpn', 'iscsiname', 'nqn', 'fdminame']:
+            value = getattr(self, field, None)
+            if value is not None:
+                cmdopts[field] = value
+                break
 
         cmdopts['protocol'] = self.protocol if self.protocol else 'scsi'
-        if self.iogrp:
-            cmdopts['iogrp'] = self.iogrp
-        if self.type:
-            cmdopts['type'] = self.type
-        if self.site:
-            cmdopts['site'] = self.site
-        if self.portset:
-            cmdopts['portset'] = self.portset
-        if self.partition:
-            cmdopts['partition'] = self.partition
-        if self.location:
-            cmdopts['location'] = self.location
+        for field in ['iogrp', 'type', 'site', 'portset', 'partition', 'location']:
+            value = getattr(self, field, None)
+            if value is not None:
+                cmdopts[field] = value
+
         self.log("Command options for creating host: '%s'", cmdopts)
 
         # Run command
@@ -802,39 +795,26 @@ class IBMSVChost(object):
             self.host_fcwwpn_update()
             self.changed = True
             self.log("fcwwpn of %s updated", self.name)
+            modify.remove('fcwwpn')
         if 'iscsiname' in modify:
             self.host_iscsiname_update()
             self.changed = True
             self.log("iscsiname of %s updated", self.name)
+            modify.remove('iscsiname')
         if 'iogrp' in modify:
             self.host_iogrp_update()
             self.changed = True
             self.log("io_grp of %s updated", self.name)
+            modify.remove('iogrp')
         if 'nqn' in modify:
             self.host_nqn_update()
             self.changed = True
             self.log("nqn of %s updated", self.name)
-        if 'type' in modify:
-            cmdopts['type'] = self.type
-        if 'site' in modify:
-            cmdopts['site'] = self.site
-        if 'portset' in modify:
-            cmdopts['portset'] = self.portset
-        if 'partition' in modify:
-            cmdopts['partition'] = self.partition
-        if 'nopartition' in modify:
-            cmdopts['nopartition'] = self.nopartition
-        if 'draftpartition' in modify:
-            cmdopts['draftpartition'] = self.draftpartition
-        if 'nodraftpartition' in modify:
-            cmdopts['nodraftpartition'] = self.nodraftpartition
-        if 'suppressofflinealert' in modify:
-            cmdopts['suppressofflinealert'] = self.suppressofflinealert
-        if 'location' in modify:
-            if self.location == "":
-                cmdopts['nolocation'] = True
-            else:
-                cmdopts['location'] = self.location
+            modify.remove('nqn')
+
+        for param in modify:
+            cmdopts[param] = getattr(self, param)
+
         if cmdopts:
             cmdargs = [self.name]
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
@@ -934,6 +914,8 @@ class IBMSVChost(object):
         changed = False
         msg = None
         modify = []
+
+        self.basic_checks()
 
         host_data = self.get_existing_host(self.name)
 
