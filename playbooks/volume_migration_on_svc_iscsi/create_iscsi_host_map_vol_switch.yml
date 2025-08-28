@@ -89,13 +89,13 @@
       ansible.builtin.debug:
         msg: "{{ multipath_var }}"
 
-    - name: Find vdisk UID present in host with path
+    - name: Find vdisk UID which is present in host with path
       ansible.builtin.set_fact:
         dm_device: "{{ item }}"
       loop: "{{ multipath_var }}"
       when: vol_uid in item
 
-    - name: Display the dm_device variable
+    - name: Display the dm_device variable for convenience
       ansible.builtin.debug:
         msg: "{{ dm_device }}"
 
@@ -113,17 +113,17 @@
       register: ps
       changed_when: false
 
-    - name: Separate facts
+    - name: Split stdout to multipath
       ansible.builtin.set_fact:
         multipath_var: "{{ ps.stdout.split('mpath') }}"
 
-    - name: Find vdisk UID present in host with path
+    - name: Find vdisk UID present in host with path in multipath
       ansible.builtin.set_fact:
         dm_device: "{{ item }}"
       loop: "{{ multipath_var }}"
       when: vol_uid in item
 
-    - name: Display the dm_device variable
+    - name: Print the dm_device variable
       ansible.builtin.debug:
         msg: "{{ dm_device }}"
 
@@ -142,7 +142,7 @@
       register: ps
       changed_when: false
 
-    - name: Separate facts
+    - name: Extract mpath entries from stdout
       ansible.builtin.set_fact:
         multipath_var: "{{ ps.stdout.split('mpath') }}"
 

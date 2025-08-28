@@ -3,6 +3,7 @@
 
 # Copyright (C) 2025 IBM CORPORATION
 # Author(s): Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Lavanya C R <lavanya.c.r1@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -53,7 +54,7 @@ options:
         type: str
     target_cluster_name:
         description:
-            - The FQDN name or IP of the flashsystem-grid coordinator (in case of join action)
+            - The FQDN or IP of the flashsystem-grid coordinator (in case of join action)
               or member cluster (in case of accept or remove action).
         type: str
     truststore:
@@ -78,12 +79,13 @@ options:
 
 author:
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Lavanya C R (@lavanyacr)
 notes:
     - This module supports C(check_mode).
     - This module requires root-certificate exchange between coordinator and member as a pre-requisite for join/accept.
     - If user tries to create flashsystem grid on a cluster that is already part of a flashsystem-grid or a flashsystem
       grid member tries to join another flashsystem-grid, the module will fail with error "CMMVC1265E The command failed
-      as this system is already a member of a Flash Grid".
+      as this system is already a member of a grid".
     - If a flashsystem grid coordinator tries to join another flashsystem grid, the module will fail with error
       "CMMVC6036E This system is flashsystem grid coordinator".
 '''
@@ -208,9 +210,14 @@ class IBMSVFlashsystemGridMgmt(object):
                 self.module.fail_json(
                     msg='action and target_cluster_name must be provided together'
                 )
-            if bool(self.action in ['join', 'accept']) != bool(self.truststore):
+
+            if self.action in ['join', 'accept'] and not self.truststore:
                 self.module.fail_json(
                     msg='action ({0}) must be provided with truststore.'.format(self.action)
+                )
+            if self.action == 'remove' and self.truststore:
+                self.module.fail_json(
+                    msg='action ({0}) does not require truststore.'.format(self.action)
                 )
 
         if self.state == 'absent':
@@ -227,13 +234,13 @@ class IBMSVFlashsystemGridMgmt(object):
         Get relevant info from flashsystem-grid based on entity
         '''
         if entity == 'members':
-            cmd = 'lsflashgridmembers'
+            cmd = 'lsgridmembers'
         elif entity == 'partitions':
-            cmd = 'lsflashgridpartition'
+            cmd = 'lsgridpartition'
         elif entity == 'systems':
-            cmd = 'lsflashgridsystem'
+            cmd = 'lsgridsystem'
         else:
-            cmd = 'lsflashgrid'
+            cmd = 'lsgrid'
 
         fg_info = self.restapi.svc_obj_info(cmd, cmdopts=None, cmdargs=None)
         return fg_info
@@ -258,10 +265,10 @@ class IBMSVFlashsystemGridMgmt(object):
 
     def fg_create_validation(self):
         if not self.name:
-            self.module.fail_json(msg="Parameter (name) is required to create a flashgrid")
+            self.module.fail_json(msg="Parameter (name) is required to create a grid")
 
     def manage_flashsystem_grid(self, action=None):
-        cmd = "manageflashgrid"
+        cmd = "managegrid"
         cmdopts = {}
         if action == 'create':
             # Create FlashsystemGrid
@@ -305,25 +312,25 @@ class IBMSVFlashsystemGridMgmt(object):
             self.module.exit_json(changed=False, msg=self.msg)
 
         fg_member_data = self.get_fg_info('members')
-        self.log("Flashgrid Member: %s", fg_member_data)
+        self.log("Grid Member: %s", fg_member_data)
         if self.state == "present":
             if not self.action:
                 # User is trying to create the flashsystem-grid
                 fg_data = self.get_fg_info()
-                self.log("Flashgrid Data: %s", fg_data)
+                self.log("Grid Data: %s", fg_data)
                 if fg_member_data:
                     self_role = self.get_cluster_role(fg_member_data)
-                    if self_role == "coordinator" and self.name == fg_data.get("flash_grid_name"):
+                    if self_role == "coordinator" and self.name == fg_data.get("grid_name"):
                         self.module.exit_json(changed=False, msg="Flashsystem grid ({0}) already exists.".format(self.name))
-                    elif self_role == "member" or self.name != fg_data.get("flash_grid_name"):
-                        self.module.fail_json(msg="CMMVC1265E The command failed as this system is already a member of a Flash Grid.")
+                    elif self_role == "member" or self.name != fg_data.get("grid_name"):
+                        self.module.fail_json(msg="CMMVC1265E The command failed as this system is already a member of a grid.")
                 else:
                     # Create flashsystem-grid
                     self.manage_flashsystem_grid(action="create")
             else:
                 self_role = None
                 target_cluster_role = None
-                # In case, current cluster and/or target cluster are part of flashgrid, get their roles
+                # In case, current cluster and/or target cluster are part of grid, get their roles
                 if fg_member_data:
                     self_role = self.get_cluster_role(fg_member_data)
                     target_cluster_role = self.get_cluster_role(fg_member_data, self.target_cluster_name)
@@ -342,7 +349,7 @@ class IBMSVFlashsystemGridMgmt(object):
 
                     elif self_role == "member":
                         # This cluster is part of some other flashsystem grid
-                        self.module.fail_json(msg="CMMVC1265E The command failed as this system is already a member of a flashsystem grid.")
+                        self.module.fail_json(msg="CMMVC1265E The command failed as this system is already a member of a grid.")
 
                 elif self.action == "accept":
                     if self_role == "coordinator" and target_cluster_role == "member":

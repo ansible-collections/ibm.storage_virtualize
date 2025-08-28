@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_portset import IBMSVCPortset
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,21 +85,20 @@ class TestIBMSVCPortset(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_module_with_blank_values(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': '',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCPortset()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCPortset()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_mutually_exclusive_case(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -93,11 +107,10 @@ class TestIBMSVCPortset(unittest.TestCase):
             'ownershipgroup': 'new_owner',
             'noownershipgroup': True,
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCPortset()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCPortset()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -109,7 +122,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                                             svc_authorize_mock,
                                                             svc_run_command_mock,
                                                             portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -118,14 +131,13 @@ class TestIBMSVCPortset(unittest.TestCase):
             'porttype': 'fc',
             'portset_type': 'replication',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -137,21 +149,20 @@ class TestIBMSVCPortset(unittest.TestCase):
                                                     svc_authorize_mock,
                                                     svc_run_command_mock,
                                                     portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'portset0',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -162,7 +173,7 @@ class TestIBMSVCPortset(unittest.TestCase):
     def test_create_portset_with_optional_params(self, svc_authorize_mock,
                                                  svc_run_command_mock,
                                                  portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -171,14 +182,13 @@ class TestIBMSVCPortset(unittest.TestCase):
             'ownershipgroup': 'new_owner',
             'portset_type': 'replication',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -190,7 +200,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                                     svc_authorize_mock,
                                                     svc_run_command_mock,
                                                     portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -200,14 +210,13 @@ class TestIBMSVCPortset(unittest.TestCase):
             'ownershipgroup': 'new_owner',
             'portset_type': 'host',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -219,7 +228,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                         svc_authorize_mock,
                                         svc_run_command_mock,
                                         svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -228,23 +237,22 @@ class TestIBMSVCPortset(unittest.TestCase):
             'ownershipgroup': 'new_owner',
             'portset_type': 'host',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "4",
+                "name": "portset0",
+                "type": "host",
+                "port_count": "0",
+                "host_count": "0",
+                "lossless": "",
+                "owner_id": "0",
+                "owner_name": "new_owner"
+            }
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {
-            "id": "4",
-            "name": "portset0",
-            "type": "host",
-            "port_count": "0",
-            "host_count": "0",
-            "lossless": "",
-            "owner_id": "0",
-            "owner_name": "new_owner"
-        }
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -256,7 +264,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                             svc_authorize_mock,
                             svc_run_command_mock,
                             svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -264,23 +272,22 @@ class TestIBMSVCPortset(unittest.TestCase):
             'name': 'portset0',
             'noownershipgroup': True,
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "4",
+                "name": "portset0",
+                "type": "host",
+                "port_count": "0",
+                "host_count": "0",
+                "lossless": "",
+                "owner_id": "0",
+                "owner_name": "new_owner"
+            }
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {
-            "id": "4",
-            "name": "portset0",
-            "type": "host",
-            "port_count": "0",
-            "host_count": "0",
-            "lossless": "",
-            "owner_id": "0",
-            "owner_name": "new_owner"
-        }
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -291,7 +298,7 @@ class TestIBMSVCPortset(unittest.TestCase):
     def test_portset_rename(self, svc_authorize_mock,
                             svc_run_command_mock,
                             svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -299,22 +306,22 @@ class TestIBMSVCPortset(unittest.TestCase):
             'name': 'new_name',
             'old_name': 'portset0',
             'state': 'present'
-        })
-        svc_obj_info_mock.return_value = {
-            "id": "4",
-            "name": "portset0",
-            "type": "host",
-            "port_count": "0",
-            "host_count": "0",
-            "lossless": "",
-            "owner_id": "0",
-            "owner_name": "new_owner"
-        }
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "4",
+                "name": "portset0",
+                "type": "host",
+                "port_count": "0",
+                "host_count": "0",
+                "lossless": "",
+                "owner_id": "0",
+                "owner_name": "new_owner"
+            }
 
-        arg_data = []
-        v = IBMSVCPortset()
-        data = v.portset_rename(arg_data)
-        self.assertEqual(data, 'Portset [portset0] has been successfully rename to [new_name].')
+            arg_data = []
+            v = IBMSVCPortset()
+            data = v.portset_rename(arg_data)
+            self.assertEqual(data, 'Portset [portset0] has been successfully rename to [new_name].')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -326,7 +333,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                              svc_authorize_mock,
                                              svc_run_command_mock,
                                              portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -335,22 +342,21 @@ class TestIBMSVCPortset(unittest.TestCase):
             'portset_type': 'host',
             'ownershipgroup': 'owner1',
             'state': 'absent'
-        })
+        }):
+            portset_exist_mock.return_value = {
+                "id": "4",
+                "name": "portset0",
+                "type": "host",
+                "port_count": "0",
+                "host_count": "0",
+                "lossless": "",
+                "owner_id": "0",
+                "owner_name": "new_owner"
+            }
 
-        portset_exist_mock.return_value = {
-            "id": "4",
-            "name": "portset0",
-            "type": "host",
-            "port_count": "0",
-            "host_count": "0",
-            "lossless": "",
-            "owner_id": "0",
-            "owner_name": "new_owner"
-        }
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCPortset()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCPortset()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -361,29 +367,28 @@ class TestIBMSVCPortset(unittest.TestCase):
     def test_delete_portset(self, svc_authorize_mock,
                             svc_run_command_mock,
                             portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'portset0',
             'state': 'absent'
-        })
+        }):
+            portset_exist_mock.return_value = {
+                "id": "4",
+                "name": "portset0",
+                "port_count": "0",
+                "host_count": "0",
+                "lossless": "",
+                "owner_id": "0",
+                "owner_name": "new_owner"
+            }
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {
-            "id": "4",
-            "name": "portset0",
-            "port_count": "0",
-            "host_count": "0",
-            "lossless": "",
-            "owner_id": "0",
-            "owner_name": "new_owner"
-        }
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -394,27 +399,26 @@ class TestIBMSVCPortset(unittest.TestCase):
     def test_delete_portset_idempotency(self, svc_authorize_mock,
                                         svc_run_command_mock,
                                         portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'portset0',
             'state': 'absent'
-        })
+        }):
+            portset_exist_mock.return_value = {
+                "portset_type": "host",
+                "porttype": "fc",
+                "replicationportsetlinkuid": "F8C5C02FC24F019154B57B59DD753BFF",
+                "state": "present",
+                "username": "superuser"
+            }
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {
-            "portset_type": "host",
-            "porttype": "fc",
-            "replicationportsetlinkuid": "F8C5C02FC24F019154B57B59DD753BFF",
-            "state": "present",
-            "username": "superuser"
-        }
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -426,7 +430,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                                                   svc_authorize_mock,
                                                                   svc_run_command_mock,
                                                                   portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -435,14 +439,13 @@ class TestIBMSVCPortset(unittest.TestCase):
             'porttype': 'ethernet',
             'portset_type': 'highspeedreplication',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -454,7 +457,7 @@ class TestIBMSVCPortset(unittest.TestCase):
                                                                      svc_authorize_mock,
                                                                      svc_run_command_mock,
                                                                      portset_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -463,15 +466,14 @@ class TestIBMSVCPortset(unittest.TestCase):
             'porttype': 'fc',
             'portset_type': 'highspeedreplication',
             'state': 'present'
-        })
+        }):
+            portset_exist_mock.return_value = {}
+            svc_run_command_mock.side_effect = fail_json
+            p = IBMSVCPortset()
 
-        portset_exist_mock.return_value = {}
-        svc_run_command_mock.side_effect = fail_json
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -480,7 +482,7 @@ class TestIBMSVCPortset(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_portset_with_replicationportsetlinkuid(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -489,22 +491,21 @@ class TestIBMSVCPortset(unittest.TestCase):
             'portset_type': 'host',
             'replicationportsetlinkuid': 'F8C5C02FC24F019154B57B59DD753BFF',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {}
+            svc_run_command_mock.return_value = {"Success"}
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {}
-        svc_run_command_mock.return_value = {"Success"}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_portset_with_replicationportsetlinkuid_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -513,23 +514,22 @@ class TestIBMSVCPortset(unittest.TestCase):
             'portset_type': 'host',
             'replicationportsetlinkuid': 'F8C5C02FC24F019154B57B59DD753BFF',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '0',
+                'name': 'fcportset1',
+                'type': 'host',
+                'portset_type': 'host',
+                'port_type': 'fc',
+                'replication_portset_link_uid': 'F8C5C02FC24F019154B57B59DD753BFF',
+                'state': 'present'
+            }
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {
-            'id': '0',
-            'name': 'fcportset1',
-            'type': 'host',
-            'portset_type': 'host',
-            'port_type': 'fc',
-            'replication_portset_link_uid': 'F8C5C02FC24F019154B57B59DD753BFF',
-            'state': 'present'
-        }
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Portset (fcportset1) already exists. No modifications done.")
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Portset (fcportset1) already exists. No modifications done.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -538,7 +538,7 @@ class TestIBMSVCPortset(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_update_replicationportsetlinkuid(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -547,24 +547,23 @@ class TestIBMSVCPortset(unittest.TestCase):
             'portset_type': 'host',
             'replicationportsetlinkuid': 'F8C5C02FC24F019154B57B59DD753BFF',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '0',
+                'name': 'fcportset1',
+                'type': 'host',
+                'portset_type': 'host',
+                'port_type': 'fc',
+                'replication_portset_link_uid': '3A05584AC8EEA48B514F9C4F14A03540',
+                'state': 'present'
+            }
+            svc_run_command_mock.return_value = {"Success"}
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {
-            'id': '0',
-            'name': 'fcportset1',
-            'type': 'host',
-            'portset_type': 'host',
-            'port_type': 'fc',
-            'replication_portset_link_uid': '3A05584AC8EEA48B514F9C4F14A03540',
-            'state': 'present'
-        }
-        svc_run_command_mock.return_value = {"Success"}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Portset (fcportset1) updated.")
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Portset (fcportset1) updated.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_portset.IBMSVCPortset.is_portset_exists')
@@ -573,7 +572,7 @@ class TestIBMSVCPortset(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_portset_with_resetreplicationportsetlinkuid(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -582,16 +581,15 @@ class TestIBMSVCPortset(unittest.TestCase):
             'portset_type': 'host',
             'resetreplicationportsetlinkuid': True,
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {}
+            svc_run_command_mock.return_value = {"Success"}
+            p = IBMSVCPortset()
 
-        svc_obj_info_mock.return_value = {}
-        svc_run_command_mock.return_value = {"Success"}
-        p = IBMSVCPortset()
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Parameter resetreplicationportsetlinkuid is not supported while creating portset.")
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Parameter resetreplicationportsetlinkuid is not supported while creating portset.")
 
 
 if __name__ == '__main__':

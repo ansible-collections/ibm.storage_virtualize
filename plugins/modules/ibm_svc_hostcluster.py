@@ -3,7 +3,8 @@
 
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
-#
+#            Lavanya C R <lavanya.c.r1@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -70,7 +71,8 @@ options:
     removeallhosts:
         description:
             - Specifies that all hosts in the host cluster and the associated host cluster object be deleted.
-            - Applies when I(state=absent).
+            - Applies when I(state=absent), to delete a host cluster with all its hosts.
+            - Parameters I(removeallhosts) and I(removemappings) are mutually exclusive.
         type: bool
     site:
         description:
@@ -78,6 +80,21 @@ options:
             - Valid when I(state=present), to modify an existing hostcluster.
         type: str
         version_added: '2.7.0'
+    partition:
+        description:
+            - Specifies the partition or draft partition name in which user wants to create the hostcluster.
+            - Valid when I(state=present), to create and modify an existing hostcluster.
+        type: str
+        version_added: '3.0.0'
+    removemappings:
+        description:
+            - Removes specified mappings from the hostcluster.
+            - Valid when I(state=absent), to delete a hostcluster.
+            - If specified as true, removes all the host-to-volume mappings.
+            - If specified as false, keeps the host-to-volume mappings (works as keepmappings).
+            - Parameters I(removeallhosts) and I(removemappings) are mutually exclusive.
+        type: bool
+        version_added: '3.0.0'
     log_path:
         description:
             - Path of debug log file.
@@ -89,6 +106,8 @@ options:
         type: bool
 author:
     - Shilpi Jain (@Shilpi-J)
+    - Lavanya C R (@lavanyacr)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -104,6 +123,16 @@ EXAMPLES = '''
     name: hostcluster0
     state: present
     ownershipgroup: group1
+- name: Define a new host cluster with partition
+  ibm.storage_virtualize.ibm_svc_hostcluster:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: hostcluster0
+    state: present
+    partition: partition1
 - name: Update the ownershipgroup of a host cluster
   ibm.storage_virtualize.ibm_svc_hostcluster:
     clustername: "{{ clustername }}"
@@ -114,6 +143,16 @@ EXAMPLES = '''
     name: hostcluster0
     state: present
     noownershipgroup: 'True'
+- name: Update the draftpartition of a host cluster
+  ibm.storage_virtualize.ibm_svc_hostcluster:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: hostcluster0
+    state: present
+    partition: draft_ptn
 - name: Delete a host cluster
   ibm.storage_virtualize.ibm_svc_hostcluster:
     clustername: "{{ clustername }}"
@@ -141,12 +180,13 @@ class IBMSVChostcluster(object):
         argument_spec.update(
             dict(
                 name=dict(type='str', required=True),
-                state=dict(type='str', required=True, choices=['absent',
-                                                               'present']),
+                state=dict(type='str', required=True, choices=['absent', 'present']),
                 ownershipgroup=dict(type='str'),
                 noownershipgroup=dict(type='bool'),
                 removeallhosts=dict(type='bool'),
-                site=dict(type='str')
+                site=dict(type='str'),
+                partition=dict(type='str'),
+                removemappings=dict(type='bool'),
             )
         )
 
@@ -169,7 +209,8 @@ class IBMSVChostcluster(object):
         self.noownershipgroup = self.module.params.get('noownershipgroup', '')
         self.removeallhosts = self.module.params.get('removeallhosts', '')
         self.site = self.module.params.get('site', '')
-
+        self.partition = self.module.params.get('partition', '')
+        self.removemappings = self.module.params.get('removemappings', '')
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -182,17 +223,26 @@ class IBMSVChostcluster(object):
         )
 
     def basic_checks(self):
-        if not self.name:
-            self.module.fail_json(msg='Missing mandatory parameter: [name]')
+        if self.state == 'present':
+            if self.removemappings or self.removeallhosts:
+                self.module.fail_json(msg="Parameter [removemappings] or [removeallhosts] can be used only while deleting hostcluster")
 
-        if self.state == 'present' and self.removeallhosts:
-            self.module.fail_json(msg="Parameter [removeallhosts] can be used only while deleting hostcluster")
+            if self.ownershipgroup and self.noownershipgroup:
+                self.module.fail_json(msg='Mutually exclusive parameters: [ownershipgroup, noownershipgroup]')
 
-        if self.ownershipgroup and self.noownershipgroup:
-            self.module.fail_json(msg='Mutually exclusive parameters: [ownershipgroup, noownershipgroup]')
+        if self.state == 'absent':
+            if self.removeallhosts and self.removemappings:
+                self.module.fail_json(msg='Mutually exclusive parameters: [removeallhosts, removemappings]')
+
+            fields = [f for f in ['ownershipgroup', 'noownershipgroup', 'site', 'partition'] if getattr(self, f)]
+            if any(fields):
+                self.module.fail_json(msg='Parameters [{0}] not supported while deleting a hostcluster'.format(', '.join(fields)))
 
     def get_existing_hostcluster(self):
         return self.restapi.svc_obj_info(cmd='lshostcluster', cmdopts=None, cmdargs=[self.name]) or {}
+
+    def get_existing_partition(self, partition_name):
+        return self.restapi.svc_obj_info(cmd='lspartition', cmdopts=None, cmdargs=[partition_name]) or {}
 
     def hostcluster_probe(self, data):
         props = []
@@ -203,7 +253,24 @@ class IBMSVChostcluster(object):
         if self.noownershipgroup and data['owner_name'] != "":
             props.append('noownershipgroup')
 
+        if self.partition:
+            partition_result = self.get_existing_partition(self.partition)
+            if not partition_result:
+                self.module.fail_json(msg="Partition [{0}] does not exist".format(self.partition))
+
+            if partition_result.get('draft') == 'yes':
+                if self.partition != data['draft_partition_name']:
+                    if data['partition_name']:
+                        self.module.fail_json(msg="Hostcluster is already associated with a partition.")
+                    props.append('partition')
+            else:
+                if self.partition != data['partition_name']:
+                    self.module.fail_json(msg="Published partition is not supported while updating host cluster")
+
         if self.site:
+            if data['host_count'] == '0':
+                self.module.fail_json(msg="Cannot update host cluster [{0}] site to [{1}] as it has no hosts.".format(self.name, self.site))
+
             site_update_required = False
             existing_hosts = self.restapi.svc_obj_info(cmd='lshost', cmdopts={'filtervalue' : 'host_cluster_name={0}'.format(self.name)}, cmdargs=None)
 
@@ -223,31 +290,38 @@ class IBMSVChostcluster(object):
                 props.append('site')
 
         self.log("hostcluster_probe props='%s'", props)
+
         return props
 
     def hostcluster_create(self):
         if self.module.check_mode:
             self.changed = True
             return
-
         # Make command
         cmd = 'mkhostcluster'
         cmdopts = {'name': self.name}
 
+        fields = [f for f in ['site'] if getattr(self, f)]
+        if any(fields):
+            self.module.fail_json(msg='Parameters [{0}] not supported while creating a hostcluster'.format(', '.join(fields)))
+
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup
 
-        self.log("creating host cluster command opts '%s'", self.ownershipgroup)
+        if self.partition:
+            partition_result = self.get_existing_partition(self.partition)
+            if not partition_result:
+                self.module.fail_json(msg="Partition [{0}] does not exist".format(self.partition))
+            if partition_result.get('draft') == 'yes':
+                cmdopts['draftpartition'] = self.partition
+            else:
+                cmdopts['partition'] = self.partition
+
+        self.log("Command options for creating host: '%s'", cmdopts)
 
         # Run command
-        result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        self.log("create host cluster result '%s'", result)
-
-        if 'message' in result:
-            self.changed = True
-            self.log("create host cluster result message '%s'", (result['message']))
-        else:
-            self.module.fail_json(msg="Failed to create host cluster [%s]" % self.name)
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        self.changed = True
 
     def hostcluster_update(self, modify):
         if self.module.check_mode:
@@ -259,7 +333,10 @@ class IBMSVChostcluster(object):
         cmdopts = {}
 
         for param in modify:
-            cmdopts[param] = getattr(self, param)
+            if param == 'partition':
+                cmdopts['draftpartition'] = self.partition
+            else:
+                cmdopts[param] = getattr(self, param)
 
         if cmdopts:
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs=[self.name])
@@ -268,7 +345,7 @@ class IBMSVChostcluster(object):
             self.changed = True
             self.log("Properties of %s updated", self.name)
 
-    def hostcluster_delete(self):
+    def hostcluster_delete(self, data):
         if self.module.check_mode:
             self.changed = True
             return
@@ -279,12 +356,26 @@ class IBMSVChostcluster(object):
         cmdopts = {}
         cmdargs = [self.name]
 
+        is_partition_associated = bool(data.get('partition_name') or data.get('draft_partition_name'))
+        mapping_count = data.get('mapping_count')
+        has_mappings = mapping_count and mapping_count != "0"
+
+        if self.removemappings:
+            if is_partition_associated:
+                self.module.fail_json(
+                    msg=f"Cannot remove host cluster [{self.name}] as it is associated with a partition. "
+                        f"Use removemappings=false to delete the host cluster to keep host to volume mappings."
+                )
+            if has_mappings:
+                cmdopts['removemappings'] = True
+        elif (is_partition_associated or has_mappings) and not self.removeallhosts:
+            cmdopts['keepmappings'] = True
+
         if self.removeallhosts:
-            cmdopts = {'force': True}
-            cmdopts['removeallhosts'] = self.removeallhosts
+            cmdopts['force'] = True
+            cmdopts['removeallhosts'] = True
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
-
         # Any error will have been raised in svc_run_command
         # chhost does not output anything when successful.
         self.changed = True
@@ -323,7 +414,7 @@ class IBMSVChostcluster(object):
                     self.hostcluster_update(modify)
                     msg = "host cluster [%s] has been modified." % self.name
             elif self.state == 'absent':
-                self.hostcluster_delete()
+                self.hostcluster_delete(hc_data)
                 msg = "host cluster [%s] has been deleted." % self.name
 
             if self.module.check_mode:

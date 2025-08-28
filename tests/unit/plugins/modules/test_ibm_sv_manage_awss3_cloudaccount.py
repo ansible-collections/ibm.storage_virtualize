@@ -15,13 +15,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_awss3_cloudaccount import IBMSVAWSS3
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -69,17 +84,16 @@ class TestIBMSVAWSS3(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_missing_state_parameter(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'awss3acc'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVAWSS3()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVAWSS3()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -87,21 +101,20 @@ class TestIBMSVAWSS3(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_mandatory_parameter_validation(self, svc_authorize_mock,
                                             svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'awss3acc',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {}
 
-        svc_obj_info_mock.return_value = {}
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            aws = IBMSVAWSS3()
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                aws = IBMSVAWSS3()
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -112,7 +125,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_aws_acc_create(self, svc_authorize_mock,
                             svc_obj_info_mock,
                             svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -126,14 +139,13 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'region': 'us-east',
             'encrypt': 'no',
             'state': 'present'
-        })
+        }):
+            aws = IBMSVAWSS3()
+            svc_obj_info_mock.return_value = {}
 
-        aws = IBMSVAWSS3()
-        svc_obj_info_mock.return_value = {}
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -144,7 +156,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_aws_acc_create_idempotency(self, svc_authorize_mock,
                                         svc_obj_info_mock,
                                         svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -158,40 +170,39 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'region': 'us-east',
             'encrypt': 'no',
             'state': 'present'
-        })
+        }):
+            aws = IBMSVAWSS3()
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "20",
+                "down_bandwidth_mbits": "20",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "yes",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "s3access",
+                "awss3_region": "us-east",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        aws = IBMSVAWSS3()
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "20",
-            "down_bandwidth_mbits": "20",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "yes",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "s3access",
-            "awss3_region": "us-east",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_awss3_cloudaccount.IBMSVAWSS3.is_aws_account_exists')
@@ -203,7 +214,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
                                 svc_authorize_mock,
                                 svc_run_command_mock,
                                 aws_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -215,42 +226,41 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'upbandwidthmbits': 10,
             'downbandwidthmbits': 10,
             'state': 'present'
-        })
+        }):
+            aws_exists_mock.side_effect = iter([
+                {
+                    "id": "0",
+                    "name": "awss3acc",
+                    "up_bandwidth_mbits": "20",
+                    "down_bandwidth_mbits": "20",
+                    "awss3_access_key_id": "s3access"
+                },
+                {},
+                {
+                    "id": "0",
+                    "name": "awss3acc",
+                    "up_bandwidth_mbits": "20",
+                    "down_bandwidth_mbits": "20",
+                    "awss3_access_key_id": "s3access"
+                }
+            ])
 
-        aws_exists_mock.side_effect = iter([
-            {
-                "id": "0",
-                "name": "awss3acc",
-                "up_bandwidth_mbits": "20",
-                "down_bandwidth_mbits": "20",
-                "awss3_access_key_id": "s3access"
-            },
-            {},
-            {
-                "id": "0",
-                "name": "awss3acc",
-                "up_bandwidth_mbits": "20",
-                "down_bandwidth_mbits": "20",
-                "awss3_access_key_id": "s3access"
-            }
-        ])
-
-        aws = IBMSVAWSS3()
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        svc_run_command_mock.assert_called_with(
-            'chcloudaccountawss3',
-            {
-                'secretaccesskey': 'saldhsalhdljsah',
-                'downbandwidthmbits': '10',
-                'upbandwidthmbits': '10',
-                'name': 'awss3_new',
-                'accesskeyid': 'newaccess',
-            },
-            cmdargs=['awss3acc'],
-            timeout=20
-        )
-        self.assertTrue(exc.value.args[0]['changed'])
+            aws = IBMSVAWSS3()
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            svc_run_command_mock.assert_called_with(
+                'chcloudaccountawss3',
+                {
+                    'secretaccesskey': 'saldhsalhdljsah',
+                    'downbandwidthmbits': '10',
+                    'upbandwidthmbits': '10',
+                    'name': 'awss3_new',
+                    'accesskeyid': 'newaccess',
+                },
+                cmdargs=['awss3acc'],
+                timeout=20
+            )
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_awss3_cloudaccount.IBMSVAWSS3.is_aws_account_exists')
@@ -262,7 +272,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
                                             svc_authorize_mock,
                                             svc_run_command_mock,
                                             aws_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -274,24 +284,23 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'upbandwidthmbits': 10,
             'downbandwidthmbits': 10,
             'state': 'present'
-        })
+        }):
+            aws_exists_mock.side_effect = iter([
+                {},
+                {
+                    "id": "0",
+                    "name": "awss3_new",
+                    "up_bandwidth_mbits": "20",
+                    "down_bandwidth_mbits": "20",
+                    "awss3_access_key_id": "s3access"
+                },
+                {}
+            ])
+            aws = IBMSVAWSS3()
 
-        aws_exists_mock.side_effect = iter([
-            {},
-            {
-                "id": "0",
-                "name": "awss3_new",
-                "up_bandwidth_mbits": "20",
-                "down_bandwidth_mbits": "20",
-                "awss3_access_key_id": "s3access"
-            },
-            {}
-        ])
-        aws = IBMSVAWSS3()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -302,7 +311,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_aws_acc_update(self, svc_authorize_mock,
                             svc_obj_info_mock,
                             svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -313,40 +322,39 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'upbandwidthmbits': 10,
             'downbandwidthmbits': 10,
             'state': 'present'
-        })
+        }):
+            aws = IBMSVAWSS3()
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "20",
+                "down_bandwidth_mbits": "20",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "yes",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "s3access",
+                "awss3_region": "us-east",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        aws = IBMSVAWSS3()
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "20",
-            "down_bandwidth_mbits": "20",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "yes",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "s3access",
-            "awss3_region": "us-east",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -357,7 +365,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_aws_acc_update_idempotency(self, svc_authorize_mock,
                                         svc_obj_info_mock,
                                         svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -368,40 +376,39 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'upbandwidthmbits': 10,
             'downbandwidthmbits': 10,
             'state': 'present'
-        })
+        }):
+            aws = IBMSVAWSS3()
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "10",
+                "down_bandwidth_mbits": "10",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "no",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "newaccess",
+                "awss3_region": "us-west",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        aws = IBMSVAWSS3()
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "10",
-            "down_bandwidth_mbits": "10",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "no",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "newaccess",
-            "awss3_region": "us-west",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -412,7 +419,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_update_accesskey_without_secretkey(self, svc_authorize_mock,
                                                 svc_obj_info_mock,
                                                 svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -423,40 +430,39 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'downbandwidthmbits': 10,
             'region': 'us-west',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "20",
+                "down_bandwidth_mbits": "20",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "yes",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "s3access",
+                "awss3_region": "us-east",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "20",
-            "down_bandwidth_mbits": "20",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "yes",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "s3access",
-            "awss3_region": "us-east",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            aws = IBMSVAWSS3()
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                aws = IBMSVAWSS3()
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -467,7 +473,7 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_delete_aws_account_validation(self, svc_authorize_mock,
                                            svc_obj_info_mock,
                                            svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -478,40 +484,39 @@ class TestIBMSVAWSS3(unittest.TestCase):
             'downbandwidthmbits': 10,
             'region': 'us-west',
             'state': 'absent'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "20",
+                "down_bandwidth_mbits": "20",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "yes",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "s3access",
+                "awss3_region": "us-east",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "20",
-            "down_bandwidth_mbits": "20",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "yes",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "s3access",
-            "awss3_region": "us-east",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            aws = IBMSVAWSS3()
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                aws = IBMSVAWSS3()
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -522,47 +527,46 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_delete_aws_account(self, svc_authorize_mock,
                                 svc_obj_info_mock,
                                 svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'awss3acc',
             'state': 'absent'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "awss3acc",
+                "type": "awss3",
+                "status": "online",
+                "mode": "normal",
+                "active_volume_count": "1",
+                "backup_volume_count": "1",
+                "import_system_id": "",
+                "import_system_name": "",
+                "error_sequence_number": "",
+                "refreshing": "no",
+                "up_bandwidth_mbits": "20",
+                "down_bandwidth_mbits": "20",
+                "backup_timestamp": "221007111148",
+                "encrypt": "no",
+                "certificate": "yes",
+                "certificate_expiry": "",
+                "endpoint": "",
+                "awss3_bucket_prefix": "ansible",
+                "awss3_access_key_id": "s3access",
+                "awss3_region": "us-east",
+                "swift_keystone": "no",
+                "swift_container_prefix": "",
+                "swift_tenant_name": "",
+                "swift_user_name": ""
+            }
 
-        svc_obj_info_mock.return_value = {
-            "id": "0",
-            "name": "awss3acc",
-            "type": "awss3",
-            "status": "online",
-            "mode": "normal",
-            "active_volume_count": "1",
-            "backup_volume_count": "1",
-            "import_system_id": "",
-            "import_system_name": "",
-            "error_sequence_number": "",
-            "refreshing": "no",
-            "up_bandwidth_mbits": "20",
-            "down_bandwidth_mbits": "20",
-            "backup_timestamp": "221007111148",
-            "encrypt": "no",
-            "certificate": "yes",
-            "certificate_expiry": "",
-            "endpoint": "",
-            "awss3_bucket_prefix": "ansible",
-            "awss3_access_key_id": "s3access",
-            "awss3_region": "us-east",
-            "swift_keystone": "no",
-            "swift_container_prefix": "",
-            "swift_tenant_name": "",
-            "swift_user_name": ""
-        }
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws = IBMSVAWSS3()
-            aws.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws = IBMSVAWSS3()
+                aws.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -573,21 +577,20 @@ class TestIBMSVAWSS3(unittest.TestCase):
     def test_delete_aws_account_idempotency(self, svc_authorize_mock,
                                             svc_obj_info_mock,
                                             svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'awss3acc',
             'state': 'absent'
-        })
+        }):
+            svc_obj_info_mock.return_value = {}
 
-        svc_obj_info_mock.return_value = {}
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            aws = IBMSVAWSS3()
-            aws.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                aws = IBMSVAWSS3()
+                aws.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

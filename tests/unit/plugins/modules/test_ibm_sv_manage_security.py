@@ -17,13 +17,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_security import IBMSVSecurityMgmt
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -86,7 +101,7 @@ class TestIBMSVSecurityMgmt(unittest.TestCase):
         clitimeout = random.randint(60, 120)
         guitimeout = random.randint(60, 120)
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -94,15 +109,14 @@ class TestIBMSVSecurityMgmt(unittest.TestCase):
             'sshgracetime': ssh_grace_time_seconds,
             'guitimeout': guitimeout,
             'clitimeout': clitimeout
-        })
+        }):
+            rp = IBMSVSecurityMgmt()
+            svc_run_command_mock.return_value = ""
 
-        rp = IBMSVSecurityMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            rp.apply()
-            print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -111,21 +125,20 @@ class TestIBMSVSecurityMgmt(unittest.TestCase):
     def test_change_patch_autoupdate_settings(self,
                                               svc_run_command_mock,
                                               svc_authorize_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'patchautoupdate': 'yes'
-        })
+        }):
+            patch = IBMSVSecurityMgmt()
+            svc_run_command_mock.return_value = ""
 
-        patch = IBMSVSecurityMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            patch.apply()
-            print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                patch.apply()
+                print(exc.value.args[0])
+            self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

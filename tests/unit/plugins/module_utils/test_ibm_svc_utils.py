@@ -14,7 +14,7 @@ import json
 from mock import patch
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, is_supported_version
 
 
 def set_module_args(args):
@@ -167,6 +167,12 @@ class TestIBMSVModuleUtils(unittest.TestCase):
         ret = self.restapi.svc_obj_info('lssite', {}, [])
         self.assertEqual(ret, "CMMVC5707E An invalid or duplicated parameter, unaccompanied argument, or "
                          "incorrect argument sequence has been detected. Ensure that the input is as per the help.")
+
+
+def test_is_supported_version():
+    """Test is_supported_version function."""
+    assert (is_supported_version('9.1.0.0', '8.7.2.0') is True)
+    assert (is_supported_version('8.7.2.0', '9.1.0.0') is False)
 
 
 if __name__ == '__main__':

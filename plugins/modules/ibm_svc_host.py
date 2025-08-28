@@ -485,31 +485,6 @@ class IBMSVChost(object):
             if self.nqn and not self.protocol:
                 self.module.fail_json(msg='Parameter [nqn] can only be entered when [protocol] has been entered.')
 
-            if self.iogrp:
-                all_iogrps = self.restapi.svc_obj_info(cmd='lsiogrp', cmdopts=None, cmdargs=None)
-                all_iogrps_map = {iog['name']: iog['id'] for iog in all_iogrps if iog['name'] != 'recovery_io_grp'}
-
-                valid_names = set(all_iogrps_map.keys())
-                valid_ids = set(all_iogrps_map.values())
-
-                input_iogrps = self.iogrp.split(":")
-                parsed_input_iogrp = set()
-
-                for iogrp in input_iogrps:
-                    if iogrp.isdigit():
-                        if iogrp not in valid_ids:
-                            self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group id")
-                        parsed_input_iogrp.add(iogrp)
-                    else:
-                        if iogrp not in valid_names:
-                            self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group name")
-                        parsed_input_iogrp.add(all_iogrps_map[iogrp])
-
-                if len(parsed_input_iogrp) != len(input_iogrps):
-                    self.module.fail_json(msg='Duplicate iogrp detected.')
-
-                self.input_iogrps_id = parsed_input_iogrp
-
         if self.state == 'absent':
             fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition',
                                   'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'iogrp', 'site'] if getattr(self, f)]
@@ -557,6 +532,31 @@ class IBMSVChost(object):
 
         return merged_result
 
+    def validate_iogrp(self):
+        all_iogrps = self.restapi.svc_obj_info(cmd='lsiogrp', cmdopts=None, cmdargs=None)
+        all_iogrps_map = {iog['name']: iog['id'] for iog in all_iogrps if iog['name'] != 'recovery_io_grp'}
+
+        valid_names = set(all_iogrps_map.keys())
+        valid_ids = set(all_iogrps_map.values())
+
+        input_iogrps = self.iogrp.split(":")
+        parsed_input_iogrp = set()
+
+        for iogrp in input_iogrps:
+            if iogrp.isdigit():
+                if iogrp not in valid_ids:
+                    self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group id")
+                parsed_input_iogrp.add(iogrp)
+            else:
+                if iogrp not in valid_names:
+                    self.module.fail_json(msg=f"The value [{iogrp}] is not a valid IO group name")
+                parsed_input_iogrp.add(all_iogrps_map[iogrp])
+
+        if len(parsed_input_iogrp) != len(input_iogrps):
+            self.module.fail_json(msg='Duplicate iogrp detected.')
+
+        self.input_iogrps_id = parsed_input_iogrp
+
     # TBD: Implement a more generic way to check for properties to modify.
     def host_probe(self, data):
         props = []
@@ -590,6 +590,7 @@ class IBMSVChost(object):
                 self.module.fail_json(msg="Host already exist, Parameter fdminame is not supported for updation.")
 
         if self.iogrp:
+            self.validate_iogrp()
             existing_host_iogrps = self.restapi.svc_obj_info(cmd='lshostiogrp', cmdopts=None, cmdargs=[self.name])
             existing_host_iogrps_id = set({node["id"] for node in existing_host_iogrps})
 
@@ -692,7 +693,10 @@ class IBMSVChost(object):
             value = getattr(self, field, None)
             if value is not None:
                 cmdopts[field] = value
-                break
+                break  # only one of these can be set
+
+        if self.iogrp:
+            self.validate_iogrp()
 
         cmdopts['protocol'] = self.protocol if self.protocol else 'scsi'
         for field in ['iogrp', 'type', 'site', 'portset', 'partition', 'location']:

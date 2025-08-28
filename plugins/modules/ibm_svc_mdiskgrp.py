@@ -2,6 +2,7 @@
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sanjaikumaar M <sanjaikumaar.m@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -139,7 +140,7 @@ options:
     version_added: 1.10.0
   replication_partner_clusterid:
     description:
-      - Specifies the id or name of the partner cluster which will be used for replication.
+      - Specifies the id or name of the partner cluster for setting replication pool linked systems mask.
       - Applies, when I(state=present).
       - Supported in SV build 8.5.2.1 or later.
     type: str
@@ -195,6 +196,7 @@ author:
     - Peng Wang(@wangpww)
     - Sanjaikumaar M (@sanjaikumaar)
     - Lavanya C R(@lavanya)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -208,7 +210,6 @@ EXAMPLES = '''
     name: pool1
     provisioningpolicy: pp0
     replicationpoollinkuid: '000000000000000'
-    replication_partner_clusterid: '000000000032432342'
     etfcmoverallocationmax: 120
     state: present
     datareduction: 'no'
@@ -362,14 +363,6 @@ class IBMSVCmdiskgrp(object):
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
         if self.state == 'present':
-            message = 'Following parameters are required together: replicationpoollinkuid, replication_partner_clusterid'
-            if self.replication_partner_clusterid:
-                if not self.replicationpoollinkuid:
-                    self.module.fail_json(msg=message)
-            else:
-                if self.replicationpoollinkuid:
-                    self.module.fail_json(msg=message)
-
             if self.replicationpoollinkuid and self.resetreplicationpoollinkuid:
                 self.module.fail_json(
                     msg='Mutually exclusive parameters: replicationpoollinkuid, resetreplicationpoollinkuid'
@@ -453,8 +446,6 @@ class IBMSVCmdiskgrp(object):
             if not self.parentmdiskgrp:
                 self.module.fail_json(msg='Required parameter missing: parentmdiskgrp')
 
-        self.check_partnership()
-
         if self.module.check_mode:
             self.changed = True
             return
@@ -498,18 +489,11 @@ class IBMSVCmdiskgrp(object):
         self.log("creating mdisk group command %s opts %s", cmd, cmdopts)
 
         # Run command
-        result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
-        self.log("creating mdisk group result %s", result)
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
 
         if self.replication_partner_clusterid:
+            self.check_partnership()
             self.set_bit_mask()
-
-        if 'message' in result:
-            self.log("creating mdisk group command result message %s",
-                     result['message'])
-        else:
-            self.module.fail_json(
-                msg="Failed to create mdisk group [%s]" % (self.name))
 
     def check_partnership(self):
         if self.replication_partner_clusterid:
@@ -569,7 +553,7 @@ class IBMSVCmdiskgrp(object):
             cmdopts = modify
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs=[self.name])
 
-        if systemmask or 'replicationpoollinkuid' in modify:
+        if systemmask in modify:
             self.set_bit_mask(systemmask)
 
         self.changed = True

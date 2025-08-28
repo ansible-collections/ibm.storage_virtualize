@@ -13,7 +13,7 @@
     size: 1
     unit: gb
   tasks:
-    - name: Send CLI command over ssh connection
+    - name: Send multiple CLI commands over ssh connection
       ibm.storage_virtualize.ibm_svctask_command:
         command: [
           "svctask mkvdisk -name {{ volname }}-mdiskgrp '{{ pool }}' -easytier '{{ easy_tier }}' -size {{ size }}-unit {{ unit }}",

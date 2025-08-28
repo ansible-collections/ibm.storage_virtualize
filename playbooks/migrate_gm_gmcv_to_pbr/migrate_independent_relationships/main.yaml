@@ -7,7 +7,6 @@
   vars:
     location_1_iogrp: "{{ location_1_iogrp_id | default(0) }}"
     location_2_iogrp: "{{ location_2_iogrp_id | default(0) }}"
-    existing_certificate: "{{ use_existing_certificate | default(true) }}"
     cleanup: "{{ remove_aux_volumes | default(false) }}"
     logpath: "{{ log_path | default('./gmcv_pbr_migration.log') }}"
   connection: local
@@ -88,25 +87,6 @@
         replicationpoollinkuid: "{{ aux_pool_info.Pool.replication_pool_link_uid }}"
         replication_partner_clusterid: "{{ partnership_info.Partnership.id }}"
         log_path: "{{ logpath }}"
-    # ------------
-    # Generate system certificate if use_existing_certificate = false in inventory.ini
-    - name: Create self signed certificates
-      when: not existing_certificate
-      block:
-        - name: Generate certificate on master
-          ibm.storage_virtualize.ibm_svctask_command:
-            clustername: "{{ master_clustername }}"
-            username: "{{ master_username }}"
-            password: "{{ master_password }}"
-            command: "svctask chsystemcert -mksystemsigned"
-            log_path: "{{ logpath }}"
-        - name: Generate certificate on aux
-          ibm.storage_virtualize.ibm_svctask_command:
-            clustername: "{{ aux_clustername }}"
-            username: "{{ aux_username }}"
-            password: "{{ aux_password }}"
-            command: "svctask chsystemcert -mksystemsigned"
-            log_path: "{{ logpath }}"
     # ------------
     # Export certificates locally to make them available to transfer to partnered system
     - name: Export system certificate on master

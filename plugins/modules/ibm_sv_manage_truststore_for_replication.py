@@ -111,7 +111,7 @@ options:
         choices: [ 'on', 'off' ]
         type: str
         version_added: 2.5.0
-    flashgrid:
+    grid:
         description:
             - Specifies the certificates in the store are used for the flashsystem grid.
         choices: [ 'on', 'off' ]
@@ -185,7 +185,7 @@ EXAMPLES = '''
     remote_username: "{{ remote_username }}"
     remote_password: "{{ remote_password }}"
     log_path: "{{ log_path }}"
-    flashgrid: "on"
+    grid: "on"
     state: "present"
 - name: Delete truststore
   ibm.storage_virtualize.ibm_sv_manage_truststore_for_replication:
@@ -249,7 +249,7 @@ class IBMSVTrustStore:
                     type='str',
                     choices=['on', 'off']
                 ),
-                flashgrid=dict(
+                grid=dict(
                     type='str',
                     choices=['on', 'off']
                 ),
@@ -309,7 +309,7 @@ class IBMSVTrustStore:
         self.vasa = self.module.params.get('vasa', '')
         self.email = self.module.params.get('email', '')
         self.snmp = self.module.params.get('snmp', '')
-        self.flashgrid = self.module.params.get('flashgrid', '')
+        self.grid = self.module.params.get('grid', '')
         self.remote_domain = self.module.params.get('remote_domain', '')
         self.remote_username = self.module.params.get('remote_username', '')
         self.remote_password = self.module.params.get('remote_password', '')
@@ -350,7 +350,7 @@ class IBMSVTrustStore:
     def basic_checks(self):
         if self.state == 'absent':
             unsupported = ('remote_clustername', 'remote_username', 'remote_password',
-                           'syslog', 'restapi', 'ipsec', 'vasa', 'email', 'snmp', 'flashgrid')
+                           'syslog', 'restapi', 'ipsec', 'vasa', 'email', 'snmp', 'grid')
             unsupported_exists = ', '.join((field for field in unsupported if getattr(self, field)))
             if unsupported_exists:
                 self.module.fail_json(
@@ -400,7 +400,7 @@ class IBMSVTrustStore:
             return
 
         self.remote_hostname = f"{self.remote_clustername}.{self.remote_domain}" if self.remote_domain else self.remote_clustername
-        cert_file = "rootcacertificate.pem" if self.flashgrid == "on" else "certificate.pem"
+        cert_file = "rootcacertificate.pem" if self.grid == "on" else "certificate.pem"
 
         # Assisted by watsonx Code Assistant
         cmd = 'scp -O -o stricthostkeychecking=no -o UserKnownHostsFile=/dev/null {0}@{1}:/dumps/{2} /upgrade/'.format(
@@ -468,7 +468,7 @@ class IBMSVTrustStore:
             self.changed = True
             return
 
-        cert_file = "rootcacertificate.pem" if self.flashgrid == "on" else "certificate.pem"
+        cert_file = "rootcacertificate.pem" if self.grid == "on" else "certificate.pem"
 
         cmd = 'mktruststore -name {0} -file /upgrade/{1}'.format(self.name, cert_file)
         if self.syslog:
@@ -483,8 +483,8 @@ class IBMSVTrustStore:
             cmd += ' -email {0}'.format(self.email)
         if self.snmp:
             cmd += ' -snmp {0}'.format(self.snmp)
-        if self.flashgrid:
-            cmd += ' -flashgrid {0}'.format(self.flashgrid)
+        if self.grid:
+            cmd += ' -grid {0}'.format(self.grid)
 
         self.log('Command to be executed: %s', cmd)
         stdin, stdout, stderr = self.ssh_client.client.exec_command(cmd)
@@ -507,22 +507,22 @@ class IBMSVTrustStore:
             value = getattr(self, prop, None)
             if value and value != data.get(prop):
                 modified_props[prop] = value
-        if data.get("flash_grid_references"):
-            if self.flashgrid == "off":
-                self.module.fail_json(msg="Invalid parameter for update: (flashgrid)")
-        elif self.flashgrid:
-            self.module.fail_json(msg="Invalid parameter for update: (flashgrid)")
+        if data.get("grid_references"):
+            if self.grid == "off":
+                self.module.fail_json(msg="Invalid parameter for update: (grid)")
+        elif self.grid:
+            self.module.fail_json(msg="Invalid parameter for update: (grid)")
         return modified_props
 
     def update_validation(self):
         # Test missing parameters for updating truststore
         if not self.name:
             self.module.fail_json(msg="Missing mandatory parameter: name")
-        # Even though probe_truststore() throws error for flashgrid attribute,
-        # self.flashgrid has to be checked here for supporting check_mode=True
-        if self.flashgrid:
-            self.log("Flashgrid parameter cannot be modified.")
-            self.module.fail_json(msg="Invalid parameter for update: flashgrid")
+        # Even though probe_truststore() throws error for grid attribute,
+        # self.grid has to be checked here for supporting check_mode=True
+        if self.grid:
+            self.log("Grid parameter cannot be modified.")
+            self.module.fail_json(msg="Invalid parameter for update: grid")
 
     def update_truststore(self, modified_props):
         self.update_validation()

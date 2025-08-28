@@ -35,7 +35,7 @@ There are total 4 files used for moving existing objects in PBHA, and decommissi
   - After that, it continues to move objects into a new partition, finally establishing high-availability between primary and secondary clusters.
 
 ### 2. create_mTLS.yml:
-  - This playbook sets up Mutual Transport Layer Security (mTLS) which includes generating and exporting certificate and creating truststore on both clusters.
+  - This playbook sets up Mutual Transport Layer Security (mTLS) which includes exporting certificates and creating truststore on both clusters.
 
 ### 3. replication_setup.yml:
   - This file links pools of both the sites and creates an HA replication policy.
@@ -49,6 +49,9 @@ There are total 4 files used for moving existing objects in PBHA, and decommissi
 
   >[!NOTE]
   > When last task (i.e. assigning HA replication policy to partition) is completed, objects are replicated to secondary cluster's pool and data copy starts immediately from primary cluster to secondary. Time taken by data-synchronization is dependent on amount of data. After sync is complete, 'lspartition' output shows ha_status=established and link_status=synchronized.
+
+  > [!Note] 
+  > After successfully executing the playbook, the quorum application will be ready for use. Please copy it to the any host. This may need to be run later in case of broken quorum. Please make sure the host has Java Runtime Environment (JRE) installed, as it is required to run the application.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

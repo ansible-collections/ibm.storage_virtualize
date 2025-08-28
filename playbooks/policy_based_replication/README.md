@@ -29,7 +29,7 @@
   - Any additional volumes that need to be added to volumegroup, and/or need to be mapped to existing host object (but were not part of volumegroup at the time of execution of the playbook), can be added to inventory file. They'll be added to volumegroup and mapped to host in subsequent execution of the playbook.
 
 ###  2. create_mTLS.yml:
-  - This playbook sets Mutual Transport Layer Security (mTLS) which includes generating and exporting certificate and creating truststore on both clusters.
+  - This playbook sets Mutual Transport Layer Security (mTLS) which includes exporting certificates and creating truststore on both clusters.
 
 ###  3. drp_pool_setup.yml:
   - This playbook checks the drive status and drive count. Based on this drive info, it creates mdiskgrp, and data reduction pool with specified level. It links pools of both the sites. Then, it creates provisioning policy and replication policy. Already exiting mdiskgrps (pools) can also be used, only mention name of desired pool in `pbr_inventory.ini`.

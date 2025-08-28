@@ -14,11 +14,17 @@
   gather_facts: false
   connection: local
   tasks:
-    - name: Create volume
-      ibm.storage_virtualize.ibm_svc_manage_volume:
+    - name: Fetch cluster auth token
+      register: auth
+      ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clustername }}"
         username: "{{ username }}"
         password: "{{ password }}"
+
+    - name: Create volume
+      ibm.storage_virtualize.ibm_svc_manage_volume:
+        clustername: "{{ clustername }}"
+        token: "{{ auth.token }}"
         name: "{{ test_vdisk }}"
         state: present
         pool: "{{ pool }}"
@@ -27,16 +33,14 @@
     - name: Creating Host
       ibm.storage_virtualize.ibm_svc_host:
         clustername: "{{ clustername }}"
-        username: "{{ username }}"
-        password: "{{ password }}"
+        token: "{{ auth.token }}"
         name: "{{ test_host }}"
         state: present
         fcwwpn: "{{ fcwwpn1 }}"
     - name: Map Host to Vdisk
       ibm.storage_virtualize.ibm_svc_vol_map:
         clustername: "{{ clustername }}"
-        username: "{{ username }}"
-        password: "{{ password }}"
+        token: "{{ auth.token }}"
         volname: "{{ test_vdisk }}"
         host: "{{ test_host }}"
         state: present

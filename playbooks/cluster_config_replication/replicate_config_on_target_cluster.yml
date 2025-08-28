@@ -20,16 +20,18 @@
         token: "{{ dest_token.token }}"
 
     - name: Setup NTP server
+      when: System.cluster_ntp_IP_address is defined
       ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
-        ntpip: "{{ System.cluster_ntp_IP_address if System.cluster_ntp_IP_address is defined }}"
+        ntpip: "{{ System.cluster_ntp_IP_address }}"
 
     - name: Setup time zone
+      when: System.time_zone is defined
       ibm.storage_virtualize.ibm_svc_initial_setup:
         clustername: "{{ cluster_ip }}"
         token: "{{ dest_token.token }}"
-        timezone: "{{ System.time_zone | regex_search('^[^\\s]+') if System.time_zone is defined }}"
+        timezone: "{{ System.time_zone | regex_search('^[^\\s]+') }}"
 
     - name: Setup DNS server
       ibm.storage_virtualize.ibm_svc_initial_setup:

@@ -16,12 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_switch_replication_direction import IBMSVSwitchReplication
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -74,28 +90,28 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
 
     def test_module_fail_when_required_args_missing(self):
         """ required arguments are reported as errors """
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({})
-            IBMSVSwitchReplication()
-        print('Info: %s' % exc.value.args[0]['msg'])
+        with set_module_args({}):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVSwitchReplication()
+            print('Info: %s' % exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_change_mode(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'test_name',
             'mode': 'independent',
-        })
-        svc_run_command_mock.return_value = ''
-        obj = IBMSVSwitchReplication()
-        return_data = obj.change_vg_mode()
-        self.assertEqual(None, return_data)
+        }):
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVSwitchReplication()
+            return_data = obj.change_vg_mode()
+            self.assertEqual(None, return_data)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_switch_replication_direction.IBMSVSwitchReplication.get_volumegroup_info')
@@ -104,20 +120,20 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_nonexistent_volumegroup(self, svc_authorize_mock, svc_run_command_mock, get_volumegroup_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'test_name',
             'mode': 'independent',
-        })
-        get_volumegroup_info_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVSwitchReplication()
-            obj.apply()
-        self.assertEqual('Volume group does not exist: [test_name]', exc.value.args[0]['msg'])
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            get_volumegroup_info_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVSwitchReplication()
+                obj.apply()
+            self.assertEqual('Volume group does not exist: [test_name]', exc.value.args[0]['msg'])
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_switch_replication_direction.IBMSVSwitchReplication.change_vg_mode')
@@ -126,18 +142,18 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_for_failure_with_unsupported_state(self, svc_authorize_mock, svc_run_command_mock, change_vg_mode_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'test_name',
             'state': 'wrong_state',
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVSwitchReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]["failed"])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVSwitchReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]["failed"])
 
 
 if __name__ == '__main__':

@@ -1,0 +1,223 @@
+---
+- name: Using IBM Storage Virtualize Ansible collection to automate firmware upgrade using applysoftware
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - inventory.ini
+  vars:
+    delay_period: "{{ poll_period | default(300) }}"
+    retry_attempts: "{{ poll_retries | default(90) }}"
+    upgrade_already_initiated: false  # DO NOT CHANGE
+  tasks:
+    - name: Check if an upgrade is already in progress
+      register: update_status
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        command_list: ["lsupdate"]
+
+    - name: Set ongoing upgrade version
+      when: update_status.Update is defined and update_status.Update.status != 'success' and update_status.Update.system_new_code_level != ''
+      ansible.builtin.set_fact:
+        current_upgrade_version: "{{ update_status.Update.system_new_code_level | regex_search('^(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"
+
+    - name: Fail if currently ongoing upgrade is not the desired upgrade
+      when: current_upgrade_version is defined and current_upgrade_version != firmware_version_number
+      ansible.builtin.fail:
+        msg: An upgrade is already in progress to version {{ current_upgrade_version }}. Please wait for the ongoing upgrade to complete.
+
+    - name: Set upgrade_already_initiated to true
+      when: current_upgrade_version is defined and current_upgrade_version == firmware_version_number
+      ansible.builtin.set_fact:
+        upgrade_already_initiated: true
+
+    - name: Check current build on the system
+      register: system_info
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        gather_subset: "system"
+
+    - name: Set timestamp cache file path
+      ansible.builtin.set_fact:
+        timestamp_cache_file: "{{ system_info.System.name }}_{{ firmware_version_number | replace('.', '_') }}_timestamp.yml"
+
+    - name: Check if upgrade path is valid and start upgrade process
+      when: not upgrade_already_initiated
+      block:
+        - name: Extract code level from current build
+          ansible.builtin.set_fact:
+            current_code_level: "{{ system_info.System.code_level | regex_search('^(\\d+\\.\\d+\\.\\d+\\.\\d+)') }}"
+
+        - name: Display message if versions match
+          ansible.builtin.debug:
+            msg: The current build version {{ current_code_level }} is the same as the new build version {{ firmware_version_number }}. No upgrade needed.
+          when: current_code_level == firmware_version_number
+
+        - name: Stop the play if versions match
+          ansible.builtin.meta: end_play
+          when: current_code_level == firmware_version_number
+
+        - name: Compare version numbers, to disallow downgrades at the start (applysoftware does not support downgrades)
+          ansible.builtin.set_fact:
+            downgrade_flag: >-
+              {{ (firmware_version_number.split('.') | map('int') | list) <
+                (current_code_level.split('.') | map('int') | list) }}
+
+        - name: Stop if the current build is the newer than as the desired build
+          when: downgrade_flag
+          ansible.builtin.fail:
+            msg: >
+              The current build version {{ current_code_level }} is newer than the build version desired {{ firmware_version_number }}. This is not supported.
+
+        - name: Extract build and test file names from paths
+          ansible.builtin.set_fact:
+            build_name: "{{ firmware_package_src_path | basename }}"
+            test_name: "{{ upgrade_test_util_src_path | basename }}"
+
+        - name: Remove host entries from known_hosts to avoid SSH issues
+          ansible.builtin.command: ssh-keygen -R "{{ clustername }}"
+          ignore_errors: true
+          register: remove_known_hosts_entries
+          changed_when: remove_known_hosts_entries.rc != 0
+
+        - name: Copy svcupgradetest (CCU Checker) from Ansible controller to cluster
+          ansible.builtin.expect:
+            command: scp -O -o StrictHostKeyChecking=no -r {{ upgrade_test_util_src_path }} {{ username }}@{{ clustername }}:/upgrade
+            responses:
+              (?i)Are you sure you want to continue connecting (yes/no/[fingerprint])?: "yes\r\n"
+              (?i)Password: "{{ password }}"
+            timeout: 60 # in seconds
+
+        - name: Install svcupgradetest utility
+          register: svcupgradetest_install
+          ibm.storage_virtualize.ibm_svctask_command:
+            command: "svctask applysoftware -file {{ test_name }}"
+            clustername: "{{ clustername }}"
+            username: "{{ username }}"
+            password: "{{ password }}"
+          failed_when: svcupgradetest_install.rc not in [0, 1]
+
+        - name: Check if svcupgradetest utility was installed successfully
+          block:
+            - name: Run svcupgradetest utility
+              ansible.builtin.expect:
+                command: "ssh {{ username }}@{{ clustername }} svcupgradetest -v {{ firmware_version_number }}"
+                responses:
+                  (?i)Are you sure you want to continue connecting (yes/no/[fingerprint])?: "yes\r\n"
+                  (?i)Password: "{{ password }}"
+                timeout: null
+              register: svcupgradetest_result
+          rescue:
+            - name: Disallow upgrade paths which are not supported
+              when: >
+                svcupgradetest_result.stdout_lines |
+                select('match', '.*upgrade path from \\d+\\.\\d+\\.\\d+\\.\\d+ to \\d+\\.\\d+\\.\\d+\\.\\d+ is unsupported.*') | list | length > 0
+              ansible.builtin.fail:
+                msg: The tool (svcupgradetest) has detected that the upgrade path specified is unsupported.
+
+            - name: Parse svcupgradetest output for errors and warnings
+              ansible.builtin.set_fact:
+                error_line: >
+                  "{{ svcupgradetest_result.stdout_lines | select('match', '^The tool has found \\d+ errors and \\d+ warnings\\.$') | list | first }}"
+
+            - name: Extract number of warnings and errors from the line
+              ansible.builtin.set_fact:
+                tool_stats: "{{ error_line | regex_findall('\\d+') }}"
+
+            - name: Fail when any errors are found or if warnings are found and ignore_warnings is not set
+              ansible.builtin.fail:
+                msg: >
+                  WARNING: The tool (svcupgradetest) has found {{ tool_stats[0] }} errors and {{ tool_stats[1] }} warnings.
+                  Resolve them before proceeding with the upgrade. If you want to proceed despite the warnings,
+                  modify the task 'Run svcupgradetest utility' to set ignore_errors to true and re-run the playbook.
+              when: (tool_stats[0] | int > 0) or (tool_stats[1] | int > 0)
+
+        - name: Copy build from Ansible controller to cluster
+          ansible.builtin.expect:
+            command: scp -O -o StrictHostKeyChecking=no -r {{ firmware_package_src_path }} {{ username }}@{{ clustername }}:/upgrade
+            responses:
+              (?i)Are you sure you want to continue connecting (yes/no/[fingerprint])?: "yes\r\n"
+              (?i)Password: "{{ password }}"
+            timeout: null
+
+        - name: Install build on cluster
+          ibm.storage_virtualize.ibm_svctask_command:
+            command: "svctask applysoftware -file {{ build_name }}"
+            clustername: "{{ clustername }}"
+            username: "{{ username }}"
+            password: "{{ password }}"
+          register: build_applysoftware
+          failed_when: build_applysoftware.rc not in [0, 1]
+
+    - name: Check if timestamp file exists
+      ansible.builtin.stat:
+        path: "{{ timestamp_cache_file }}"
+      register: timestamp_file
+
+    - name: Get cached timestamp
+      when: timestamp_file.stat.exists
+      ansible.builtin.include_vars:
+        file: "{{ timestamp_cache_file }}"
+
+    - name: If cache does not exist, get timestamp and cache
+      when: not timestamp_file.stat.exists
+      block:
+        - name: Get controller start time
+          ansible.builtin.command: "date +%s"
+          changed_when: false
+          register: controller_start_time_output
+
+        - name: Set controller start time in epoch
+          ansible.builtin.set_fact:
+            controller_start_time: "{{ controller_start_time_output.stdout | int }}"
+
+        - name: Write controller start time to cache
+          ansible.builtin.copy:
+            content: |
+              controller_start_time: {{ controller_start_time }}
+            dest: "{{ timestamp_cache_file }}"
+            mode: '0644'
+
+    - name: Get event log
+      register: event_log
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        gather_subset: ["eventlog"]
+
+    - name: Get start upgrade event
+      ansible.builtin.set_fact:
+        start_time_event: "{{ event_log.EventLog | selectattr('description', 'equalto', 'Update prepared') | list }}"
+
+    - name: Capture upgrade start time in epoch
+      when: start_time_event | length > 0
+      ansible.builtin.set_fact:
+        system_start_time: "{{ (start_time_event[0].last_timestamp | to_datetime('%y%m%d%H%M%S')).strftime('%s') | int }}"
+
+    - name: Set system_start_time to controller if system time is not found
+      when: system_start_time is not defined
+      ansible.builtin.set_fact:
+        system_start_time: "{{ controller_start_time }}"
+
+    - name: Set offset
+      ansible.builtin.set_fact:
+        offset: "{{ (system_start_time | int) - (controller_start_time | int) }}"
+
+    - name: Check and display upgrade progress
+      ansible.builtin.include_tasks: _upgrade_status.yaml
+      loop: "{{ range(0, retry_attempts | int) }}"
+      when: upgrade_progress.Update is not defined or upgrade_progress.Update.status != 'success'
+
+    - name: Stop if operation has not succeeded
+      ansible.builtin.fail:
+        msg: "ERROR: Upgrade did not complete successfully"
+      when: upgrade_progress.Update.status != 'success'
+
+    - name: Remove timestamp file
+      ansible.builtin.file:
+        path: "{{ timestamp_cache_file }}"
+        state: absent

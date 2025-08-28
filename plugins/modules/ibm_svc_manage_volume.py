@@ -3,6 +3,7 @@
 
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -76,7 +77,6 @@ options:
       - I(size) is required when using I(unit).
     type: str
     choices: [ b, kb, mb, gb, tb, pb ]
-    default: mb
   iogrp:
     description:
       - Specifies the list of I/O group names. Group names in the list must be separated by using a comma.
@@ -178,8 +178,15 @@ options:
     description:
       - Path of debug log file.
     type: str
+  grainsize:
+    description:
+      - Sets the grain size for a thin-provisioned volume.
+    choices: [32, 64, 128, 256]
+    type: int
+    version_added: '3.0.0'
 author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
+    - Rahul Pawar(@rahul-p)
 notes:
     - This module supports C(check_mode).
     - For unmap parameter, the option remotecopy_relationships has been deprecated from 8.7.1.0 onwards.
@@ -246,7 +253,7 @@ EXAMPLES = r'''
     unit: "gb"
     iogrp: "io_grp0"
 - name: Create thinclone volume from volume vol1
-  ibm_svc_manage_volume:
+  ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
     username: "{{ username }}"
@@ -255,8 +262,9 @@ EXAMPLES = r'''
     fromsourcevolume: "vol1"
     state: "present"
     pool: "pool0"
+    type: "thinclone"
 - name: Create clone volume from volume vol1
-  ibm_svc_manage_volume:
+  ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
     username: "{{ username }}"
@@ -265,6 +273,7 @@ EXAMPLES = r'''
     fromsourcevolume: "vol1"
     state: "present"
     pool: "pool0"
+    type: "clone"
 - name: Adding a new iogrp- io_grp1
   ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
@@ -275,9 +284,7 @@ EXAMPLES = r'''
     name: "volume_name"
     state: "present"
     pool: "pool_name"
-    size: "1"
-    unit: "gb"
-    iogrp: "io_grp0, iogrp1"
+    iogrp: "io_grp0, io_grp1"
 - name: Rename an existing volume
   ibm.storage_virtualize.ibm_svc_manage_volume:
     clustername: "{{ clustername }}"
@@ -306,6 +313,25 @@ EXAMPLES = r'''
     name: "vol0:vol1:vol2"
     type: "clone"
     log_path: "{{ log_path }}"
+    state: "present"
+- name: Update size of volume
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "volume_name"
+    size: "2"
+    unit: "gb"
+    state: "present"
+- name: Update volumegroup of volume
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "volume_name"
+    volumegroup: "vg1"
     state: "present"
 - name: Enable cloud backup in an existing volume
   ibm.storage_virtualize.ibm_svc_manage_volume:
@@ -336,6 +362,20 @@ EXAMPLES = r'''
     name: "new_volume_name"
     state: "absent"
     unmap: ['host_mappings', 'remotecopy_relationships', 'flashcopy_mappings']
+- name: Create a thin volume with grainsize
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "volume_name"
+    state: "present"
+    pool: "pool_name"
+    size: "1"
+    unit: "gb"
+    thin: true
+    grainsize: 32
 '''
 
 RETURN = '''#'''
@@ -346,10 +386,12 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     IBMSVCRestApi,
     svc_argument_spec,
     get_logger,
-    strtobool
+    strtobool,
+    is_feature_supported
 )
 from ansible.module_utils._text import to_native
 import random
+import re
 
 
 class IBMSVCvolume(object):
@@ -363,9 +405,7 @@ class IBMSVCvolume(object):
                 pool=dict(type='str', required=False),
                 size=dict(type='str', required=False),
                 warning=dict(type='int', required=False),
-                unit=dict(type='str', default='mb', choices=['b', 'kb',
-                                                             'mb', 'gb',
-                                                             'tb', 'pb']),
+                unit=dict(type='str', choices=['b', 'kb', 'mb', 'gb', 'tb', 'pb']),
                 buffersize=dict(type='str', required=False),
                 iogrp=dict(type='str', required=False),
                 volumegroup=dict(type='str', required=False),
@@ -381,7 +421,8 @@ class IBMSVCvolume(object):
                 cloud_account_name=dict(type='str'),
                 type=dict(type='str', required=False, choices=['clone', 'thinclone']),
                 fromsourcevolume=dict(type='str', required=False),
-                allow_hs=dict(type='bool', default=False)
+                allow_hs=dict(type='bool', default=False),
+                grainsize=dict(type='int', required=False, choices=[32, 64, 128, 256])
             )
         )
 
@@ -415,6 +456,7 @@ class IBMSVCvolume(object):
         self.type = self.module.params['type']
         self.fromsourcevolume = self.module.params['fromsourcevolume']
         self.unmap = self.module.params['unmap']
+        self.grainsize = self.module.params['grainsize']
 
         # internal variable
         self.changed = False
@@ -453,7 +495,7 @@ class IBMSVCvolume(object):
                 self.module.fail_json(msg='Empty or non-existing iogrp detected: {0}'.format(invalid))
             self.iogrp = temp
 
-    # for validating mandatory parameters of the module
+    # Validate mandatory parameters of the module
     def mandatory_parameter_validation(self):
         missing = [item[0] for item in [('name', self.name), ('state', self.state)] if not item[1]]
         if missing:
@@ -464,12 +506,14 @@ class IBMSVCvolume(object):
             self.module.fail_json(msg='Mutually exclusive parameters detected: [thin] and [compressed]')
         if self.state == 'present' and self.unmap is not None:
             self.module.fail_json(msg='Parameter [unmap] cannot be specified when creating or updating a volume.')
+        if self.unit and not self.size:
+            self.module.fail_json(msg='Parameter [unit] is invalid without [size]')
 
     # for validating parameter while removing an existing volume
     def volume_deletion_parameter_validation(self):
         invalids = ('pool', 'size', 'iogrp', 'buffersize', 'volumegroup', 'novolumegroup',
                     'thin', 'compressed', 'deduplicated', 'old_name', 'enable_cloud_snapshot',
-                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume', 'warning')
+                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume', 'warning', 'grainsize')
 
         invalid_params = ', '.join((param for param in invalids if getattr(self, param)))
 
@@ -495,6 +539,9 @@ class IBMSVCvolume(object):
         if (self.warning) and not self.thin and not self.compressed:
             self.module.fail_json(msg='Parameter [warning] is invalid without [thin] or [compressed]')
 
+        if self.grainsize and not self.thin:
+            self.module.fail_json(msg='Parameter [grainsize] is invalid without [thin]')
+
         missing = []
         if self.type and self.fromsourcevolume:
             if not self.pool:
@@ -506,6 +553,13 @@ class IBMSVCvolume(object):
 
         if missing:
             self.module.fail_json(msg='Missing required parameter(s) while creating: [{0}]'.format(', '.join(missing)))
+
+    def chvolume_supported(self):
+        system_info = self.restapi.svc_obj_info(cmd='lssystem', cmdopts=None, cmdargs=None)
+        code_build_version = system_info['code_level']
+        match = re.match(r'^([\d\.]+)', code_build_version)
+        code_level = match.group(1) if match else None
+        return is_feature_supported('chvolume', code_level)
 
     # for validating parameter while renaming a volume
     def parameter_handling_while_renaming(self):
@@ -522,7 +576,9 @@ class IBMSVCvolume(object):
             "compressed": self.compressed,
             "deduplicated": self.deduplicated,
             "type": self.type,
-            "fromsourcevolume": self.fromsourcevolume
+            "fromsourcevolume": self.fromsourcevolume,
+            "warning": self.warning,
+            "grainsize": self.grainsize
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -657,6 +713,8 @@ class IBMSVCvolume(object):
             cmdopts['fromsnapshotid'] = snapshot_id
         if self.fromsourcevolume:
             cmdopts['fromsourcevolume'] = self.fromsourcevolume
+        if self.grainsize:
+            cmdopts['grainsize'] = self.grainsize
 
         result = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         if result and 'message' in result:
@@ -709,19 +767,19 @@ class IBMSVCvolume(object):
                     props['iogrp'] = {
                         'remove': list(iogrp_to_remove)
                     }
-        # check for changes in volume size
+        # check for changes in volume size for non-HA volumes
+        # Even if we need to use chvolume, it is ok to calculate
+        # because these are local calculations, and won't have any
+        # effect if chvolume is to be used. Refer to update_volume()
+        # for 'updating size of a volume'
+
         if self.size:
             input_size = self.convert_to_bytes()
             existing_size = int(data[0]['capacity'])
             if input_size != existing_size:
-                if input_size > existing_size:
-                    props['size'] = {
-                        'expand': input_size - existing_size
-                    }
-                elif existing_size > input_size:
-                    props['size'] = {
-                        'shrink': existing_size - input_size
-                    }
+                action = 'expand' if input_size > existing_size else 'shrink'
+                props['size'] = {action: abs(input_size - existing_size)}
+
         if self.warning:
             # Check for standard or compressed volume
             if (data[0]['capacity'] != data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'yes'):
@@ -734,8 +792,9 @@ class IBMSVCvolume(object):
         if self.volumegroup:
             if self.volumegroup != data[0]['volume_group_name']:
                 props['volumegroup'] = {
-                    'name': self.volumegroup
+                    'name': self.volumegroup,
                 }
+
         # check for presence of novolumegroup
         if self.novolumegroup:
             if data[0]['volume_group_name']:
@@ -797,6 +856,11 @@ class IBMSVCvolume(object):
             if self.type != data[0].get('volume_type'):
                 props['type'] = {'status': True}
 
+        if self.grainsize:
+            if self.grainsize != int(data[1].get('grainsize')):
+                props['grainsize'] = {'status': True}
+
+        self.log("Properties to be changed: %s", props)
         return props
 
     # function to expand an existing volume size
@@ -877,14 +941,19 @@ class IBMSVCvolume(object):
 
     # function to update an existing volume
     def update_volume(self, modify):
-        # raise error for unsupported parameter
-        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'fromsourcevolume']
-        unsupported_exists = []
-        for parameter in unsupported_parameters:
-            if parameter in modify:
-                unsupported_exists.append(parameter)
+        # raise error for unsupported parameter(s)
+        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'fromsourcevolume', 'grainsize']
+        unsupported_exists = [param for param in unsupported_parameters if param in modify]
         if unsupported_exists:
-            self.module.fail_json(msg='Update not supported for parameter: {0}'.format(unsupported_exists))
+            self.module.fail_json(msg=f"Update not supported for parameter(s): {', '.join(unsupported_exists)}")
+
+        invalid_params = ['warning', 'cloud_backup', 'volumegroup', 'novolumegroup', 'size']
+        mutually_exclusive_params = [param for param in invalid_params if param in modify]
+
+        # If any 2 conflicting parameters are passed, return error
+        if len(mutually_exclusive_params) > 1:
+            self.module.fail_json(msg=f"Parameters are mutually exclusive: {', '.join(mutually_exclusive_params)}")
+
         # when check_mode is enabled
         if self.module.check_mode:
             self.changed = True
@@ -896,26 +965,40 @@ class IBMSVCvolume(object):
                 self.add_iogrp(modify['iogrp']['add'])
             if 'remove' in modify['iogrp']:
                 self.remove_iogrp(modify['iogrp']['remove'])
-        # updating size of a volume
-        if 'size' in modify:
-            if 'expand' in modify['size']:
-                self.expand_volume(modify['size']['expand'])
-            elif 'shrink' in modify['size']:
-                self.shrink_volume(modify['size']['shrink'])
 
         if 'cloud_backup' in modify:
             self.update_cloud_backup()
 
+        cmd = 'chvdisk'
+
         cmdopts = {}
         if 'volumegroup' in modify:
             cmdopts['volumegroup'] = modify['volumegroup']['name']
+            if self.chvolume_supported():
+                cmd = 'chvolume'
         if 'novolumegroup' in modify:
             cmdopts['novolumegroup'] = modify['novolumegroup']['status']
+            if self.chvolume_supported():
+                cmd = 'chvolume'
         if 'warning' in modify:
             cmdopts['warning'] = modify['warning']
+
+        # updating size of a volume
+        if 'size' in modify:
+            if 'shrink' in modify['size']:
+                self.shrink_volume(modify['size']['shrink'])
+            else:
+                if self.chvolume_supported():
+                    cmd = 'chvolume'
+                    cmdopts['size'] = self.size
+                    if self.unit:
+                        cmdopts['unit'] = self.unit
+                else:
+                    self.expand_volume(modify['size']['expand'])
+
         if cmdopts:
             self.restapi.svc_run_command(
-                'chvdisk',
+                cmd,
                 cmdopts,
                 [self.name]
             )
@@ -937,9 +1020,11 @@ class IBMSVCvolume(object):
             if self.module.check_mode:
                 self.changed = True
                 return
-            self.restapi.svc_run_command('chvdisk', {'name': self.name}, [self.old_name])
+
+            cmd = 'chvolume' if self.chvolume_supported() else 'chvdisk'
+            self.restapi.svc_run_command(cmd, {'name': self.name}, [self.old_name])
             self.changed = True
-            msg = "Volume [{0}] has been successfully rename to [{1}]".format(self.old_name, self.name)
+            msg = "Volume [{0}] has been successfully renamed to [{1}]".format(self.old_name, self.name)
         return msg
 
     def apply(self):
@@ -974,7 +1059,10 @@ class IBMSVCvolume(object):
                 self.module.exit_json(msg='Volume {0} is not a thinclone.'.format(self.name), changed=self.changed)
 
         if self.state == "present" and self.old_name:
-            msg = self.volume_rename(volume_data)
+            if self.name == self.old_name:
+                self.module.exit_json(msg="Volume's name is same as old name.", changed=self.changed)
+            else:
+                msg = self.volume_rename(volume_data)
         elif self.state == "absent" and self.old_name:
             self.module.fail_json(msg="Rename functionality is not supported when 'state' is absent.")
         else:
@@ -1021,7 +1109,6 @@ class IBMSVCvolume(object):
         if self.module.check_mode:
             msg = 'Skipping changes due to check mode.'
             self.log('skipping changes due to check mode.')
-
         self.module.exit_json(msg=msg, changed=self.changed)
 
 

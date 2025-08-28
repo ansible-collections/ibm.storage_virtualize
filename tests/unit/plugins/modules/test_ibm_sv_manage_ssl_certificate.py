@@ -15,13 +15,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_ssl_certificate import IBMSVSSLCertificate
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -73,21 +88,20 @@ class TestIBMSVSSLCertificate(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_module_export_certificate(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'certificate_type': 'system'
-        })
+        }):
+            cert = IBMSVSSLCertificate()
 
-        cert = IBMSVSSLCertificate()
+            with pytest.raises(AnsibleExitJson) as exc:
+                cert.apply()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            cert.apply()
-
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertEqual(svc_run_command_mock.call_count, 1)
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(svc_run_command_mock.call_count, 1)
 
 
 if __name__ == '__main__':

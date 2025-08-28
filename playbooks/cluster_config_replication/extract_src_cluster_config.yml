@@ -66,10 +66,14 @@
       register: src_creation
 
     - name: Write content into file
-      ansible.builtin.lineinfile:
+      ansible.builtin.blockinfile:
         path: "{{ src_file }}"
-        line: "System: {{ settable_system_info }}\nDnsServer: {{ settable_dns_info }}\nOwnershipGroup: {{ settable_ownershipgrp_info }}\n
-              UserGrp: {{ settable_usergrp_info }}\nUser: {{ settable_user_info }}"
+        block: |
+          System: {{ settable_system_info }}
+          DnsServer: {{ settable_results.settable_dns_info }}
+          OwnershipGroup: {{ settable_results.settable_ownershipgrp_info }}
+          UserGrp: {{ settable_results.settable_usergrp_info }}
+          User: {{ settable_results.settable_user_info }}
 
     - name: Read file content
       register: file_data

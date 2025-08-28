@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_provisioning_policy import IBMSVProvisioningPolicy
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,30 +85,28 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_module_with_blank_values(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': ''
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVProvisioningPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVProvisioningPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_without_state_parameter(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'pp0',
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVProvisioningPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVProvisioningPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -105,21 +118,20 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                                 svc_authorize_mock,
                                                 svc_run_command_mock,
                                                 pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'pp0',
             'state': 'present'
-        })
+        }):
+            pp_exists_mock.return_value = {}
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.return_value = {}
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -131,7 +143,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                         svc_authorize_mock,
                                         svc_run_command_mock,
                                         pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -139,14 +151,13 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'name': 'pp0',
             'capacitysaving': 'drivebased',
             'state': 'present'
-        })
+        }):
+            pp_exists_mock.return_value = {}
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.return_value = {}
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -158,7 +169,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                                     svc_authorize_mock,
                                                     svc_obj_info_mock,
                                                     svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -166,14 +177,13 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'name': 'pp0',
             'capacitysaving': 'drivebased',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'capacity_saving': 'none'}
+            pp = IBMSVProvisioningPolicy()
 
-        svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'capacity_saving': 'none'}
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -185,7 +195,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                         svc_authorize_mock,
                                         svc_run_command_mock,
                                         pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -193,18 +203,17 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'name': 'pp_new',
             'old_name': 'pp0',
             'state': 'present'
-        })
+        }):
+            pp_exists_mock.side_effect = iter([
+                {'id': 0, 'name': 'pp0'},
+                {},
+                {'id': 0, 'name': 'pp0'}
+            ])
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.side_effect = iter([
-            {'id': 0, 'name': 'pp0'},
-            {},
-            {'id': 0, 'name': 'pp0'}
-        ])
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -216,7 +225,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                                     svc_authorize_mock,
                                                     svc_run_command_mock,
                                                     pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -224,14 +233,13 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'name': 'pp_new',
             'old_name': 'pp0',
             'state': 'present'
-        })
+        }):
+            pp_exists_mock.side_effect = iter([{}, {'id': 0, 'name': 'pp0'}, {}])
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.side_effect = iter([{}, {'id': 0, 'name': 'pp0'}, {}])
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -243,7 +251,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                         svc_authorize_mock,
                                         svc_run_command_mock,
                                         svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -252,13 +260,12 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'old_name': 'pp0',
             'capacitysaving': 'drivebased',
             'state': 'present'
-        })
-
-        svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'capacity_saving': 'none'}
-        pp = IBMSVProvisioningPolicy()
-        with pytest.raises(AnsibleFailJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'capacity_saving': 'none'}
+            pp = IBMSVProvisioningPolicy()
+            with pytest.raises(AnsibleFailJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -270,7 +277,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                       svc_authorize_mock,
                                       svc_run_command_mock,
                                       svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -279,13 +286,12 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'old_name': 'pp0',
             'deduplicated': True,
             'state': 'present'
-        })
-
-        svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'deduplicated': 'no'}
-        pp = IBMSVProvisioningPolicy()
-        with pytest.raises(AnsibleFailJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            svc_obj_info_mock.return_value = {'id': 0, 'name': 'pp0', 'deduplicated': 'no'}
+            pp = IBMSVProvisioningPolicy()
+            with pytest.raises(AnsibleFailJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -297,21 +303,20 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                         svc_authorize_mock,
                                         svc_run_command_mock,
                                         pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'pp0',
             'state': 'absent'
-        })
+        }):
+            pp_exists_mock.return_value = {'id': 0, 'name': 'pp0'}
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.return_value = {'id': 0, 'name': 'pp0'}
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -323,21 +328,20 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                                     svc_authorize_mock,
                                                     svc_run_command_mock,
                                                     pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'pp0',
             'state': 'absent'
-        })
+        }):
+            pp_exists_mock.return_value = {}
+            pp = IBMSVProvisioningPolicy()
 
-        pp_exists_mock.return_value = {}
-        pp = IBMSVProvisioningPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            pp.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                pp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_provisioning_policy.IBMSVProvisioningPolicy.is_pp_exists')
@@ -349,7 +353,7 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
                                                    svc_authorize_mock,
                                                    svc_run_command_mock,
                                                    pp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -357,13 +361,12 @@ class TestIBMSVProvisioningPolicy(unittest.TestCase):
             'name': 'pp0',
             'capacitysaving': 'drivebased',
             'state': 'absent'
-        })
+        }):
+            pp_exists_mock.return_value = {}
 
-        pp_exists_mock.return_value = {}
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVProvisioningPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVProvisioningPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
 
 if __name__ == '__main__':

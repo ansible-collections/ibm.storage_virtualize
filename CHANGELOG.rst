@@ -4,6 +4,36 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.0.0
+======
+
+Release Summary
+---------------
+
+Added support for renaming FlashSystem objects, HA volume size expansion, volumegroup and grainsize change, partition support for hostcluster, latest FlashSystem grid APIs, management portset in partition, playbooks for firmware upgrade and FlashSystem log collection, ansible compliance changes in unit-tests.
+
+Minor Changes
+-------------
+
+- ibm_sv_manage_flashsystem_grid - Added support for new FlashSystem grid APIs
+- ibm_sv_manage_storage_partition - Added support for management portset and renaming partition
+- ibm_sv_manage_truststore_for_replication - Added support for new FlashSystem grid APIs
+- ibm_svc_hostcluster - Added support for partition and for managing host mappings during hostcluster deletion
+- ibm_svc_info - Added support for new FlashSystem grid APIs
+- ibm_svc_manage_ip - Changes for management portset
+- ibm_svc_manage_portset - Added support for management portset
+- ibm_svc_manage_volume - Added support for HA volumes volume expansion, volumegroup, volume rename and grainsize
+
+Breaking Changes / Porting Guide
+--------------------------------
+
+- ibm_sv_manage_flashsystem_grid - The flashsystem grid module now uses newer FlashSystem REST APIs to perform tasks.
+
+Bugfixes
+--------
+
+- ibm_svc_mdiskgrp - Removed mandatory system mask setting during pool-linking
+
 v2.7.4
 ======
 

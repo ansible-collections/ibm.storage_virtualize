@@ -16,13 +16,28 @@ from ansible.module_utils.compat.paramiko import paramiko
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_complete_initial_setup import IBMSVCCompleteSetup
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -69,24 +84,24 @@ class TestIBMSVCInitS(unittest.TestCase):
         })
 
     def test_ssh_connect_with_missing_username(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'password': 'password',
-            })
-            IBMSVCCompleteSetup()
-            print('Info: %s' % exc.value.args[0]['msg'])
-            self.assertFalse(exc.value.args[0]['changed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'password': 'password',
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCCompleteSetup()
+                self.assertFalse(exc.value.args[0]['changed'])
+                print('Info: %s' % exc.value.args[0]['msg'])
 
     def test_ssh_connect_with_missing_password(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'username': 'username',
-            })
-            IBMSVCCompleteSetup()
-            print('Info: %s' % exc.value.args[0]['msg'])
-            self.assertFalse(exc.value.args[0]['changed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCCompleteSetup()
+                self.assertFalse(exc.value.args[0]['changed'])
+                print('Info: %s' % exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_complete_initial_setup.IBMSVCCompleteSetup.is_lmc')
@@ -95,18 +110,18 @@ class TestIBMSVCInitS(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_setup_with_lmc(self, connect_mock, disconnect_mock, lmc_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password'
-        })
-        lmc_mock.return_value = True
-        patch.object(paramiko.SSHClient, 'exec_command')
-        conn = IBMSVCCompleteSetup()
-        with pytest.raises(Exception) as exc:
-            conn.apply()
-        print('Info: %s' % exc)
-        self.assertTrue(exc)
+        }):
+            lmc_mock.return_value = True
+            patch.object(paramiko.SSHClient, 'exec_command')
+            conn = IBMSVCCompleteSetup()
+            with pytest.raises(Exception) as exc:
+                conn.apply()
+            print('Info: %s' % exc)
+            self.assertTrue(exc)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_complete_initial_setup.IBMSVCCompleteSetup.is_lmc')
@@ -115,18 +130,18 @@ class TestIBMSVCInitS(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_setup_without_lmc(self, connect_mock, disconnect_mock, lmc_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password'
-        })
-        lmc_mock.return_value = False
-        patch.object(paramiko.SSHClient, 'exec_command')
-        conn = IBMSVCCompleteSetup()
-        with pytest.raises(Exception) as exc:
-            conn.apply()
-        print('Info: %s' % exc)
-        self.assertFalse(exc.value.args[0]['changed'])
+        }):
+            lmc_mock.return_value = False
+            patch.object(paramiko.SSHClient, 'exec_command')
+            conn = IBMSVCCompleteSetup()
+            with pytest.raises(Exception) as exc:
+                conn.apply()
+            print('Info: %s' % exc)
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

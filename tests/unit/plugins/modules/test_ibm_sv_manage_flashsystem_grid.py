@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_flashsystem_grid import IBMSVFlashsystemGridMgmt
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -83,22 +98,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Create a flashsystem grid on a cluster which is not part of flashsystem grid
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'fg0',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = ""
+            svc_run_command_mock.return_value = ""
 
-        svc_obj_info_mock.return_value = ""
-        svc_run_command_mock.return_value = ""
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -111,31 +125,30 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Create a flashsystem grid on a cluster which has flashsystem grid with same name
         and is coordinator.
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'fg0',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.side_effect = [
+                # For lsgridmembers
+                [
+                    {"id": "0", "member_address": "", "role": "coordinator"},
+                    {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                    {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+                ],
+                {"grid_name": 'fg0'}  # For lsgrid, to get grid_name
+            ]
 
-        svc_obj_info_mock.side_effect = [
-            # For lsflashgridmembers
-            [
-                {"id": "0", "member_address": "", "role": "coordinator"},
-                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-            ],
-            {"flash_grid_name": 'fg0'}  # For lsflashgrid, to get flash_grid_name
-        ]
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
 
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Flashsystem grid (fg0) already exists.")
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Flashsystem grid (fg0) already exists.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -145,32 +158,31 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test failure if user tries to create another flashsystem grid on a flashsystem grid coordinator
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'fg0',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.side_effect = [
+                # For lsgridmembers
+                [
+                    {"id": "0", "member_address": "", "role": "coordinator"},
+                    {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                    {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+                ],
+                {"grid_name": 'fg1'}  # For lsgrid, to get grid_name
+            ]
 
-        svc_obj_info_mock.side_effect = [
-            # For lsflashgridmembers
-            [
-                {"id": "0", "member_address": "", "role": "coordinator"},
-                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-            ],
-            {"flash_grid_name": 'fg1'}  # For lsflashgrid, to get flash_grid_name
-        ]
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg.apply()
 
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg.apply()
-
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "CMMVC1265E The command failed as this system is already a member of a Flash Grid.")
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "CMMVC1265E The command failed as this system is already a member of a grid.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -182,31 +194,30 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test failure if user tries to create another flashsystem grid on a flashsystem grid member
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'fg0',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.side_effect = [
+                [
+                    {"id": "0", "member_address": "", "role": "member"},
+                    {"id": "1", "member_address": "1.2.3.5", "role": "coordinator."},
+                    {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+                ],
+                {"grid_name": 'fg1'}  # For lsgrid, to get grid_name
+            ]
 
-        svc_obj_info_mock.side_effect = [
-            [
-                {"id": "0", "member_address": "", "role": "member"},
-                {"id": "1", "member_address": "1.2.3.5", "role": "coordinator."},
-                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-            ],
-            {"flash_grid_name": 'fg1'}  # For lsflashgrid, to get flash_grid_name
-        ]
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg.apply()
 
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg.apply()
-
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "CMMVC1265E The command failed as this system is already a member of a Flash Grid.")
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "CMMVC1265E The command failed as this system is already a member of a grid.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -222,26 +233,25 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Delete a flashsystem grid from coordinator
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'state': 'absent'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                # lsgridmembers output
+                [{"id": "0", "member_address": "", "role": "coordinator"}]
+            ]
+            svc_run_command_mock.return_value = ""
 
-        svc_obj_info_mock.return_value = [
-            # lsflashgridmembers output
-            [{"id": "0", "member_address": "", "role": "coordinator"}]
-        ]
-        svc_run_command_mock.return_value = ""
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
 
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Deleted flashsystem-grid successfully")
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Deleted flashsystem-grid successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -253,22 +263,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test deleting a non-existent flashsystem grid from a cluster
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'state': 'absent'
-        })
+        }):
+            svc_obj_info_mock.return_value = ""
 
-        svc_obj_info_mock.return_value = ""
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
 
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'], "Flashsystem grid does not exist.")
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Flashsystem grid does not exist.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -283,7 +292,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test joining a flashsystem grid from a new cluster
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -292,15 +301,14 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'truststore': 'ts0',
             'action': 'join',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = ""
+            svc_run_command_mock.return_value = ""
 
-        svc_obj_info_mock.return_value = ""
-        svc_run_command_mock.return_value = ""
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -315,7 +323,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test joining same flashsystem grid again which is already joined (idempotency)
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -324,22 +332,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'truststore': 'ts0',
             'action': 'join',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "member"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "coordinator"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "member"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "coordinator"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
+            get_cluster_role_mock.side_effect = ["member", "coordinator"]
 
-        get_cluster_role_mock.side_effect = ["member", "coordinator"]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "(1.2.3.4) is already member of flashsystem grid with coordinator (1.2.3.5)")
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "(1.2.3.4) is already member of flashsystem grid with coordinator (1.2.3.5)")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -354,7 +361,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test joining same flashsystem grid again which is already joined (idempotency)
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -363,22 +370,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'truststore': 'ts0',
             'action': 'join',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "coordinator"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "coordinator"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
+            get_cluster_role_mock.side_effect = ["coordinator", None]
 
-        get_cluster_role_mock.side_effect = ["coordinator", None]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "CMMVC6036E This system is flashsystem grid coordinator")
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "CMMVC6036E This system is flashsystem grid coordinator")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -396,7 +402,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test joining a flashsystem grid from a new cluster
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -405,20 +411,19 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'truststore': 'ts0',
             'action': 'accept',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "coordinator"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
+            svc_run_command_mock.return_value = ""
+            get_cluster_role_mock.return_value = ["coordinator", None]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "coordinator"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
-        svc_run_command_mock.return_value = ""
-        get_cluster_role_mock.return_value = ["coordinator", None]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -433,7 +438,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test joining same flashsystem grid again which is already joined (idempotency)
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -442,22 +447,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'truststore': 'ts0',
             'action': 'accept',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "coordinator"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "coordinator"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
+            get_cluster_role_mock.side_effect = ["coordinator", "member"]
 
-        get_cluster_role_mock.side_effect = ["coordinator", "member"]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "(1.2.3.5) is already member of flashsystem grid with coordinator (1.2.3.4)")
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "(1.2.3.5) is already member of flashsystem grid with coordinator (1.2.3.4)")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -475,7 +479,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test removing a flashsystem member
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -483,22 +487,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'target_cluster_name': '1.2.3.5',
             'action': 'remove',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "coordinator"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
+            svc_run_command_mock.return_value = ""
+            get_cluster_role_mock.side_effect = ["coordinator", "member"]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "coordinator"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
-        svc_run_command_mock.return_value = ""
-        get_cluster_role_mock.side_effect = ["coordinator", "member"]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "Removed flashsystem-grid member (1.2.3.5) successfully")
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "Removed flashsystem-grid member (1.2.3.5) successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_flashsystem_grid.IBMSVFlashsystemGridMgmt.get_cluster_role')
@@ -513,7 +516,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test removing a non-existing member from flashsystem grid
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -521,22 +524,21 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'target_cluster_name': '1.2.3.10',
             'action': 'remove',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "member_address": "", "role": "coordinator"},
+                {"id": "1", "member_address": "1.2.3.5", "role": "member"},
+                {"id": "2", "member_address": "1.2.3.6", "role": "member"}
+            ]
 
-        svc_obj_info_mock.return_value = [
-            {"id": "0", "member_address": "", "role": "coordinator"},
-            {"id": "1", "member_address": "1.2.3.5", "role": "member"},
-            {"id": "2", "member_address": "1.2.3.6", "role": "member"}
-        ]
+            get_cluster_role_mock.side_effect = ["coordinator", None]
 
-        get_cluster_role_mock.side_effect = ["coordinator", None]
-
-        fg = IBMSVFlashsystemGridMgmt()
-        with pytest.raises(AnsibleExitJson) as exc:
-            fg.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         "(1.2.3.10) is not a flashsystem grid member.")
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             "(1.2.3.10) is not a flashsystem grid member.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -544,7 +546,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         '''
         Test mutually exclusive parameters name and target_cluster_name during create operation
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -552,14 +554,13 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'name': 'fg0',
             'target_cluster_name': '1.2.3.10',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg = IBMSVFlashsystemGridMgmt()
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'Parameter name is mutually exclusive with action and target_cluster_name')
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg = IBMSVFlashsystemGridMgmt()
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'Parameter name is mutually exclusive with action and target_cluster_name')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -568,7 +569,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Test failure due to missing dependent parameter target_cluster_name
         to be used with action during join action
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -576,14 +577,13 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'action': 'join',
             'truststore': 'ts0',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg = IBMSVFlashsystemGridMgmt()
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'action and target_cluster_name must be provided together')
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg = IBMSVFlashsystemGridMgmt()
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'action and target_cluster_name must be provided together')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -592,7 +592,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Test failure due to missing dependent parameter truststore
         to be used with action during join action
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -600,14 +600,13 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'action': 'join',
             'target_cluster_name': '1.2.3.5',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg = IBMSVFlashsystemGridMgmt()
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'action (join) must be provided with truststore.')
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg = IBMSVFlashsystemGridMgmt()
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'action (join) must be provided with truststore.')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -617,7 +616,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
         Test failure due to presence of invalid parameters target_cluster_name
         to be used with action during join action
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': '1.2.3.4',
             'domain': 'domain',
             'username': 'username',
@@ -625,14 +624,13 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             'target_cluster_name': '1.2.3.5',
             'truststore': 'ts0',
             'state': 'absent'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            fg = IBMSVFlashsystemGridMgmt()
-            fg.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'Invalid parameter(s) for state=absent: target_cluster_name, truststore')
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                fg = IBMSVFlashsystemGridMgmt()
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'Invalid parameter(s) for state=absent: target_cluster_name, truststore')
 
 
 if __name__ == '__main__':
