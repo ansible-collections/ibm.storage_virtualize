@@ -101,15 +101,11 @@ ibm.storage_virtualize
 |volume_group_name_prefix |yes           |X        |Prefix for the volume group to be created, the name of the GMCV relationship/consistency groups is appended to this prefix for each migration|
 |location_1_iogrp_id      |no            |0        |ID of the IO Group on location 1 for replication policy                                |
 |location_2_iogrp_id      |no            |0        |ID of the IO Group on location 2 for replication policy                                |
-|use_existing_certificate |no            |true     |Whether the system should use the existing certificate for truststores                 |
 |remove_aux_volumes       |no            |false    |Whether to delete GMCV/GM relationships/consistency groups and auxiliary volumes       |
 |log_path                 |no            |./gm_gmcv_pbr_migration.log    |Where should logs of the migration process be placed             |
 
 >[!CAUTION]
 > The remove_aux_volumes variable, when set to true, will delete all specified GMCV relationships, consistency groups and their auxiliary volumes as well once PBR is fully setup. If set to false, all the information necessary to clean up the Global Mirror/GMCV remnants later will be stored in an inventory_cleanup_<ir/prefix/cg>\_master_system_name_aux_system_name.ini file, and can be cleaned up later using the cleanup_gm_gmcv_<ir/prefix/cg>_pbr_migration.yaml.yaml playbook.
-
->[!CAUTION]
-> The use_existing_certificate variable, when set to false, will create a new self-signed system certificate and discard the old certificate of the system, which can lead to issues with Truststores and PBR setups created before the creation of the new certificate.
 
 ### Variables for independent relationship migration
 

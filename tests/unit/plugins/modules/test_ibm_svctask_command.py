@@ -16,13 +16,28 @@ from ansible.module_utils.compat.paramiko import paramiko
 from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svctask_command import IBMSVCsshClient
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,94 +85,94 @@ class TestIBMSVCsshClient_svctask(unittest.TestCase):
         })
 
     def test_ssh_connect_with_missing_username(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'password': 'password',
-                'command': 'svctask cli_command',
-            })
-            IBMSVCsshClient()
+        with set_module_args({
+            'clustername': 'clustername',
+            'password': 'password',
+            'command': 'svctask cli_command',
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCsshClient()
             print('Info: %s' % exc.value.args[0]['msg'])
-            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_ssh_connect_with_missing_password(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'username': 'username',
-                'command': 'svctask cli_command',
-            })
-            IBMSVCsshClient()
+        with set_module_args({
+            'clustername': 'clustername',
+            'username': 'username',
+            'command': 'svctask cli_command',
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCsshClient()
             print('Info: %s' % exc.value.args[0]['msg'])
-            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_ssh_connect_with_password(self, connect_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'command': 'svctask cli_command',
-        })
-        if paramiko is None:
-            print("paramiko is not installed")
+        }):
+            if paramiko is None:
+                print("paramiko is not installed")
 
-        patch.object(paramiko.SSHClient, 'exec_command')
-        conn = IBMSVCsshClient()
-        with pytest.raises(Exception) as exc:
-            conn.send_svctask_command()
-        print('Info: %s' % exc.value.args[0])
-        self.assertTrue(conn.ssh_client.is_client_connected)
+            patch.object(paramiko.SSHClient, 'exec_command')
+            conn = IBMSVCsshClient()
+            with pytest.raises(Exception) as exc:
+                conn.send_svctask_command()
+            print('Info: %s' % exc.value.args[0])
+            self.assertTrue(conn.ssh_client.is_client_connected)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_ssh_connect_with_key(self, connect_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': '',
             'usesshkey': 'yes',
             'command': 'svctask cli_command',
-        })
-        if paramiko is None:
-            print("paramiko is not installed")
+        }):
+            if paramiko is None:
+                print("paramiko is not installed")
 
-        patch.object(paramiko.SSHClient, 'exec_command')
-        conn = IBMSVCsshClient()
-        with pytest.raises(Exception) as exc:
-            conn.send_svctask_command()
-        print('Info: %s' % exc.value.args[0])
-        self.assertTrue(conn.ssh_client.is_client_connected)
+            patch.object(paramiko.SSHClient, 'exec_command')
+            conn = IBMSVCsshClient()
+            with pytest.raises(Exception) as exc:
+                conn.send_svctask_command()
+            print('Info: %s' % exc.value.args[0])
+            self.assertTrue(conn.ssh_client.is_client_connected)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_disconnect')
     def test_ssh_disconnect(self, connect_mock, disconnect_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'command': 'svctask cli_command',
-        })
-        conn = IBMSVCsshClient()
-        conn.is_client_connected = True
-        conn.ssh_client._svc_disconnect()
-        self.assertTrue(conn.ssh_client.is_client_connected)
+        }):
+            conn = IBMSVCsshClient()
+            conn.is_client_connected = True
+            conn.ssh_client._svc_disconnect()
+            self.assertTrue(conn.ssh_client.is_client_connected)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_ssh_disconnect_failed(self, connect_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'command': 'svctask cli_command',
-        })
-        conn = IBMSVCsshClient()
-        conn.ssh_client._svc_disconnect()
-        self.assertFalse(conn.ssh_client.is_client_connected)
+        }):
+            conn = IBMSVCsshClient()
+            conn.ssh_client._svc_disconnect()
+            self.assertFalse(conn.ssh_client.is_client_connected)
 
 
 if __name__ == '__main__':

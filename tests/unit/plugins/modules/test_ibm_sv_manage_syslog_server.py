@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_syslog_server import IBMSVSyslogserver
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,21 +85,20 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_module_with_blank_values(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': '',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVSyslogserver()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVSyslogserver()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_mutually_exclusive_case_1(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -93,14 +107,13 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'cadf': 'on',
             'facility': 1,
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVSyslogserver()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVSyslogserver()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_mutually_exclusive_case_2(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -108,11 +121,10 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'name': 'server1',
             'port': '1010',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVSyslogserver()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVSyslogserver()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -124,7 +136,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                           svc_authorize_mock,
                                           svc_run_command_mock,
                                           server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -132,14 +144,13 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'name': 'server0',
             'ip': '1.1.1.1',
             'state': 'present'
-        })
+        }):
+            server_exist_mock.return_value = {}
+            p = IBMSVSyslogserver()
 
-        server_exist_mock.return_value = {}
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -151,7 +162,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                                        svc_authorize_mock,
                                                        svc_run_command_mock,
                                                        server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -161,14 +172,13 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'info': 'off',
             'warning': 'off'
-        })
+        }):
+            server_exist_mock.return_value = {}
+            p = IBMSVSyslogserver()
 
-        server_exist_mock.return_value = {}
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -180,34 +190,33 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                               svc_authorize_mock,
                                               svc_run_command_mock,
                                               svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'server0',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "1",
+                "name": "server0",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
+            p = IBMSVSyslogserver()
 
-        svc_obj_info_mock.return_value = {
-            "id": "1",
-            "name": "server0",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -219,7 +228,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                   svc_authorize_mock,
                                   svc_run_command_mock,
                                   svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -228,27 +237,26 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'info': 'off',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "1",
+                "name": "server0",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
+            p = IBMSVSyslogserver()
 
-        svc_obj_info_mock.return_value = {
-            "id": "1",
-            "name": "server0",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -259,7 +267,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
     def test_rename_syslog_server(self, svc_authorize_mock,
                                   svc_run_command_mock,
                                   svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -267,26 +275,26 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'name': 'new_server0',
             'old_name': 'server0',
             'state': 'present'
-        })
-        svc_obj_info_mock.return_value = {
-            "id": "1",
-            "name": "server0",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "1",
+                "name": "server0",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
 
-        arg_data = []
-        v = IBMSVSyslogserver()
-        data = v.rename_server(arg_data)
-        self.assertEqual(data, 'Syslog server [server0] has been successfully rename to [new_server0].')
+            arg_data = []
+            v = IBMSVSyslogserver()
+            data = v.rename_server(arg_data)
+            self.assertEqual(data, 'Syslog server [server0] has been successfully rename to [new_server0].')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -298,7 +306,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                                      svc_authorize_mock,
                                                      svc_run_command_mock,
                                                      server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -307,26 +315,25 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'error': 'off',
             'state': 'absent'
-        })
+        }):
+            server_exist_mock.return_value = {
+                "id": "1",
+                "name": "server0",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
 
-        server_exist_mock.return_value = {
-            "id": "1",
-            "name": "server0",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVSyslogserver()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVSyslogserver()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -337,34 +344,33 @@ class TestIBMSVSyslogserver(unittest.TestCase):
     def test_delete_syslog_server(self, svc_authorize_mock,
                                   svc_run_command_mock,
                                   server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'server0',
             'state': 'absent'
-        })
+        }):
+            server_exist_mock.return_value = {
+                "id": "1",
+                "name": "server0",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
+            p = IBMSVSyslogserver()
 
-        server_exist_mock.return_value = {
-            "id": "1",
-            "name": "server0",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -375,21 +381,20 @@ class TestIBMSVSyslogserver(unittest.TestCase):
     def test_delete_syslog_server_idempotency(self, svc_authorize_mock,
                                               svc_run_command_mock,
                                               server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'server0',
             'state': 'absent'
-        })
+        }):
+            server_exist_mock.return_value = {}
+            p = IBMSVSyslogserver()
 
-        server_exist_mock.return_value = {}
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_syslog_server.IBMSVSyslogserver.get_syslog_server_details')
@@ -401,7 +406,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                            svc_authorize_mock,
                                            svc_run_command_mock,
                                            server_exist_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -410,14 +415,13 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'state': 'present',
             'protocol': 'tls'
-        })
+        }):
+            server_exist_mock.return_value = {}
+            p = IBMSVSyslogserver()
 
-        server_exist_mock.return_value = {}
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -429,7 +433,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                            svc_authorize_mock,
                                            svc_run_command_mock,
                                            svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -438,27 +442,26 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'state': 'present',
             'protocol': 'tls'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "1",
+                "name": "server1",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "udp",
+                "port": "514"
+            }
+            p = IBMSVSyslogserver()
 
-        svc_obj_info_mock.return_value = {
-            "id": "1",
-            "name": "server1",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "udp",
-            "port": "514"
-        }
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -470,7 +473,7 @@ class TestIBMSVSyslogserver(unittest.TestCase):
                                                   svc_authorize_mock,
                                                   svc_run_command_mock,
                                                   svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -479,27 +482,26 @@ class TestIBMSVSyslogserver(unittest.TestCase):
             'ip': '1.1.1.1',
             'state': 'present',
             'protocol': 'tcp'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "1",
+                "name": "server1",
+                "IP_address": "1.1.1.1",
+                "error": "on",
+                "warning": "on",
+                "info": "on",
+                "cadf": "off",
+                "audit": "off",
+                "login": "off",
+                "facility": "0",
+                "protocol": "tls",
+                "port": "6514"
+            }
+            p = IBMSVSyslogserver()
 
-        svc_obj_info_mock.return_value = {
-            "id": "1",
-            "name": "server1",
-            "IP_address": "1.1.1.1",
-            "error": "on",
-            "warning": "on",
-            "info": "on",
-            "cadf": "off",
-            "audit": "off",
-            "login": "off",
-            "facility": "0",
-            "protocol": "tls",
-            "port": "6514"
-        }
-        p = IBMSVSyslogserver()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            p.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

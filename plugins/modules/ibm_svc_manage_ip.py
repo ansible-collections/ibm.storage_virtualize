@@ -3,6 +3,7 @@
 
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -58,7 +59,6 @@ options:
         description:
             - Specifies a port ranging from 1 - 16 to which IP shall be assigned.
         type: int
-        required: true
     portset:
         description:
             - Specifies the name of the portset object.
@@ -130,6 +130,20 @@ EXAMPLES = '''
    portset: portset0
    ip_address: x.x.x.x
    state: absent
+- name: Create IP provisioning for management portset
+  ibm.storage_virtualize.ibm_svc_manage_ip:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   log_path: /tmp/playbook.debug
+   node: node1
+   portset: mgmt_portset
+   ip_address: x.x.x.x
+   subnet_prefix: 20
+   gateway: x.x.x.x
+   vlan: 1
+   shareip: true
+   state: present
 '''
 
 RETURN = '''#'''
@@ -147,7 +161,7 @@ class IBMSVCIp(object):
             dict(
                 node=dict(type='str', required=True),
                 state=dict(type='str', required=True, choices=['present', 'absent']),
-                port=dict(type='int', required=True),
+                port=dict(type='int'),
                 portset=dict(type='str'),
                 ip_address=dict(type='str', required=True),
                 subnet_prefix=dict(type='int'),
@@ -167,7 +181,6 @@ class IBMSVCIp(object):
         # Required
         self.node = self.module.params['node']
         self.state = self.module.params['state']
-        self.port = self.module.params['port']
         self.ip_address = self.module.params.get('ip_address', False)
 
         # Optional
@@ -176,6 +189,7 @@ class IBMSVCIp(object):
         self.gateway = self.module.params.get('gateway', False)
         self.vlan = self.module.params.get('vlan', False)
         self.shareip = self.module.params.get('shareip', False)
+        self.port = self.module.params.get('port', False)
 
         # Initialize changed variable
         self.changed = False
@@ -198,7 +212,6 @@ class IBMSVCIp(object):
         if self.state == 'present':
             required_when_present = {
                 'node': self.node,
-                'port': self.port,
                 'ip_address': self.ip_address,
                 'subnet_prefix': self.subnet_prefix
             }
@@ -208,7 +221,6 @@ class IBMSVCIp(object):
         if self.state == 'absent':
             required_when_absent = {
                 'node': self.node,
-                'port': self.port,
                 'ip_address': self.ip_address
             }
             not_required_when_absent = {

@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_mdisk import IBMSVCmdisk
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -75,17 +90,17 @@ class TestIBMSVCmdisk(unittest.TestCase):
 
     def test_module_fail_when_required_args_missing(self):
         """ required arguments are reported as errors """
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({})
-            IBMSVCmdisk()
-        print('Info: %s' % exc.value.args[0]['msg'])
+        with set_module_args({}):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCmdisk()
+            print('Info: %s' % exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_get_existing_mdisk(self, svc_authorize_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -93,19 +108,19 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_get_existing_mdisk',
             'mdiskgrp': 'Ansible-Pool'
-        })
-        mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
-                      "status": "online", "mode": "array", "mdisk_grp_id": "0",
-                      "mdisk_grp_name": "Pool_Ansible_collections",
-                      "capacity": "5.2TB", "ctrl_LUN_#": "",
-                      "controller_name": "", "UID": "", "tier": "tier0_flash",
-                      "encrypt": "no", "site_id": "", "site_name": "",
-                      "distributed": "no", "dedupe": "no",
-                      "over_provisioned": "no", "supports_unmap": "yes"}]
-        svc_obj_info_mock.return_value = mdisk_ret
-        mdisk = IBMSVCmdisk().mdisk_exists('test_get_existing_mdisk')
-        self.assertEqual('mdisk_Ansible_collections', mdisk['name'])
-        self.assertEqual('0', mdisk['id'])
+        }):
+            mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
+                          "status": "online", "mode": "array", "mdisk_grp_id": "0",
+                          "mdisk_grp_name": "Pool_Ansible_collections",
+                          "capacity": "5.2TB", "ctrl_LUN_#": "",
+                          "controller_name": "", "UID": "", "tier": "tier0_flash",
+                          "encrypt": "no", "site_id": "", "site_name": "",
+                          "distributed": "no", "dedupe": "no",
+                          "over_provisioned": "no", "supports_unmap": "yes"}]
+            svc_obj_info_mock.return_value = mdisk_ret
+            mdisk = IBMSVCmdisk().mdisk_exists('test_get_existing_mdisk')
+            self.assertEqual('mdisk_Ansible_collections', mdisk['name'])
+            self.assertEqual('0', mdisk['id'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -115,7 +130,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_mdisk_create_get_existing_mdisk_called(self, svc_authorize_mock, svc_run_cmd,
                                                     get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -125,15 +140,15 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'level' : 'raid0',
             'drive' : '0:1',
             'mdiskgrp': 'Pool'
-        })
-        svc_run_cmd.return_value = {
-            "message": "success"
-        }
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        get_existing_mdisk_mock.assert_called_with("test_mdisk_create_get_existing_mdisk_called")
+        }):
+            svc_run_cmd.return_value = {
+                "message": "success"
+            }
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            get_existing_mdisk_mock.assert_called_with("test_mdisk_create_get_existing_mdisk_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -141,7 +156,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_mdisk_failed_since_missed_required_param(
             self, svc_authorize_mock, get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -149,13 +164,13 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_create_mdisk_failed_since_missed_required_param',
             'mdiskgrp': 'Pool'
-        })
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleFailJson) as exc:
-            mdisk_created.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_failed_since_missed_required_param")
+        }):
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleFailJson) as exc:
+                mdisk_created.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_failed_since_missed_required_param")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -163,7 +178,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_mdisk_failed_incorrect_parameter(
             self, svc_authorize_mock, get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -172,13 +187,13 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'name': 'test_create_mdisk_failed_incorrect_parameter',
             'drivecount': '1',
             'mdiskgrp': 'Pool'
-        })
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleFailJson) as exc:
-            mdisk_created.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_failed_incorrect_parameter")
+        }):
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleFailJson) as exc:
+                mdisk_created.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_failed_incorrect_parameter")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -189,7 +204,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     def test_create_mdisk_but_mdisk_existed(self, svc_authorize_mock,
                                             mdisk_probe_mock,
                                             get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -197,22 +212,22 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_create_mdisk_but_mdisk_existed',
             'mdiskgrp': 'Pool'
-        })
-        mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
-                      "status": "online", "mode": "array", "mdisk_grp_id": "0",
-                      "mdisk_grp_name": "Pool_Ansible_collections",
-                      "capacity": "5.2TB", "ctrl_LUN_#": "",
-                      "controller_name": "", "UID": "", "tier": "tier0_flash",
-                      "encrypt": "no", "site_id": "", "site_name": "",
-                      "distributed": "no", "dedupe": "no",
-                      "over_provisioned": "no", "supports_unmap": "yes"}]
-        get_existing_mdisk_mock.return_value = mdisk_ret
-        mdisk_probe_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_but_mdisk_existed")
+        }):
+            mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
+                          "status": "online", "mode": "array", "mdisk_grp_id": "0",
+                          "mdisk_grp_name": "Pool_Ansible_collections",
+                          "capacity": "5.2TB", "ctrl_LUN_#": "",
+                          "controller_name": "", "UID": "", "tier": "tier0_flash",
+                          "encrypt": "no", "site_id": "", "site_name": "",
+                          "distributed": "no", "dedupe": "no",
+                          "over_provisioned": "no", "supports_unmap": "yes"}]
+            get_existing_mdisk_mock.return_value = mdisk_ret
+            mdisk_probe_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_but_mdisk_existed")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -223,7 +238,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     def test_create_mdisk_successfully(self, svc_authorize_mock,
                                        mdisk_create_mock,
                                        get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -234,16 +249,16 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'drive': '5:6',
             'encrypt': 'no',
             'mdiskgrp': 'Pool'
-        })
-        mdisk = {u'message': u'Mdisk, id [0],'
-                             u'successfully created', u'id': u'0'}
-        mdisk_create_mock.return_value = mdisk
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
+        }):
+            mdisk = {u'message': u'Mdisk, id [0],'
+                                 u'successfully created', u'id': u'0'}
+            mdisk_create_mock.return_value = mdisk
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -254,7 +269,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     def test_create_draid_successfully(self, svc_authorize_mock,
                                        mdisk_create_mock,
                                        get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -267,16 +282,16 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'stripewidth': '2',
             'encrypt': 'no',
             'mdiskgrp': 'Pool'
-        })
-        mdisk = {u'message': u'Mdisk, id [0],'
-                             u'successfully created', u'id': u'0'}
-        mdisk_create_mock.return_value = mdisk
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
+        }):
+            mdisk = {u'message': u'Mdisk, id [0],'
+                                 u'successfully created', u'id': u'0'}
+            mdisk_create_mock.return_value = mdisk
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -287,7 +302,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     def test_create_mdisk_failed_since_no_message_in_result(
             self, svc_authorize_mock, svc_run_command_mock,
             get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -298,14 +313,14 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'drive': '5:6',
             'encrypt': 'no',
             'mdiskgrp': 'Pool'
-        })
-        mdisk = {u'id': u'0'}
-        svc_run_command_mock.return_value = mdisk
-        get_existing_mdisk_mock.return_value = []
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleFailJson) as exc:
-            mdisk_created.apply()
-        get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
+        }):
+            mdisk = {u'id': u'0'}
+            svc_run_command_mock.return_value = mdisk
+            get_existing_mdisk_mock.return_value = []
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleFailJson) as exc:
+                mdisk_created.apply()
+            get_existing_mdisk_mock.assert_called_with("test_create_mdisk_successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -316,7 +331,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_mdisk_rename_with_state_absent(self, mock_auth, mock_old, mock_cmd, get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -325,17 +340,17 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'name': 'new_name',
             'state': 'absent',
             'mdiskgrp': 'Pool'
-        })
-        mock_old.return_value = [
-            {
-                "id": "1", "name": "ansible_pool"
-            }
-        ]
-        get_existing_mdisk_mock.return_value = []
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCmdisk()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]["failed"])
+        }):
+            mock_old.return_value = [
+                {
+                    "id": "1", "name": "ansible_pool"
+                }
+            ]
+            get_existing_mdisk_mock.return_value = []
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCmdisk()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]["failed"])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -344,7 +359,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_mdisk_rename(self, mock_auth, mock_old, mock_cmd):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -353,17 +368,17 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'name': 'new_name',
             'state': 'present',
             'mdiskgrp': 'Pool'
-        })
-        mock_old.return_value = [
-            {
-                "id": "1", "name": "ansible_pool"
-            }
-        ]
-        arg_data = []
-        mock_cmd.return_value = None
-        v = IBMSVCmdisk()
-        data = v.mdisk_rename(arg_data)
-        self.assertTrue(data, 'mdisk [name] has been successfully rename to [new_name].')
+        }):
+            mock_old.return_value = [
+                {
+                    "id": "1", "name": "ansible_pool"
+                }
+            ]
+            arg_data = []
+            mock_cmd.return_value = None
+            v = IBMSVCmdisk()
+            data = v.mdisk_rename(arg_data)
+            self.assertTrue(data, 'mdisk [name] has been successfully rename to [new_name].')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -371,7 +386,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_mdisk_but_mdisk_not_existed(self, svc_authorize_mock,
                                                 get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -379,13 +394,13 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_delete_mdisk_but_mdisk_not_existed',
             'mdiskgrp': 'Pool'
-        })
-        get_existing_mdisk_mock.return_value = []
-        mdisk_deleted = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_deleted.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_mdisk_mock.assert_called_with("test_delete_mdisk_but_mdisk_not_existed")
+        }):
+            get_existing_mdisk_mock.return_value = []
+            mdisk_deleted = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_deleted.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_mdisk_mock.assert_called_with("test_delete_mdisk_but_mdisk_not_existed")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -393,7 +408,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_mdisk_invalid_parameter(self, svc_authorize_mock,
                                             get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -402,12 +417,12 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'name': 'test_delete_mdisk_invalid_parameter',
             'driveclass': '1',
             'mdiskgrp': 'Pool'
-        })
-        get_existing_mdisk_mock.return_value = []
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCmdisk()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]["failed"])
+        }):
+            get_existing_mdisk_mock.return_value = []
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCmdisk()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]["failed"])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -415,20 +430,20 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_mdisk_parameter_missing(self, svc_authorize_mock,
                                             get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
             'username': 'username',
             'password': 'password',
             'name': 'test_delete_mdisk_invalid_parameter',
-        })
-        get_existing_mdisk_mock.return_value = []
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCmdisk()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]["failed"])
-        self.assertEqual(exc.value.args[0]["msg"], "Parameter [mdiskgrp] is required when deleting an MDisk.")
+        }):
+            get_existing_mdisk_mock.return_value = []
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCmdisk()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]["failed"])
+            self.assertEqual(exc.value.args[0]["msg"], "Parameter [mdiskgrp] is required when deleting an MDisk.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -439,7 +454,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
     def test_delete_mdisk_successfully(self, svc_authorize_mock,
                                        mdisk_delete_mock,
                                        get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -447,21 +462,21 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_delete_mdisk_successfully',
             'mdiskgrp': 'Pool'
-        })
-        mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
-                      "status": "online", "mode": "array", "mdisk_grp_id": "0",
-                      "mdisk_grp_name": "Pool_Ansible_collections",
-                      "capacity": "5.2TB", "ctrl_LUN_#": "",
-                      "controller_name": "", "UID": "", "tier": "tier0_flash",
-                      "encrypt": "no", "site_id": "", "site_name": "",
-                      "distributed": "no", "dedupe": "no",
-                      "over_provisioned": "no", "supports_unmap": "yes"}]
-        get_existing_mdisk_mock.return_value = mdisk_ret
-        mdisk_deleted = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_deleted.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_mdisk_mock.assert_called_with("test_delete_mdisk_successfully")
+        }):
+            mdisk_ret = [{"id": "0", "name": "mdisk_Ansible_collections",
+                          "status": "online", "mode": "array", "mdisk_grp_id": "0",
+                          "mdisk_grp_name": "Pool_Ansible_collections",
+                          "capacity": "5.2TB", "ctrl_LUN_#": "",
+                          "controller_name": "", "UID": "", "tier": "tier0_flash",
+                          "encrypt": "no", "site_id": "", "site_name": "",
+                          "distributed": "no", "dedupe": "no",
+                          "over_provisioned": "no", "supports_unmap": "yes"}]
+            get_existing_mdisk_mock.return_value = mdisk_ret
+            mdisk_deleted = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_deleted.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_mdisk_mock.assert_called_with("test_delete_mdisk_successfully")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -471,7 +486,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_update_tier(self, svc_authorize_mock, mock_cmd,
                          get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -479,19 +494,19 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'mdisk1',
             'tier': 'tier1_flash'
-        })
-        get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
-                                                "status": "online", "mode": "array", "mdisk_grp_id": "0",
-                                                "drive_count": "2", "mdisk_grp_name": "Pool",
-                                                "raid_level": "raid1", "capacity": "5.2TB", "ctrl_LUN_#": "",
-                                                "controller_name": "", "UID": "", "tier": "tier0_flash",
-                                                "encrypt": "no", "site_id": "", "site_name": "",
-                                                "distributed": "no", "dedupe": "no",
-                                                "over_provisioned": "no", "supports_unmap": "yes"}
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+        }):
+            get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
+                                                    "status": "online", "mode": "array", "mdisk_grp_id": "0",
+                                                    "drive_count": "2", "mdisk_grp_name": "Pool",
+                                                    "raid_level": "raid1", "capacity": "5.2TB", "ctrl_LUN_#": "",
+                                                    "controller_name": "", "UID": "", "tier": "tier0_flash",
+                                                    "encrypt": "no", "site_id": "", "site_name": "",
+                                                    "distributed": "no", "dedupe": "no",
+                                                    "over_provisioned": "no", "supports_unmap": "yes"}
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdisk.IBMSVCmdisk.mdisk_exists')
@@ -501,7 +516,7 @@ class TestIBMSVCmdisk(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_update_tier_idempotency(self, svc_authorize_mock, mock_cmd,
                                      get_existing_mdisk_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -509,19 +524,19 @@ class TestIBMSVCmdisk(unittest.TestCase):
             'password': 'password',
             'name': 'mdisk1',
             'tier': 'tier0_flash',
-        })
-        get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
-                                                "status": "online", "mode": "array", "mdisk_grp_id": "0",
-                                                "drive_count": "2", "mdisk_grp_name": "Pool",
-                                                "raid_level": "raid1", "capacity": "5.2TB", "ctrl_LUN_#": "",
-                                                "controller_name": "", "UID": "", "tier": "tier0_flash",
-                                                "encrypt": "no", "site_id": "", "site_name": "",
-                                                "distributed": "no", "dedupe": "no",
-                                                "over_provisioned": "no", "supports_unmap": "yes"}
-        mdisk_created = IBMSVCmdisk()
-        with pytest.raises(AnsibleExitJson) as exc:
-            mdisk_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+        }):
+            get_existing_mdisk_mock.return_value = {"id": "0", "name": "mdisk1",
+                                                    "status": "online", "mode": "array", "mdisk_grp_id": "0",
+                                                    "drive_count": "2", "mdisk_grp_name": "Pool",
+                                                    "raid_level": "raid1", "capacity": "5.2TB", "ctrl_LUN_#": "",
+                                                    "controller_name": "", "UID": "", "tier": "tier0_flash",
+                                                    "encrypt": "no", "site_id": "", "site_name": "",
+                                                    "distributed": "no", "dedupe": "no",
+                                                    "over_provisioned": "no", "supports_unmap": "yes"}
+            mdisk_created = IBMSVCmdisk()
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdisk_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -16,13 +17,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_mdiskgrp import IBMSVCmdiskgrp
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -75,71 +91,71 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
 
     def test_module_fail_when_required_args_missing(self):
         """ required arguments are reported as errors """
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({})
-            IBMSVCmdiskgrp()
-        print('Info: %s' % exc.value.args[0]['msg'])
+        with set_module_args({}):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCmdiskgrp()
+            print('Info: %s' % exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_get_existing_pool(self, svc_authorize_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'test_get_existing_pool',
-        })
-        pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
-                    "status": "online", "mdisk_count": "1", "vdisk_count": "1",
-                    "capacity": "5.23TB", "extent_size": "1024",
-                    "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
-                    "used_capacity": "4.00GB", "real_capacity": "4.00GB",
-                    "overallocation": "0", "warning": "0", "easy_tier": "on",
-                    "easy_tier_status": "balanced",
-                    "compression_active": "no",
-                    "compression_virtual_capacity": "0.00MB",
-                    "compression_compressed_capacity": "0.00MB",
-                    "compression_uncompressed_capacity": "0.00MB",
-                    "parent_mdisk_grp_id": "0",
-                    "parent_mdisk_grp_name": "Pool_Ansible_collections",
-                    "child_mdisk_grp_count": "0",
-                    "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
-                    "encrypt": "no", "owner_type": "none", "owner_id": "",
-                    "owner_name": "", "site_id": "", "site_name": "",
-                    "data_reduction": "no",
-                    "used_capacity_before_reduction": "0.00MB",
-                    "used_capacity_after_reduction": "0.00MB",
-                    "overhead_capacity": "0.00MB",
-                    "deduplication_capacity_saving": "0.00MB",
-                    "reclaimable_capacity": "0.00MB",
-                    "easy_tier_fcm_over_allocation_max": "100%"}
-        svc_obj_info_mock.return_value = pool_ret
-        pool = IBMSVCmdiskgrp().mdiskgrp_exists('test_get_existing_pool')
-        self.assertEqual('Pool_Ansible_collections', pool['name'])
-        self.assertEqual('0', pool['id'])
+        }):
+            pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
+                        "status": "online", "mdisk_count": "1", "vdisk_count": "1",
+                        "capacity": "5.23TB", "extent_size": "1024",
+                        "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
+                        "used_capacity": "4.00GB", "real_capacity": "4.00GB",
+                        "overallocation": "0", "warning": "0", "easy_tier": "on",
+                        "easy_tier_status": "balanced",
+                        "compression_active": "no",
+                        "compression_virtual_capacity": "0.00MB",
+                        "compression_compressed_capacity": "0.00MB",
+                        "compression_uncompressed_capacity": "0.00MB",
+                        "parent_mdisk_grp_id": "0",
+                        "parent_mdisk_grp_name": "Pool_Ansible_collections",
+                        "child_mdisk_grp_count": "0",
+                        "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
+                        "encrypt": "no", "owner_type": "none", "owner_id": "",
+                        "owner_name": "", "site_id": "", "site_name": "",
+                        "data_reduction": "no",
+                        "used_capacity_before_reduction": "0.00MB",
+                        "used_capacity_after_reduction": "0.00MB",
+                        "overhead_capacity": "0.00MB",
+                        "deduplication_capacity_saving": "0.00MB",
+                        "reclaimable_capacity": "0.00MB",
+                        "easy_tier_fcm_over_allocation_max": "100%"}
+            svc_obj_info_mock.return_value = pool_ret
+            pool = IBMSVCmdiskgrp().mdiskgrp_exists('test_get_existing_pool')
+            self.assertEqual('Pool_Ansible_collections', pool['name'])
+            self.assertEqual('0', pool['id'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_pool_create_get_existing_pool_called(self, svc_authorize_mock, get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
-        })
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -151,7 +167,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                   svc_authorize_mock,
                                                   svc_run_command_mock,
                                                   get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -160,18 +176,14 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'provisioningpolicy': 'pp0',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {}
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -183,7 +195,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                               svc_authorize_mock,
                                                               svc_run_command_mock,
                                                               get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -192,17 +204,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'provisioningpolicy': 'pp0',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "provisioning_policy_name": "pp0"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "provisioning_policy_name": "pp0"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -214,7 +226,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                               svc_authorize_mock,
                                               svc_run_command_mock,
                                               get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -223,18 +235,14 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'ownershipgroup': 'owner0',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {}
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -246,7 +254,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                           svc_authorize_mock,
                                                           svc_run_command_mock,
                                                           get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -255,23 +263,32 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'ownershipgroup': 'owner0',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "owner_name": "owner0"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "owner_name": "owner0"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_pool_create_with_replicationpoollinkuid_failed(self,
-                                                            svc_authorize_mock):
-        set_module_args({
+    def test_pool_create_with_replicationpoollinkuid_and_set_bit_mask(self,
+                                                                      svc_authorize_mock,
+                                                                      svc_run_command_mock,
+                                                                      svc_obj_info_mock,
+                                                                      get_existing_pool_mock):
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -280,18 +297,64 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'provisioningpolicy': 'pp0',
             'replicationpoollinkuid': '000000000000000100000123456789C4',
+            'replication_partner_clusterid': 'x.x.x.x',
             'ext': True
-        })
-        message = 'Following parameters are required together: replicationpoollinkuid, replication_partner_clusterid'
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCmdiskgrp()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'], message)
+        }):
+            get_existing_pool_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            svc_obj_info_mock.return_value = {
+                "id": "000002022A104B10",
+                "partnership_index": "1"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_pool_create_with_replicationpoollinkuid_and_set_bit_mask_idempotency(self,
+                                                                                  svc_authorize_mock,
+                                                                                  svc_run_command_mock,
+                                                                                  svc_obj_info_mock,
+                                                                                  get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_pool_create_get_existing_pool_called',
+            'provisioningpolicy': 'pp0',
+            'replicationpoollinkuid': '000000000000000100000123456789C4',
+            'replication_partner_clusterid': 'x.x.x.x',
+            'ext': True
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": 0,
+                "name": "test_pool_create_get_existing_pool_called",
+                "replication_pool_link_uid": "000000000000000100000123456789C4",
+                "provisioning_policy_name": "pp0",
+                "replication_pool_linked_systems_mask": "0000000000000000000000000000000000000000000000000000000000000010"
+            }
+            svc_run_command_mock.return_value = {}
+            svc_obj_info_mock.return_value = {
+                "id": "000002022A104B10",
+                "partnership_index": "1"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -299,9 +362,8 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
     def test_pool_create_with_replicationpoollinkuid(self,
                                                      svc_authorize_mock,
                                                      svc_run_command_mock,
-                                                     svc_obj_info_mock,
                                                      get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -310,39 +372,58 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'name': 'test_pool_create_get_existing_pool_called',
             'provisioningpolicy': 'pp0',
             'replicationpoollinkuid': '000000000000000100000123456789C4',
-            'replication_partner_clusterid': 'x.x.x.x',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {}
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        svc_obj_info_mock.return_value = {
-            "id": "000002022A104B10",
-            "partnership_index": "1"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_pool_create_with_replicationpoollinkuid_idempotency(self,
                                                                  svc_authorize_mock,
-                                                                 svc_run_command_mock,
-                                                                 svc_obj_info_mock,
                                                                  get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_pool_create_get_existing_pool_called',
+            'provisioningpolicy': 'pp0',
+            'replicationpoollinkuid': '000000000000000100000123456789C4',
+            'ext': True
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": 0,
+                "name": "test_pool_create_get_existing_pool_called",
+                "replication_pool_link_uid": "000000000000000100000123456789C4",
+                "provisioning_policy_name": "pp0"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_pool_update_with_replicationpoollinkuid_and_replication_partner_clusterid(self,
+                                                                                       svc_authorize_mock,
+                                                                                       svc_run_command_mock,
+                                                                                       svc_obj_info_mock,
+                                                                                       get_existing_pool_mock):
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -353,28 +434,23 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'replicationpoollinkuid': '000000000000000100000123456789C4',
             'replication_partner_clusterid': 'x.x.x.x',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {
-            "id": 0,
-            "name": "test_pool_create_get_existing_pool_called",
-            "replication_pool_link_uid": "000000000000000100000123456789C4",
-            "provisioning_policy_name": "pp0",
-            "replication_pool_linked_systems_mask": "0000000000000000000000000000000000000000000000000000000000000010"
-        }
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        svc_obj_info_mock.return_value = {
-            "id": "000002022A104B10",
-            "partnership_index": "1"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                'id': 0,
+                'name': 'test_pool_create_get_existing_pool_called',
+                'replication_pool_link_uid': '000000000000000100000123456789C5',
+                'replication_pool_linked_systems_mask': '0000000000000000000000000000000000000000000000000000000000000100',
+                'provisioning_policy_name': ''
+            }
+            svc_run_command_mock.return_value = {}
+            svc_obj_info_mock.return_value = {
+                "id": "000002022A104B10",
+                "partnership_index": "1"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -384,59 +460,12 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_pool_update_with_replicationpoollinkuid(self,
-                                                     svc_authorize_mock,
-                                                     svc_run_command_mock,
-                                                     svc_obj_info_mock,
-                                                     get_existing_pool_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'state': 'present',
-            'username': 'username',
-            'password': 'password',
-            'name': 'test_pool_create_get_existing_pool_called',
-            'provisioningpolicy': 'pp0',
-            'replicationpoollinkuid': '000000000000000100000123456789C4',
-            'replication_partner_clusterid': 'x.x.x.x',
-            'ext': True
-        })
-        get_existing_pool_mock.return_value = {
-            'id': 0,
-            'name': 'test_pool_create_get_existing_pool_called',
-            'replication_pool_link_uid': '000000000000000100000123456789C5',
-            'replication_pool_linked_systems_mask': '0000000000000000000000000000000000000000000000000000000000000100',
-            'provisioning_policy_name': ''
-        }
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        svc_obj_info_mock.return_value = {
-            "id": "000002022A104B10",
-            "partnership_index": "1"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_pool_update_with_replicationpoollinkuid_idempotency(self,
-                                                                 svc_authorize_mock,
-                                                                 svc_run_command_mock,
-                                                                 svc_obj_info_mock,
-                                                                 get_existing_pool_mock):
-        set_module_args({
+    def test_pool_update_with_replicationpoollinkuid_and_replication_partner_clusterid_idempotency(self,
+                                                                                                   svc_authorize_mock,
+                                                                                                   svc_run_command_mock,
+                                                                                                   svc_obj_info_mock,
+                                                                                                   get_existing_pool_mock):
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -447,28 +476,86 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'replicationpoollinkuid': '000000000000000100000123456789C5',
             'replication_partner_clusterid': 'x.x.x.x',
             'ext': True
-        })
-        get_existing_pool_mock.return_value = {
-            'id': 0,
+        }):
+            get_existing_pool_mock.return_value = {
+                'id': 0,
+                'name': 'test_pool_create_get_existing_pool_called',
+                'replication_pool_link_uid': '000000000000000100000123456789C5',
+                'replication_pool_linked_systems_mask': '0000000000000000000000000000000000000000000000000000000000000010',
+                'provisioning_policy_name': 'pp0'
+            }
+            svc_run_command_mock.return_value = {}
+            svc_obj_info_mock.return_value = {
+                "id": "000002022A104B10",
+                "partnership_index": "1"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_pool_update_with_replicationpoollinkuid(self,
+                                                     svc_authorize_mock,
+                                                     svc_run_command_mock,
+                                                     get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
-            'replication_pool_link_uid': '000000000000000100000123456789C5',
-            'replication_pool_linked_systems_mask': '0000000000000000000000000000000000000000000000000000000000000010',
-            'provisioning_policy_name': 'pp0'
-        }
-        svc_run_command_mock.return_value = {
-            u'message': u'Storage pool, id [0], '
-                        u'successfully created',
-            u'id': u'0'
-        }
-        svc_obj_info_mock.return_value = {
-            "id": "000002022A104B10",
-            "partnership_index": "1"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+            'provisioningpolicy': 'pp0',
+            'replicationpoollinkuid': '000000000000000100000123456789C4',
+            'ext': True
+        }):
+            get_existing_pool_mock.return_value = {
+                'id': 0,
+                'name': 'test_pool_create_get_existing_pool_called',
+                'replication_pool_link_uid': '000000000000000100000123456789C5',
+                'provisioning_policy_name': ''
+            }
+            svc_run_command_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_pool_update_with_replicationpoollinkuid_idempotency(self,
+                                                                 svc_authorize_mock,
+                                                                 get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_pool_create_get_existing_pool_called',
+            'provisioningpolicy': 'pp0',
+            'replicationpoollinkuid': '000000000000000100000123456789C5',
+            'ext': True
+        }):
+            get_existing_pool_mock.return_value = {
+                'id': 0,
+                'name': 'test_pool_create_get_existing_pool_called',
+                'replication_pool_link_uid': '000000000000000100000123456789C5',
+                'provisioning_policy_name': 'pp0'
+            }
+
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -480,7 +567,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                   svc_authorize_mock,
                                                   svc_run_command_mock,
                                                   get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -488,17 +575,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'provisioningpolicy': 'pp0'
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "provisioning_policy_name": ""
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "provisioning_policy_name": ""
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -510,7 +597,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                    svc_authorize_mock,
                                                    svc_run_command_mock,
                                                    get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -518,17 +605,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'noprovisioningpolicy': True
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "provisioning_policy_name": "pp0"
-        }
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "provisioning_policy_name": "pp0"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -540,7 +627,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                               svc_authorize_mock,
                                               svc_run_command_mock,
                                               get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -548,17 +635,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'ownershipgroup': 'owner0'
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "owner_name": ""
-        }
-        pool_updated = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_updated.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "owner_name": ""
+            }
+            pool_updated = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_updated.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -570,7 +657,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                svc_authorize_mock,
                                                svc_run_command_mock,
                                                get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -578,17 +665,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'noownershipgroup': True
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "owner_name": "owner0"
-        }
-        pool_updated = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_updated.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "owner_name": "owner0"
+            }
+            pool_updated = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_updated.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -600,7 +687,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                       svc_authorize_mock,
                                       svc_run_command_mock,
                                       get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -608,17 +695,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'warning': '1'
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "warning": ""
-        }
-        pool_updated = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_updated.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "warning": ""
+            }
+            pool_updated = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_updated.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -630,7 +717,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                                      svc_authorize_mock,
                                                      svc_run_command_mock,
                                                      get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -638,17 +725,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'password': 'password',
             'name': 'test_pool_create_get_existing_pool_called',
             'vdiskprotectionenabled': 'no'
-        })
-        get_existing_pool_mock.return_value = {
-            "id": "0",
-            "name": "test_pool_create_get_existing_pool_called",
-            "vdisk_protectionenabled": ""
-        }
-        pool_updated = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_updated.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "test_pool_create_get_existing_pool_called",
+                "vdisk_protectionenabled": ""
+            }
+            pool_updated = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_updated.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("test_pool_create_get_existing_pool_called")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -657,20 +744,20 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
     def test_create_pool_failed_since_missed_required_param(self,
                                                             svc_authorize_mock,
                                                             get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_pool',
-        })
-        get_existing_pool_mock.return_value = []
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleFailJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
-        get_existing_pool_mock.assert_called_with("ansible_pool")
+        }):
+            get_existing_pool_mock.return_value = []
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleFailJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            get_existing_pool_mock.assert_called_with("ansible_pool")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -682,47 +769,47 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                           svc_authorize_mock,
                                           pool_probe_mock,
                                           get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_pool',
-        })
-        pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
-                    "status": "online", "mdisk_count": "1",
-                    "vdisk_count": "1",
-                    "capacity": "5.23TB", "extent_size": "1024",
-                    "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
-                    "used_capacity": "4.00GB", "real_capacity": "4.00GB",
-                    "overallocation": "0", "warning": "0", "easy_tier": "on",
-                    "easy_tier_status": "balanced",
-                    "compression_active": "no",
-                    "compression_virtual_capacity": "0.00MB",
-                    "compression_compressed_capacity": "0.00MB",
-                    "compression_uncompressed_capacity": "0.00MB",
-                    "parent_mdisk_grp_id": "0",
-                    "parent_mdisk_grp_name": "Pool_Ansible_collections",
-                    "child_mdisk_grp_count": "0",
-                    "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
-                    "encrypt": "no", "owner_type": "none", "owner_id": "",
-                    "owner_name": "", "site_id": "", "site_name": "",
-                    "data_reduction": "no",
-                    "used_capacity_before_reduction": "0.00MB",
-                    "used_capacity_after_reduction": "0.00MB",
-                    "overhead_capacity": "0.00MB",
-                    "deduplication_capacity_saving": "0.00MB",
-                    "reclaimable_capacity": "0.00MB",
-                    "easy_tier_fcm_over_allocation_max": "100%"
-                    }
-        get_existing_pool_mock.return_value = pool_ret
-        pool_probe_mock.return_value = []
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("ansible_pool")
+        }):
+            pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
+                        "status": "online", "mdisk_count": "1",
+                        "vdisk_count": "1",
+                        "capacity": "5.23TB", "extent_size": "1024",
+                        "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
+                        "used_capacity": "4.00GB", "real_capacity": "4.00GB",
+                        "overallocation": "0", "warning": "0", "easy_tier": "on",
+                        "easy_tier_status": "balanced",
+                        "compression_active": "no",
+                        "compression_virtual_capacity": "0.00MB",
+                        "compression_compressed_capacity": "0.00MB",
+                        "compression_uncompressed_capacity": "0.00MB",
+                        "parent_mdisk_grp_id": "0",
+                        "parent_mdisk_grp_name": "Pool_Ansible_collections",
+                        "child_mdisk_grp_count": "0",
+                        "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
+                        "encrypt": "no", "owner_type": "none", "owner_id": "",
+                        "owner_name": "", "site_id": "", "site_name": "",
+                        "data_reduction": "no",
+                        "used_capacity_before_reduction": "0.00MB",
+                        "used_capacity_after_reduction": "0.00MB",
+                        "overhead_capacity": "0.00MB",
+                        "deduplication_capacity_saving": "0.00MB",
+                        "reclaimable_capacity": "0.00MB",
+                        "easy_tier_fcm_over_allocation_max": "100%"
+                        }
+            get_existing_pool_mock.return_value = pool_ret
+            pool_probe_mock.return_value = []
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("ansible_pool")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -734,7 +821,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                       svc_authorize_mock,
                                       pool_create_mock,
                                       get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -745,46 +832,14 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'easytier': 'auto',
             'encrypt': 'no',
             'ext': '1024',
-        })
-        pool = {u'message': u'Storage pool, id [0], '
-                            u'successfully created', u'id': u'0'}
-        pool_create_mock.return_value = pool
-        get_existing_pool_mock.return_value = []
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_created.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("ansible_pool")
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_pool_failed_since_no_message_in_result(self,
-                                                           svc_authorize_mock,
-                                                           svc_run_command_mock,
-                                                           get_existing_pool_mock):
-        set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'state': 'present',
-            'username': 'username',
-            'password': 'password',
-            'name': 'ansible_pool',
-            'datareduction': 'no',
-            'easytier': 'auto',
-            'encrypt': 'no',
-            'ext': '1024',
-        })
-        pool = {u'id': u'0'}
-        svc_run_command_mock.return_value = pool
-        get_existing_pool_mock.return_value = []
-        pool_created = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleFailJson) as exc:
-            pool_created.apply()
-        get_existing_pool_mock.assert_called_with("ansible_pool")
+        }):
+            pool_create_mock.return_value = {}
+            get_existing_pool_mock.return_value = []
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("ansible_pool")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -793,7 +848,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_mdiskgrp_rename(self, mock_auth, mock_old, mock_cmd):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -801,17 +856,17 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'old_name': 'name',
             'name': 'new_name',
             'state': 'present',
-        })
-        mock_old.return_value = [
-            {
-                "id": "1", "name": "ansible_pool"
-            }
-        ]
-        arg_data = []
-        mock_cmd.return_value = None
-        v = IBMSVCmdiskgrp()
-        data = v.mdiskgrp_rename(arg_data)
-        self.assertTrue(data, 'mdiskgrp [name] has been successfully rename to [new_name].')
+        }):
+            mock_old.return_value = [
+                {
+                    "id": "1", "name": "ansible_pool"
+                }
+            ]
+            arg_data = []
+            mock_cmd.return_value = None
+            v = IBMSVCmdiskgrp()
+            data = v.mdiskgrp_rename(arg_data)
+            self.assertTrue(data, 'mdiskgrp [name] has been successfully rename to [new_name].')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -820,20 +875,20 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
     def test_delete_pool_but_pool_not_existed(self,
                                               svc_authorize_mock,
                                               get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_pool',
-        })
-        get_existing_pool_mock.return_value = []
-        pool_deleted = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_deleted.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("ansible_pool")
+        }):
+            get_existing_pool_mock.return_value = []
+            pool_deleted = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_deleted.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("ansible_pool")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -845,45 +900,45 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                                       svc_authorize_mock,
                                       pool_delete_mock,
                                       get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_pool',
-        })
-        pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
-                    "status": "online", "mdisk_count": "1",
-                    "vdisk_count": "1",
-                    "capacity": "5.23TB", "extent_size": "1024",
-                    "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
-                    "used_capacity": "4.00GB", "real_capacity": "4.00GB",
-                    "overallocation": "0", "warning": "0", "easy_tier": "on",
-                    "easy_tier_status": "balanced",
-                    "compression_active": "no",
-                    "compression_virtual_capacity": "0.00MB",
-                    "compression_compressed_capacity": "0.00MB",
-                    "compression_uncompressed_capacity": "0.00MB",
-                    "parent_mdisk_grp_id": "0",
-                    "parent_mdisk_grp_name": "Pool_Ansible_collections",
-                    "child_mdisk_grp_count": "0",
-                    "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
-                    "encrypt": "no", "owner_type": "none", "owner_id": "",
-                    "owner_name": "", "site_id": "", "site_name": "",
-                    "data_reduction": "no",
-                    "used_capacity_before_reduction": "0.00MB",
-                    "used_capacity_after_reduction": "0.00MB",
-                    "overhead_capacity": "0.00MB",
-                    "deduplication_capacity_saving": "0.00MB",
-                    "reclaimable_capacity": "0.00MB",
-                    "easy_tier_fcm_over_allocation_max": "100%"}
-        get_existing_pool_mock.return_value = pool_ret
-        pool_deleted = IBMSVCmdiskgrp()
-        with pytest.raises(AnsibleExitJson) as exc:
-            pool_deleted.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
-        get_existing_pool_mock.assert_called_with("ansible_pool")
+        }):
+            pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
+                        "status": "online", "mdisk_count": "1",
+                        "vdisk_count": "1",
+                        "capacity": "5.23TB", "extent_size": "1024",
+                        "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
+                        "used_capacity": "4.00GB", "real_capacity": "4.00GB",
+                        "overallocation": "0", "warning": "0", "easy_tier": "on",
+                        "easy_tier_status": "balanced",
+                        "compression_active": "no",
+                        "compression_virtual_capacity": "0.00MB",
+                        "compression_compressed_capacity": "0.00MB",
+                        "compression_uncompressed_capacity": "0.00MB",
+                        "parent_mdisk_grp_id": "0",
+                        "parent_mdisk_grp_name": "Pool_Ansible_collections",
+                        "child_mdisk_grp_count": "0",
+                        "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
+                        "encrypt": "no", "owner_type": "none", "owner_id": "",
+                        "owner_name": "", "site_id": "", "site_name": "",
+                        "data_reduction": "no",
+                        "used_capacity_before_reduction": "0.00MB",
+                        "used_capacity_after_reduction": "0.00MB",
+                        "overhead_capacity": "0.00MB",
+                        "deduplication_capacity_saving": "0.00MB",
+                        "reclaimable_capacity": "0.00MB",
+                        "easy_tier_fcm_over_allocation_max": "100%"}
+            get_existing_pool_mock.return_value = pool_ret
+            pool_deleted = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_deleted.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            get_existing_pool_mock.assert_called_with("ansible_pool")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -892,7 +947,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
     def test_delete_pool_invalid_params(self,
                                         svc_authorize_mock,
                                         get_existing_pool_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -903,37 +958,37 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'easytier': 'auto',
             'encrypt': 'no',
             'ext': '1024',
-        })
-        pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
-                    "status": "online", "mdisk_count": "1",
-                    "vdisk_count": "1",
-                    "capacity": "5.23TB", "extent_size": "1024",
-                    "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
-                    "used_capacity": "4.00GB", "real_capacity": "4.00GB",
-                    "overallocation": "0", "warning": "0", "easy_tier": "on",
-                    "easy_tier_status": "balanced",
-                    "compression_active": "no",
-                    "compression_virtual_capacity": "0.00MB",
-                    "compression_compressed_capacity": "0.00MB",
-                    "compression_uncompressed_capacity": "0.00MB",
-                    "parent_mdisk_grp_id": "0",
-                    "parent_mdisk_grp_name": "Pool_Ansible_collections",
-                    "child_mdisk_grp_count": "0",
-                    "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
-                    "encrypt": "no", "owner_type": "none", "owner_id": "",
-                    "owner_name": "", "site_id": "", "site_name": "",
-                    "data_reduction": "no",
-                    "used_capacity_before_reduction": "0.00MB",
-                    "used_capacity_after_reduction": "0.00MB",
-                    "overhead_capacity": "0.00MB",
-                    "deduplication_capacity_saving": "0.00MB",
-                    "reclaimable_capacity": "0.00MB",
-                    "easy_tier_fcm_over_allocation_max": "100%"}
-        get_existing_pool_mock.return_value = pool_ret
-        with pytest.raises(AnsibleFailJson) as exc:
-            pool_deleted = IBMSVCmdiskgrp()
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'], 'state=absent but following parameters have been passed: easytier, ext')
+        }):
+            pool_ret = {"id": "0", "name": "Pool_Ansible_collections",
+                        "status": "online", "mdisk_count": "1",
+                        "vdisk_count": "1",
+                        "capacity": "5.23TB", "extent_size": "1024",
+                        "free_capacity": "5.23TB", "virtual_capacity": "4.00GB",
+                        "used_capacity": "4.00GB", "real_capacity": "4.00GB",
+                        "overallocation": "0", "warning": "0", "easy_tier": "on",
+                        "easy_tier_status": "balanced",
+                        "compression_active": "no",
+                        "compression_virtual_capacity": "0.00MB",
+                        "compression_compressed_capacity": "0.00MB",
+                        "compression_uncompressed_capacity": "0.00MB",
+                        "parent_mdisk_grp_id": "0",
+                        "parent_mdisk_grp_name": "Pool_Ansible_collections",
+                        "child_mdisk_grp_count": "0",
+                        "child_mdisk_grp_capacity": "0.00MB", "type": "parent",
+                        "encrypt": "no", "owner_type": "none", "owner_id": "",
+                        "owner_name": "", "site_id": "", "site_name": "",
+                        "data_reduction": "no",
+                        "used_capacity_before_reduction": "0.00MB",
+                        "used_capacity_after_reduction": "0.00MB",
+                        "overhead_capacity": "0.00MB",
+                        "deduplication_capacity_saving": "0.00MB",
+                        "reclaimable_capacity": "0.00MB",
+                        "easy_tier_fcm_over_allocation_max": "100%"}
+            get_existing_pool_mock.return_value = pool_ret
+            with pytest.raises(AnsibleFailJson) as exc:
+                pool_deleted = IBMSVCmdiskgrp()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], 'state=absent but following parameters have been passed: easytier, ext')
 
 
 if __name__ == '__main__':

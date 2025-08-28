@@ -20,7 +20,7 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "2.7.4"
+COLLECTION_VERSION = "3.0.0"
 TIMEOUT = 600
 
 
@@ -87,6 +87,33 @@ def get_logger(module_name, log_file_name, log_level=logging.INFO):
     return log
 
 
+def is_supported_version(current_version, supported_version):
+    current_parts = list(map(int, current_version.split('.')))
+    supported_parts = list(map(int, supported_version.split('.')))
+
+    for current_part, supported_part in zip(current_parts, supported_parts):
+        if current_part < supported_part:
+            return False
+        elif current_part > supported_part:
+            return True
+
+    return True
+
+
+def is_feature_supported(feature, version):
+    '''
+    This function contains a dictionary of mapping of CLI/feature with its earliest
+    supported SVC version.
+    '''
+    # Feature or CLI to version mapping.
+    # Example: First mapping shows that chvolume was introduced in SVC version 9.1.0.0
+    feature_version_mapping = {
+        'chvolume': '9.1.0.0'
+    }
+
+    return is_supported_version(version, feature_version_mapping[feature])
+
+
 class IBMSVCRestApi(object):
     """ Communicate with SVC through RestApi
     SVC commands usually have the format
@@ -129,7 +156,7 @@ class IBMSVCRestApi(object):
                                           " or username/password to generate new token")
             self.token = self._svc_authorize()
         else:
-            self.log("Token already passed: %s", self.token)
+            self.log("Using user-provided token for authentication.")
 
         if not self.token:
             self.module.exit_json(msg='Failed to obtain access token', unreachable=True)

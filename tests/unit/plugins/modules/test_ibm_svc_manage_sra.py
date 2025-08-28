@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_sra import IBMSVCSupportRemoteAssistance
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,20 +85,20 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_module_required_if_functionality(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
             'username': 'username',
             'password': 'password',
             'support': 'remote'
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_required_together_functionality(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -91,13 +106,13 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'password': 'password',
             'support': 'remote',
             'name': []
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_with_empty_list(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -107,13 +122,13 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': [],
             'sra_ip': [],
             'sra_port': []
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_with_blank_value_in_list(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -123,38 +138,38 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': [''],
             'sra_ip': [''],
             'sra_port': ['']
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_without_state_parameter(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'support': 'onsite'
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_onsite_with_unnecessary_args(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'support': 'onsite',
             'name': ['test_proxy']
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_with_unequal_proxy_arguments(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -164,11 +179,10 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': ['dummy_proxy'],
             'sra_ip': ['9.9.9.9', '9.9.9.9'],
             'sra_port': []
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -179,21 +193,20 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
     def test_enable_sra_onsite(self, svc_authorize_mock,
                                svc_run_command_mock,
                                sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
             'username': 'username',
             'password': 'password',
             'support': 'onsite',
-        })
+        }):
+            sra_enabled_mock.return_value = False
 
-        sra_enabled_mock.return_value = False
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -207,7 +220,7 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                                           svc_run_command_mock,
                                           add_proxy_mock,
                                           sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -217,14 +230,13 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': ['customer_proxy'],
             'sra_ip': ['10.10.10.10'],
             'sra_port': [8888]
-        })
+        }):
+            sra_enabled_mock.return_value = False
 
-        sra_enabled_mock.return_value = False
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -238,7 +250,7 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                                          svc_authorize_mock,
                                          svc_run_command_mock,
                                          sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'disabled',
@@ -248,12 +260,11 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': ['customer_proxy'],
             'sra_ip': ['10.10.10.10'],
             'sra_port': [8888]
-        })
-
-        sra_enabled_mock.return_value = True
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSupportRemoteAssistance()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            sra_enabled_mock.return_value = True
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSupportRemoteAssistance()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -267,7 +278,7 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                                 svc_authorize_mock,
                                 svc_run_command_mock,
                                 sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'disabled',
@@ -275,14 +286,13 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'password': 'password',
             'support': 'remote',
             'name': ['customer_proxy']
-        })
+        }):
+            sra_enabled_mock.return_value = True
 
-        sra_enabled_mock.return_value = True
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -296,22 +306,21 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                               svc_run_command_mock,
                               svc_obj_info_mock,
                               sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
             'username': 'username',
             'password': 'password',
             'support': 'onsite',
-        })
+        }):
+            svc_obj_info_mock.return_value = {'remote_support_enabled': 'yes'}
+            sra_enabled_mock.return_value = True
 
-        svc_obj_info_mock.return_value = {'remote_support_enabled': 'yes'}
-        sra_enabled_mock.return_value = True
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -325,7 +334,7 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
                         add_proxy_mock,
                         remote_enabled_mock,
                         sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'enabled',
@@ -335,16 +344,15 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
             'name': ['customer_proxy'],
             'sra_ip': ['10.10.10.10'],
             'sra_port': [8888]
-        })
+        }):
+            sra_enabled_mock.return_value = True
+            remote_enabled_mock.return_value = False
+            add_proxy_mock.return_value = []
 
-        sra_enabled_mock.return_value = True
-        remote_enabled_mock.return_value = False
-        add_proxy_mock.return_value = []
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -355,21 +363,20 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
     def test_disable_sra(self, svc_authorize_mock,
                          svc_run_command_mock,
                          sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'disabled',
             'username': 'username',
             'password': 'password',
             'support': 'onsite',
-        })
+        }):
+            sra_enabled_mock.return_value = True
 
-        sra_enabled_mock.return_value = True
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_sra.IBMSVCSupportRemoteAssistance.is_sra_enabled')
@@ -380,21 +387,20 @@ class TestIBMSVCSupportRemoteAssistance(unittest.TestCase):
     def test_disable_sra_twice(self, svc_authorize_mock,
                                svc_run_command_mock,
                                sra_enabled_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'disabled',
             'username': 'username',
             'password': 'password',
             'support': 'onsite',
-        })
+        }):
+            sra_enabled_mock.return_value = False
 
-        sra_enabled_mock.return_value = False
-
-        sra_inst = IBMSVCSupportRemoteAssistance()
-        with pytest.raises(AnsibleExitJson) as exc:
-            sra_inst.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            sra_inst = IBMSVCSupportRemoteAssistance()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sra_inst.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

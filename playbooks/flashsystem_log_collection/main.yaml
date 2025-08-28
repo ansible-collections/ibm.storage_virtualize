@@ -1,0 +1,119 @@
+---
+- name: IBM FlashSystem Log and Dump Collection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - inventory.ini
+  vars:
+    logpath: "{{ log_path | default('/tmp/log_collection.log') }}"
+
+  tasks:
+    - name: Remove cluster key from known_hosts
+      ansible.builtin.command: ssh-keygen -R "{{ clustername }}"
+      ignore_errors: true
+      register: remove_service_key
+      changed_when: remove_service_key.rc != 0
+
+    - name: Fetch system details for cluster
+      register: system_info
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ clustername }}"
+        username: "{{ cluster_username }}"
+        password: "{{ cluster_password }}"
+        gather_subset: node
+        log_path: "{{ logpath }}"
+
+    - name: Take the snap
+      ibm.storage_virtualize.ibm_svctask_command:
+        command: "svc_snap a"
+        clustername: "{{ clustername }}"
+        username: "{{ cluster_username }}"
+        password: "{{ cluster_password }}"
+        log_path: "{{ logpath }}"
+
+    - name: Prepare and trigger livedump on each node
+      ibm.storage_virtualize.ibm_svctask_command:
+        command: "preplivedump {{ item.name }} && triggerlivedump {{ item.name }}"
+        clustername: "{{ clustername }}"
+        username: "{{ cluster_username }}"
+        password: "{{ cluster_password }}"
+        log_path: "{{ logpath }}"
+      loop: "{{ system_info.Node }}"
+      loop_control:
+        label: "{{ item.name }}"
+        pause: 5
+
+    - name: Set current timestamp
+      ansible.builtin.set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+    - name: Set log directory path
+      ansible.builtin.set_fact:
+        log_dir: "{{ lookup('env', 'HOME') }}/log_{{ clustername | replace('.', '_') }}_{{ timestamp }}"
+
+    - name: Create log directory
+      ansible.builtin.file:
+        path: "{{ log_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Get list of dumps, snaps and node info from each node
+      register: svcinfo_results
+      ibm.storage_virtualize.ibm_svcinfo_command:
+        command: "lsnodecanister {{ item.id }} && sainfo lsfiles {{ item.panel_name }} -prefix /dumps"
+        clustername: "{{ clustername }}"
+        username: "{{ cluster_username }}"
+        password: "{{ cluster_password }}"
+        log_path: "{{ logpath }}"
+      loop: "{{ system_info.Node }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Parse and store snap and livedump files
+      ansible.builtin.set_fact:
+        nodes_info: "{{ nodes_info | default({}) | combine({item.item.name: {'name': node_name, 'ip': node_ip, 'files': [snap] + livedumps}}) }}"
+      vars:
+        output_lines: "{{ item.stdout.splitlines() }}"
+        node_name: "{{ output_lines | select('search', 'name') | list | first | split() | last | default('') }}"
+        node_ip: "{{ output_lines | select('search', 'service_IP_address') | list | first | split() | last | default('') }}"
+        snap: "{{ (output_lines | select('search', 'snap') | select('search', 'tgz') | reject('search', 'info') | list)[-3] | default('') }}"
+        livedumps: "{{ (output_lines | select('search', 'livedump') | list)[-3:] }}"
+      loop: "{{ svcinfo_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Remove nodes key from known_hosts
+      ansible.builtin.command: ssh-keygen -R "{{ item.ip }}"
+      ignore_errors: true
+      register: remove_service_key
+      changed_when: remove_service_key.rc != 0
+      loop: "{{ nodes_info.values() | list }}"
+
+    - name: Copy snap and dump files from each node to ansible controller
+      ansible.builtin.expect:
+        command: scp -O -o StrictHostKeyChecking=no -r {{ cluster_username }}@{{ item.0.ip }}:/dumps/{{ item.1 }} {{ log_dir }}
+        responses:
+          (?i)Are you sure you want to continue connecting (yes/no/[fingerprint])?: "yes\r\n"
+          (?i)Password: "{{ cluster_password }}"
+        timeout: null
+      async: 3600
+      poll: 0
+      register: async_jobs
+      loop: "{{ query('subelements', nodes_info.values() | list, 'files') }}"
+      loop_control:
+        label: "Copying {{ item.1 }} from {{ item.0.name }} ({{ item.0.ip }}) to {{ log_dir }}/{{ item.1 }}"
+        pause: 5
+
+    - name: Wait for SCP to complete
+      ansible.builtin.async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      retries: 20
+      delay: 180
+      loop: "{{ async_jobs.results }}"
+
+    - name: Display log path
+      ansible.builtin.debug:
+        msg: "All logs collected under the path: {{ log_dir }}"

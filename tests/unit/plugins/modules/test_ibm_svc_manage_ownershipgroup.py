@@ -19,13 +19,28 @@ from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_ownershipgroup import \
     IBMSVCOwnershipgroup
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -77,60 +92,60 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
 
     def test_module_fail_when_required_args_missing(self):
         """ required arguments are reported as errors """
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({})
-            IBMSVCOwnershipgroup()
-        self.assertTrue(exc.value.args[0]['failed'])
+        with set_module_args({}):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCOwnershipgroup()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_fail_when_name_parameter_missing(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'domain': 'domain',
-                'state': 'present',
-                'username': 'username',
-                'password': 'password'
-            })
-            IBMSVCOwnershipgroup()
-        self.assertTrue(exc.value.args[0]['failed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCOwnershipgroup()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_fail_when_name_is_blank(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'domain': 'domain',
-                'state': 'present',
-                'username': 'username',
-                'password': 'password',
-                'name': ''
-            })
-            IBMSVCOwnershipgroup()
-        self.assertTrue(exc.value.args[0]['failed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': ''
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCOwnershipgroup()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_fail_when_state_parameter_missing(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'domain': 'domain',
-                'name': 'ansible_owshgroup',
-                'username': 'username',
-                'password': 'password'
-            })
-            IBMSVCOwnershipgroup()
-        self.assertTrue(exc.value.args[0]['failed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'name': 'ansible_owshgroup',
+            'username': 'username',
+            'password': 'password'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCOwnershipgroup()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_fail_when_state_parameter_is_blank(self):
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({
-                'clustername': 'clustername',
-                'domain': 'domain',
-                'name': 'ansible_owshgroup',
-                'username': 'username',
-                'password': 'password',
-                'state': ''
-            })
-            IBMSVCOwnershipgroup()
-        self.assertTrue(exc.value.args[0]['failed'])
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'name': 'ansible_owshgroup',
+            'username': 'username',
+            'password': 'password',
+            'state': ''
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCOwnershipgroup()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_ownershipgroup.IBMSVCOwnershipgroup.check_existing_owgroups')
@@ -139,7 +154,7 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
     def test_create_ownershipgroup_with_keepobjects(self,
                                                     svc_authorize_mock,
                                                     check_existing_ownership_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
@@ -147,14 +162,13 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
             'password': 'password',
             'name': 'ansible_owshgroup',
             'keepobjects': True
-        })
+        }):
+            check_existing_ownership_mock.return_value = False
 
-        check_existing_ownership_mock.return_value = False
-
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleFailJson) as exc:
-            ownership.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleFailJson) as exc:
+                ownership.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_ownershipgroup.IBMSVCOwnershipgroup.check_existing_owgroups')
@@ -165,25 +179,25 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
     def test_create_ownershipgroup(self, svc_authorize_mock,
                                    svc_run_mock,
                                    check_existing_ownership_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_owshgroup'
-        })
-        message = {
-            'id': '0',
-            'message': 'Ownership Group, id [0], successfully created'
-        }
-        svc_run_mock.return_value = message
-        check_existing_ownership_mock.return_value = {}
+        }):
+            message = {
+                'id': '0',
+                'message': 'Ownership Group, id [0], successfully created'
+            }
+            svc_run_mock.return_value = message
+            check_existing_ownership_mock.return_value = {}
 
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleExitJson) as exc:
-            ownership.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ownership.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_ownershipgroup.IBMSVCOwnershipgroup.check_existing_owgroups')
@@ -193,23 +207,23 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
                                       svc_authorize_mock,
                                       check_existing_ownership_mock):
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'present',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_owshgroup'
-        })
-        return_val = {
-            'id': '0',
-            'name': 'ansible_owshgroup'
-        }
-        check_existing_ownership_mock.return_value = return_val
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleExitJson) as exc:
-            ownership.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+        }):
+            return_val = {
+                'id': '0',
+                'name': 'ansible_owshgroup'
+            }
+            check_existing_ownership_mock.return_value = return_val
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ownership.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -221,19 +235,19 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
                                            svc_authorize_mock,
                                            check_existing_ownership_mock,
                                            svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
             'username': 'username',
             'password': 'password',
             'name': 'ansible_owshgroup'
-        })
-        check_existing_ownership_mock.return_value = True
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleExitJson) as exc:
-            ownership.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+        }):
+            check_existing_ownership_mock.return_value = True
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ownership.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -245,7 +259,7 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
                                                    svc_run_command_mock,
                                                    check_existing_ownership_mock,
                                                    svc_authorize_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -253,12 +267,12 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
             'password': 'password',
             'name': 'ansible_owshgroup',
             'keepobjects': True
-        })
-        check_existing_ownership_mock.return_value = True
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleExitJson) as exc:
-            ownership.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+        }):
+            check_existing_ownership_mock.return_value = True
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ownership.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -270,7 +284,7 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
                                                    svc_token_mock,
                                                    check_existing_ownership_mock,
                                                    svc_authorize_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -278,17 +292,16 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
             'password': 'password',
             'name': 'ansible_owshgroup',
             'keepobjects': True
-        })
-
-        check_existing_ownership_mock.return_value = True
-        svc_token_mock.return_value = {
-            'err': True,
-            'out': 'Ownership group associated with one or more usergroup'
-        }
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleFailJson) as exc:
-            ownership.apply()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            check_existing_ownership_mock.return_value = True
+            svc_token_mock.return_value = {
+                'err': True,
+                'out': 'Ownership group associated with one or more usergroup'
+            }
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleFailJson) as exc:
+                ownership.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -300,7 +313,7 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
                                         svc_run_command_mock,
                                         check_existing_owgroup_mock,
                                         svc_authorize_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'state': 'absent',
@@ -308,12 +321,12 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
             'password': 'password',
             'name': 'ansible_owshgroup',
             'keepobjects': True
-        })
-        check_existing_owgroup_mock.return_value = False
-        ownership = IBMSVCOwnershipgroup()
-        with pytest.raises(AnsibleExitJson) as exc:
-            ownership.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+        }):
+            check_existing_owgroup_mock.return_value = False
+            ownership = IBMSVCOwnershipgroup()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ownership.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

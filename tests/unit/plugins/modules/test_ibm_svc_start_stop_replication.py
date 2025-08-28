@@ -16,12 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_start_stop_replication import IBMSVCStartStopReplication
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -74,17 +90,17 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
 
     def test_module_fail_when_required_args_missing(self):
         """ required arguments are reported as errors """
-        with pytest.raises(AnsibleFailJson) as exc:
-            set_module_args({})
-            IBMSVCStartStopReplication()
-        print('Info: %s' % exc.value.args[0]['msg'])
+        with set_module_args({}):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCStartStopReplication()
+            print('Info: %s' % exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_start(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -92,18 +108,18 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'started',
             'clean': 'true'
-        })
-        svc_run_command_mock.return_value = ''
-        obj = IBMSVCStartStopReplication()
-        return_data = obj.start()
-        self.assertEqual(None, return_data)
+        }):
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVCStartStopReplication()
+            return_data = obj.start()
+            self.assertEqual(None, return_data)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_start_when_isgroup(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -112,18 +128,18 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'state': 'started',
             'clean': 'true',
             'isgroup': 'true'
-        })
-        svc_run_command_mock.return_value = ''
-        obj = IBMSVCStartStopReplication()
-        return_data = obj.start()
-        self.assertEqual(None, return_data)
+        }):
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVCStartStopReplication()
+            return_data = obj.start()
+            self.assertEqual(None, return_data)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_rcrelationship(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -131,20 +147,20 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'started',
             'clean': 'true',
-        })
-        svc_run_command_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.start()
-        self.assertEqual('Failed to start the rcrelationship [test_name]', exc.value.args[0]['msg'])
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            svc_run_command_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.start()
+            self.assertEqual('Failed to start the rcrelationship [test_name]', exc.value.args[0]['msg'])
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_starting_rcrelationship(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -152,20 +168,20 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'started',
             'clean': 'true',
-        })
-        svc_run_command_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.start()
-        self.assertEqual('Failed to start the rcrelationship [test_name]', exc.value.args[0]['msg'])
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            svc_run_command_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.start()
+            self.assertEqual('Failed to start the rcrelationship [test_name]', exc.value.args[0]['msg'])
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_starting_when_isgroup(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -174,19 +190,19 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'state': 'started',
             'clean': 'true',
             'isgroup': 'true'
-        })
-        svc_run_command_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.start()
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            svc_run_command_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.start()
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_stop(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -194,18 +210,18 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'stopped',
             'clean': 'true'
-        })
-        svc_run_command_mock.return_value = ''
-        obj = IBMSVCStartStopReplication()
-        return_data = obj.stop()
-        self.assertEqual(None, return_data)
+        }):
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVCStartStopReplication()
+            return_data = obj.stop()
+            self.assertEqual(None, return_data)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_stop_when_isgroup(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -213,37 +229,37 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'stopped',
             'isgroup': 'true'
-        })
-        svc_run_command_mock.return_value = ''
-        obj = IBMSVCStartStopReplication()
-        return_data = obj.stop()
-        self.assertEqual(None, return_data)
+        }):
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVCStartStopReplication()
+            return_data = obj.stop()
+            self.assertEqual(None, return_data)
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_stopping_rcrelationship(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'test_name',
             'state': 'stopped',
-        })
-        svc_run_command_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.stop()
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            svc_run_command_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.stop()
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_stopping_when_isgroup(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -251,19 +267,19 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'stopped',
             'isgroup': 'true'
-        })
-        svc_run_command_mock.return_value = {}
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.stop()
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            svc_run_command_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.stop()
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_for_failure_with_activeactive(self, svc_authorize_mock, svc_run_command_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -271,11 +287,11 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'started',
             'clean': 'true'
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_start_stop_replication.IBMSVCStartStopReplication.start')
@@ -284,7 +300,7 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_start_remotecopy(self, svc_authorize_mock, svc_run_command_mock, start_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -292,11 +308,11 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'started',
             'clean': 'true'
-        })
-        with pytest.raises(AnsibleExitJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]['changed'])
+        }):
+            with pytest.raises(AnsibleExitJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_start_stop_replication.IBMSVCStartStopReplication.start')
@@ -305,7 +321,7 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_start_remotecopy_when_isgroup(self, svc_authorize_mock, svc_run_command_mock, start_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -314,11 +330,11 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'state': 'started',
             'clean': 'true',
             'isgroup': 'true'
-        })
-        with pytest.raises(AnsibleExitJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]['changed'])
+        }):
+            with pytest.raises(AnsibleExitJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_start_stop_replication.IBMSVCStartStopReplication.stop')
@@ -327,18 +343,18 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_stop_remotecopy(self, svc_authorize_mock, svc_run_command_mock, start_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'test_name',
             'state': 'stopped',
-        })
-        with pytest.raises(AnsibleExitJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]['changed'])
+        }):
+            with pytest.raises(AnsibleExitJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_start_stop_replication.IBMSVCStartStopReplication.stop')
@@ -347,7 +363,7 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_stop_remotecopy_when_isgroup(self, svc_authorize_mock, svc_run_command_mock, start_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -356,11 +372,11 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'state': 'stopped',
             'clean': 'true',
             'isgroup': 'true'
-        })
-        with pytest.raises(AnsibleExitJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]['changed'])
+        }):
+            with pytest.raises(AnsibleExitJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_start_stop_replication.IBMSVCStartStopReplication.stop')
@@ -369,7 +385,7 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_for_failure_with_unsupported_state(self, svc_authorize_mock, svc_run_command_mock, start_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -377,11 +393,11 @@ class TestIBMSVCStartStopReplication(unittest.TestCase):
             'name': 'test_name',
             'state': 'wrong_state',
             'clean': 'true',
-        })
-        with pytest.raises(AnsibleFailJson) as exc:
-            obj = IBMSVCStartStopReplication()
-            obj.apply()
-        self.assertEqual(True, exc.value.args[0]["failed"])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                obj = IBMSVCStartStopReplication()
+                obj.apply()
+            self.assertEqual(True, exc.value.args[0]["failed"])
 
 
 if __name__ == '__main__':

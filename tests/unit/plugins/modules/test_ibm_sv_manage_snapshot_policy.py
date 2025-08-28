@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_snapshotpolicy import IBMSVCSnapshotPolicy
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -70,20 +85,19 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
                                      False, 'test.log', '')
 
     def test_module_with_blank_values(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': ''
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSnapshotPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSnapshotPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     def test_module_without_state_parameter(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -93,11 +107,10 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             'backupinterval': '1',
             'backupstarttime': '2102281800',
             'retentiondays': '2'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSnapshotPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSnapshotPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -107,7 +120,7 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_snapshot_policy(self, svc_authorize_mock,
                                     svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -118,15 +131,14 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             'backupstarttime': '2102281800',
             'retentiondays': '10',
             'state': 'present'
-        })
+        }):
+            sp_exists_mock.return_value = {}
 
-        sp_exists_mock.return_value = {}
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -136,7 +148,7 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_create_snapshotpolicy_idempotency(self, svc_authorize_mock,
                                                svc_run_command_mock, svc_obj_info_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -147,23 +159,22 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             'backupstarttime': '2102281800',
             'retentiondays': '10',
             'state': 'present'
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "policy_id": "3",
+                "policy_name": "snapshotpolicy0",
+                "schedule_id": "1",
+                "backup_unit": "day",
+                "backup_interval": "1",
+                "backup_start_time": "210228180000",
+                "retention_days": "10"
+            }
 
-        svc_obj_info_mock.return_value = {
-            "policy_id": "3",
-            "policy_name": "snapshotpolicy0",
-            "schedule_id": "1",
-            "backup_unit": "day",
-            "backup_interval": "1",
-            "backup_start_time": "210228180000",
-            "retention_days": "10"
-        }
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -173,7 +184,7 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_snapshot_policy_failure(self, svc_authorize_mock,
                                             svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -184,21 +195,20 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             'backupstarttime': '2102281800',
             'retentiondays': '10',
             'state': 'absent'
-        })
+        }):
+            sp_exists_mock.return_value = {
+                "policy_id": "3",
+                "policy_name": "snapshotpolicy0",
+                "schedule_id": "1",
+                "backup_unit": "day",
+                "backup_interval": "1",
+                "backup_start_time": "210228180000",
+                "retention_days": "10"
+            }
 
-        sp_exists_mock.return_value = {
-            "policy_id": "3",
-            "policy_name": "snapshotpolicy0",
-            "schedule_id": "1",
-            "backup_unit": "day",
-            "backup_interval": "1",
-            "backup_start_time": "210228180000",
-            "retention_days": "10"
-        }
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSnapshotPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSnapshotPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -208,30 +218,29 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_snapshot_policy(self, svc_authorize_mock,
                                     svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'snapshotpolicy0',
             'state': 'absent'
-        })
+        }):
+            sp_exists_mock.return_value = {
+                "policy_id": "3",
+                "policy_name": "snapshotpolicy0",
+                "schedule_id": "1",
+                "backup_unit": "day",
+                "backup_interval": "1",
+                "backup_start_time": "210228180000",
+                "retention_days": "10"
+            }
 
-        sp_exists_mock.return_value = {
-            "policy_id": "3",
-            "policy_name": "snapshotpolicy0",
-            "schedule_id": "1",
-            "backup_unit": "day",
-            "backup_interval": "1",
-            "backup_start_time": "210228180000",
-            "retention_days": "10"
-        }
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -241,22 +250,21 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_delete_snapshotpolicy_idempotency(self, svc_authorize_mock,
                                                svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'name': 'snapshotpolicy0',
             'state': 'absent'
-        })
+        }):
+            sp_exists_mock.return_value = {}
 
-        sp_exists_mock.return_value = {}
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -266,7 +274,7 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_suspend_snapshotpolicy_failure(self, svc_authorize_mock,
                                             svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
@@ -277,11 +285,10 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             'backupstarttime': '2102281800',
             'retentiondays': '10',
             'state': 'suspend'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVCSnapshotPolicy()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSnapshotPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -291,19 +298,18 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_suspend_snapshotpolicy(self, svc_authorize_mock,
                                     svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'state': 'suspend'
-        })
+        }):
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
@@ -313,19 +319,18 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_resume_snapshotpolicy(self, svc_authorize_mock,
                                    svc_run_command_mock, sp_exists_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'state': 'resume'
-        })
+        }):
+            sp = IBMSVCSnapshotPolicy()
 
-        sp = IBMSVCSnapshotPolicy()
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            sp.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

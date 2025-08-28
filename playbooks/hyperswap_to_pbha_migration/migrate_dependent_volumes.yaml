@@ -170,7 +170,7 @@
       when:
         - hyperswap_volumes.Volume is defined and hyperswap_volumes.Volume | length > 0
 
-    - name: Display warning about HyperSwap volume file
+    - name: Display warning about HyperSwap volume file (at file creation)
       ansible.builtin.debug:
         msg: >
           WARNING: DO NOT DELETE auto-generated file 'Hyperswap_volumes_of_{{ primary_system_info.System.name }}.json'.

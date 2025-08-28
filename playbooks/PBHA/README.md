@@ -37,6 +37,8 @@ This playbook automates the setup and configure PBHA Replication between source 
   - This playbook checks the drive status and drive count. Based on this drive info, it creates standard or data reduction pool with specified level. 
   - It links pools of both the sites, and creates provisioning policy.
 
+  > [!NOTE]
+  > After successfully executing the playbook, the quorum application will be ready for use. Please copy it to the any host. This may need to be run later in case of broken quorum. Please make sure the host has Java Runtime Environment (JRE) installed, as it is required to run the application.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Variables

@@ -16,13 +16,28 @@ from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_truststore_for_replication import (
     IBMSVTrustStore
 )
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -62,22 +77,21 @@ class TestIBMSVTrustStore(unittest.TestCase):
         self.addCleanup(self.mock_module_helper.stop)
 
     def test_missing_mandatory_parameter_name(self):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'state': 'present'
-        })
-
-        with pytest.raises(AnsibleFailJson) as exc:
-            IBMSVTrustStore()
-        self.assertTrue(exc.value.args[0]['failed'])
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVTrustStore()
+            self.assertTrue(exc.value.args[0]['failed'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -86,30 +100,30 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_username': 'remote_username',
             'remote_password': 'remote_password',
             'state': 'present'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_idempotency(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -118,83 +132,83 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_username': 'remote_username',
             'remote_password': 'remote_password',
             'state': 'present'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name":"truststore1"}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{"name":"truststore1"}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertFalse(exc.value.args[0]['changed'])
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_delete_truststore(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'name': 'truststore1',
             'state': 'absent'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "truststore1"}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{"name": "truststore1"}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_delete_truststore_idempotency(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
             'name': 'truststore1',
             'state': 'absent'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_with_syslog_and_restapi_on(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -205,30 +219,30 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'state': 'present',
             'syslog': 'on',
             'restapi': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_with_ipsec_and_vasa(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -239,24 +253,24 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'state': 'present',
             'ipsec': 'on',
             'vasa': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_truststore_for_replication.IBMSVTrustStore.is_truststore_present')
@@ -267,7 +281,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
                                                     svc_connect_mock,
                                                     ssh_mock,
                                                     is_truststore_present_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -276,38 +290,37 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'ipsec': 'on',
             'syslog': 'on',
             'snmp': 'on'
-        })
+        }):
+            is_truststore_present_mock.return_value = {
+                "name": "truststore1",
+                "ipsec": "off",
+                "syslog": "off",
+                "snmp": "on"
+            }
 
-        is_truststore_present_mock.return_value = {
-            "name": "truststore1",
-            "ipsec": "off",
-            "syslog": "off",
-            "snmp": "on"
-        }
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+            ts = IBMSVTrustStore()
 
-        ts = IBMSVTrustStore()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
-
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_for_flashsystem_grid(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -316,31 +329,31 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_username': 'remote_username',
             'remote_password': 'remote_password',
             'state': 'present',
-            'flashgrid': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+            'grid': 'on'
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_for_flashsystem_grid_idempotency(self, svc_connect_mock, ssh_mock):
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -349,25 +362,25 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_username': 'remote_username',
             'remote_password': 'remote_password',
             'state': 'present',
-            'flashgrid': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": "0"}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+            'grid': 'on'
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{"name": "truststore1", "grid_references": "0"}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleExitJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleExitJson) as exc:
+                ts.apply()
 
-        self.assertFalse(exc.value.args[0]['changed'])
-        self.assertTrue('truststore1' in exc.value.args[0]['msg'])
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
@@ -376,7 +389,7 @@ class TestIBMSVTrustStore(unittest.TestCase):
         '''
         Test failure while trying to update a truststore that was created for flashsystem grid.
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -386,35 +399,35 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_password': 'remote_password',
             'state': 'present',
             'email': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": "0"}', b''])
-        stdout.channel.recv_exit_status.side_effect = iter([0, 1])
-        stderr.read.return_value = br'CMMVC1274E The command failed as the trust store entry is being used for another member of the Flash Grid.'
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{"name": "truststore1", "grid_references": "0"}', b''])
+            stdout.channel.recv_exit_status.side_effect = iter([0, 1])
+            stderr.read.return_value = br'CMMVC1274E The command failed as the trust store entry is being used for another member of the grid.'
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleFailJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleFailJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'CMMVC1274E The command failed as the trust store entry is being used for another member of the Flash Grid.')
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'CMMVC1274E The command failed as the trust store entry is being used for another member of the grid.')
 
     @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
-    def test_failure_update_truststore_flashgrid_attr(self, svc_connect_mock, ssh_mock):
+    def test_failure_update_truststore_grid_attr(self, svc_connect_mock, ssh_mock):
         '''
-        Test failure while trying to update a truststore attribute flashgrid=on.
+        Test failure while trying to update a truststore attribute grid=on.
         '''
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'username': 'username',
             'password': 'password',
@@ -423,26 +436,26 @@ class TestIBMSVTrustStore(unittest.TestCase):
             'remote_username': 'remote_username',
             'remote_password': 'remote_password',
             'state': 'present',
-            'flashgrid': 'on'
-        })
-        con_mock = Mock()
-        svc_connect_mock.return_value = True
-        ssh_mock.return_value = con_mock
-        stdin = Mock()
-        stdout = Mock()
-        stderr = Mock()
-        con_mock.exec_command.return_value = (stdin, stdout, stderr)
-        stdout.read.side_effect = iter([br'{"name": "truststore1", "flash_grid_references": ""}', b'', b''])
-        stdout.channel.recv_exit_status.return_value = 0
+            'grid': 'on'
+        }):
+            con_mock = Mock()
+            svc_connect_mock.return_value = True
+            ssh_mock.return_value = con_mock
+            stdin = Mock()
+            stdout = Mock()
+            stderr = Mock()
+            con_mock.exec_command.return_value = (stdin, stdout, stderr)
+            stdout.read.side_effect = iter([br'{"name": "truststore1", "grid_references": ""}', b'', b''])
+            stdout.channel.recv_exit_status.return_value = 0
 
-        ts = IBMSVTrustStore()
+            ts = IBMSVTrustStore()
 
-        with pytest.raises(AnsibleFailJson) as exc:
-            ts.apply()
+            with pytest.raises(AnsibleFailJson) as exc:
+                ts.apply()
 
-        self.assertTrue(exc.value.args[0]['failed'])
-        self.assertEqual(exc.value.args[0]['msg'],
-                         'Invalid parameter for update: (flashgrid)')
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'Invalid parameter for update: (grid)')
 
 
 if __name__ == '__main__':

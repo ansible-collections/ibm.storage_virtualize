@@ -5,6 +5,8 @@
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
 #            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
+#            Vivek Pandey <vivek.pandey11@ibm.com>
+#            Rahul Pawar <rahul.p@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -148,15 +150,34 @@ options:
         type: str
         choices: [ fixeventwithchecks ]
         version_added: 2.6.0
+    old_name:
+        description:
+            - Specifies the name of the storage partition to be renamed.
+            - Valid when I(state=present), to rename an existing storage partition.
+        type: str
+        version_added: '3.0.0'
     validate_certs:
         description:
             - Validates certification.
         default: false
         type: bool
+    managementportset:
+        description:
+            - Specifies management portset to be assigned to partition.
+        type: str
+        version_added: 3.0.0
+    nomanagementportset:
+        description:
+            - Removes the management portset from the partition.
+        type: bool
+        choices: [ true ]
+        version_added: 3.0.0
 author:
     - Shilpi Jain (@Shilpi-J)
     - Sumit Kumar Gupta (@sumitguptaibm)
     - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
+    - Vivek Pandey (@Vivek-Pandey11)
+    - Rahul Pawar (@rahul-p)
 notes:
     - This module supports C(check_mode).
     - Parameters drlink_partition_uuid and remotesystem are interdependent and mutually exclusive with other parameters.
@@ -243,6 +264,30 @@ EXAMPLES = '''
    name: partition0
    state: present
    migrationaction: fixeventwithchecks
+- name: Create partition with management portset
+  ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition1
+   managementportset: portset4
+   state: present
+- name: Remove management portset from a partition
+  ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition1
+   nomanagementportset: true
+   state: present
+- name: Rename partition partition0 to partition1
+  ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   old_name: partition0
+   name: partition1
+   state: present
 '''
 
 RETURN = '''#'''
@@ -311,8 +356,17 @@ class IBMSVStoragePartition:
                 migrationaction=dict(
                     type='str',
                     choices=['fixeventwithchecks']
+                ),
+                old_name=dict(
+                    type='str'
+                ),
+                managementportset=dict(
+                    type='str'
+                ),
+                nomanagementportset=dict(
+                    type='bool',
+                    choices=[True]
                 )
-
             )
         )
 
@@ -337,7 +391,9 @@ class IBMSVStoragePartition:
         self.removedrlink = self.module.params.get('removedrlink')
         self.location = self.module.params.get('location')
         self.migrationaction = self.module.params.get('migrationaction')
-
+        self.old_name = self.module.params.get('old_name')
+        self.managementportset = self.module.params.get('managementportset')
+        self.nomanagementportset = self.module.params.get('nomanagementportset')
         # logging setup
         self.log_path = self.module.params['log_path']
         log = get_logger(self.__class__.__name__, self.log_path)
@@ -369,10 +425,14 @@ class IBMSVStoragePartition:
             'preferredmanagementsystem', 'deletepreferredmanagementcopy',
             'removedrlink', 'drlink_partition_uuid',
             'draft', 'partition_to_merge',
-            'location', 'migrationaction'
+            'location', 'migrationaction', 'old_name',
+            'nomanagementportset'
         ]
 
         if self.state == 'present':
+            if self.nomanagementportset and self.managementportset:
+                self.module.fail_json(msg='Parameter {0} and {1} are mutually exclusive.'.format(
+                    "managementportset", "nomanagementportset"))
             if self.deletenonpreferredmanagementobjects or self.deletepreferredmanagementobjects:
                 self.module.fail_json(
                     msg='Parameters not allowed while creation or update: '
@@ -381,7 +441,7 @@ class IBMSVStoragePartition:
 
             # These parameters are loners; cannot be specified with any other parameters in common_invalids
             loners_list = ['drlink_partition_uuid', 'removedrlink', 'draft',
-                           'partition_to_merge', 'location', 'migrationaction']
+                           'partition_to_merge', 'location', 'migrationaction', 'old_name', 'nomanagementportset']
             for attr in loners_list:
                 if getattr(self, attr) is not None:
                     # Remove attr itself from list, and get invalids with this loner
@@ -391,11 +451,9 @@ class IBMSVStoragePartition:
                         self.module.fail_json(
                             msg="Parameter {0} is mutually exclusive with"
                             " specified parameters: {1}.".format(attr, current_invalids))
-
         else:
-            invalids_for_delete = common_invalids + ['remotesystem']
+            invalids_for_delete = common_invalids + ['remotesystem', 'managementportset']
             invalid_exists = ', '.join((var for var in invalids_for_delete if getattr(self, var) not in {'', None}))
-
             if invalid_exists:
                 self.module.fail_json(
                     msg='state=absent but following parameter(s) have been passed: {0}'.format(invalid_exists)
@@ -415,7 +473,7 @@ class IBMSVStoragePartition:
 
     def create_storage_partition(self):
         unsupported = ('noreplicationpolicy', 'preferredmanagementsystem', 'deletepreferredmanagementcopy',
-                       'drlink_partition_uuid', 'remotesystem', 'removedrlink')
+                       'drlink_partition_uuid', 'remotesystem', 'removedrlink', 'old_name', 'nomanagementportset')
         unsupported_exists = ', '.join((field for field in unsupported if getattr(self, field) not in {'', None}))
 
         if unsupported_exists:
@@ -436,6 +494,8 @@ class IBMSVStoragePartition:
             cmdopts['draft'] = self.draft
         if self.replicationpolicy:
             cmdopts['replicationpolicy'] = self.replicationpolicy
+        if self.managementportset:
+            cmdopts['managementportset'] = self.managementportset
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('Storage Partition (%s) created', self.name)
@@ -454,17 +514,21 @@ class IBMSVStoragePartition:
         if self.deletepreferredmanagementcopy and not self.noreplicationpolicy:
             self.module.fail_json(msg='These parameters must be passed together: {0}, {1}'.format(
                                   "deletepreferredmanagementcopy", "noreplicationpolicy"))
-
         # Mapping the parameters with the existing data for comparision
         params_mapping = (
             ('replicationpolicy', data.get('replication_policy_name', '')),
             ('preferredmanagementsystem', data.get('preferred_management_system_name', '')),
             ('noreplicationpolicy', not bool(data.get('replication_policy_name', ''))),
             ('drlink_partition_uuid', data.get('dr_linked_partition_uuid', '')),
-            ('removedrlink', not bool(data.get('dr_linked_partition_name')))
+            ('removedrlink', not bool(data.get('dr_linked_partition_name'))),
+            ('managementportset', data.get('management_portset_name', '')),
+            ('nomanagementportset', not bool(data.get('management_portset_name', '')))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
+        if data.get('management_portset_name') and self.managementportset and data.get('management_portset_name') != self.managementportset:
+            self.module.fail_json(msg='This paritition is already mapped to a managementportset: {0}'.format(
+                                  data.get('management_portset_name')))
         if "noreplicationpolicy" in props:
             if self.deletepreferredmanagementcopy:
                 if data.get("preferred_management_system_name") == data.get("active_management_system_name"):
@@ -521,7 +585,10 @@ class IBMSVStoragePartition:
 
         cmd = 'chpartition'
         cmdopts = dict((k, getattr(self, k)) for k in updates)
-        cmdargs = [self.name]
+        if 'name' in updates:
+            cmdargs = [self.old_name]
+        else:
+            cmdargs = [self.name]
 
         # If existing partition's data indicates, that partition is already published, then nothing to do.
         # If not, then insert publish=true in API
@@ -577,8 +644,17 @@ class IBMSVStoragePartition:
         self.changed = True
 
     def apply(self):
-        data = self.get_storage_partition_details(self.name)
+        # In case of rename, skip the probe, and directly call update function
+        if getattr(self, 'old_name'):
+            old_or_existing_data = self.get_storage_partition_details(self.old_name)
+            if old_or_existing_data:
+                self.update_storage_partition({'name': self.name})
+                self.module.exit_json(
+                    changed=True,
+                    msg="Storage Partition ({0}) renamed to ({1})".format(self.old_name, self.name)
+                )
 
+        data = self.get_storage_partition_details(self.name)
         if data:
             if self.state == 'present':
                 if self.partition_to_merge:
@@ -598,14 +674,15 @@ class IBMSVStoragePartition:
                 self.msg = 'Storage Partition ({0}) does not exist'.format(self.name)
             elif self.partition_to_merge:
                 self.module.fail_json(msg="Target Partition ({0}) does not exist. Merge failed.".format(self.name))
+            elif self.location:
+                self.msg = 'Storage Partition ({0}) either does not exist or already migrated'.format(self.name)
+            elif self.migrationaction:
+                self.module.fail_json(msg='CMMVC5753E The specified partition object does not exist.')
+            elif self.old_name:
+                self.module.fail_json(msg='CMMVC5753E The specified object does not exist or is not a suitable candidate.')
             else:
-                if self.location:
-                    self.msg = 'Storage Partition ({0}) either does not exist or already migrated'.format(self.name)
-                elif self.migrationaction:
-                    self.module.fail_json(msg='CMMVC5753E The specified partition object does not exist.')
-                else:
-                    self.create_storage_partition()
-                    self.msg = 'Storage Partition ({0}) created.'.format(self.name)
+                self.create_storage_partition()
+                self.msg = 'Storage Partition ({0}) created.'.format(self.name)
 
         if self.module.check_mode:
             self.msg = 'skipping changes due to check mode.'

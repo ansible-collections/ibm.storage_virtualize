@@ -16,13 +16,28 @@ from ansible.module_utils import basic
 from ansible.module_utils._text import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_drive import IBMSVDriveMgmt
+import contextlib
 
 
+@contextlib.contextmanager
 def set_module_args(args):
-    """prepare arguments so that they will be picked up during module
-    creation """
-    args = json.dumps({'ANSIBLE_MODULE_ARGS': args})
-    basic._ANSIBLE_ARGS = to_bytes(args)  # pylint: disable=protected-access
+    """
+    Context manager that sets module arguments for AnsibleModule
+    """
+    if '_ansible_remote_tmp' not in args:
+        args['_ansible_remote_tmp'] = '/tmp'
+    if '_ansible_keep_remote_files' not in args:
+        args['_ansible_keep_remote_files'] = False
+
+    try:
+        from ansible.module_utils.testing import patch_module_args
+        with patch_module_args(args):
+            yield
+    except ImportError:
+        from ansible.module_utils import basic
+        serialized_args = to_bytes(json.dumps({'ANSIBLE_MODULE_ARGS': args}))
+        with patch.object(basic, '_ANSIBLE_ARGS', serialized_args):
+            yield
 
 
 class AnsibleExitJson(Exception):
@@ -80,22 +95,21 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
         Test drive state change to a permissible state (e.g. candidate, unused)
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'drive_state': 'candidate',
             'drive_id': 10
-        })
+        }):
+            rp = IBMSVDriveMgmt()
+            svc_run_command_mock.return_value = ""
 
-        rp = IBMSVDriveMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            rp.apply()
-            print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -111,23 +125,22 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
         Perform a drive task (e.g. format, erase)
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'task': 'format',
             'drive_id': 10
-        })
+        }):
+            lsdriveprogress_mock.return_value = ""
+            rp = IBMSVDriveMgmt()
+            svc_run_command_mock.return_value = ""
 
-        lsdriveprogress_mock.return_value = ""
-        rp = IBMSVDriveMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            rp.apply()
-            print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -140,22 +153,21 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
         Test performing a drive task (e.g. format, erase) when another task is in progress; should fail
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'task': 'triggerdump',
             'drive_id': 10
-        })
+        }):
+            rp = IBMSVDriveMgmt()
+            svc_run_command_mock.return_value = ""
 
-        rp = IBMSVDriveMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            rp.apply()
-            print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
+            self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -172,28 +184,27 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
         Test for idempotency of drive task
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'task': 'erase',
             'drive_id': 10
-        })
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "10",
+                "task": "erase",
+                "progress": "25",
+                "estimated_completion_time": "240603112838"
+            }
+            rp = IBMSVDriveMgmt()
+            svc_run_command_mock.return_value = ""
 
-        svc_obj_info_mock.return_value = {
-            "id": "10",
-            "task": "erase",
-            "progress": "25",
-            "estimated_completion_time": "240603112838"
-        }
-        rp = IBMSVDriveMgmt()
-        svc_run_command_mock.return_value = ""
-
-        with pytest.raises(AnsibleExitJson) as exc:
-            rp.apply()
-            print(exc.value.args[0])
-        self.assertFalse(exc.value.args[0]['changed'])
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
+            self.assertFalse(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -207,30 +218,29 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
         when a different task is in progress; should fail
         '''
 
-        set_module_args({
+        with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
             'task': 'erase',
             'drive_id': 10
-        })
+        }):
+            lsdriveprogress_mock.return_value = {
+                "id": "10",
+                "task": "format",
+                "progress": "25",
+                "estimated_completion_time": "240603112838"
+            }
+            rp = IBMSVDriveMgmt()
 
-        lsdriveprogress_mock.return_value = {
-            "id": "10",
-            "task": "format",
-            "progress": "25",
-            "estimated_completion_time": "240603112838"
-        }
-        rp = IBMSVDriveMgmt()
+            with pytest.raises(AnsibleFailJson) as exc:
+                rp.apply()
+                print(exc.value.args[0])
 
-        with pytest.raises(AnsibleFailJson) as exc:
-            rp.apply()
+            self.assertIn("CMMVC6625E", exc.value.args[0]['msg'])
             print(exc.value.args[0])
-
-        self.assertIn("CMMVC6625E", exc.value.args[0]['msg'])
-        print(exc.value.args[0])
-        self.assertTrue(exc.value.args[0]['failed'])
+            self.assertTrue(exc.value.args[0]['failed'])
 
 
 if __name__ == '__main__':

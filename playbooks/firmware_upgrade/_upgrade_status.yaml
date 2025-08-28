@@ -1,0 +1,70 @@
+- name: Get controller current time
+  ansible.builtin.command: "date +%s"
+  changed_when: false
+  register: controller_current_time_output
+
+- name: Set current time
+  ansible.builtin.set_fact:
+    controller_current_time: "{{ controller_current_time_output.stdout | int }}"
+
+- name: Query upgrade progress
+  register: upgrade_progress
+  failed_when: upgrade_progress.Update is defined and (('failed' in upgrade_progress.Update.status) or ('stalled' in upgrade_progress.Update.status))
+  ignore_unreachable: true
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    command_list: ["lsupdate"]
+
+- name: Confirm build installation if succeeded
+  when: upgrade_progress.Update is defined and upgrade_progress.Update.status == 'success'
+  block:
+    - name: Get new system info
+      register: system_info
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ clustername }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        gather_subset: system
+
+    - name: Remove timestamp file
+      ansible.builtin.file:
+        path: "{{ timestamp_cache_file }}"
+        state: absent
+
+    - name: Print new build version
+      ansible.builtin.debug:
+        msg: "BUILD UPDATE SUCCEEDED! The new build version is {{ system_info.System.code_level }}"
+
+    - name: End play with success
+      ansible.builtin.meta: end_play
+
+- name: Get estimated completion time in epoch
+  when: upgrade_progress.Update is defined
+  ansible.builtin.set_fact:
+    system_estimated_completion_time: "{{ (upgrade_progress.Update.estimated_completion_time | to_datetime('%y%m%d%H%M%S')).strftime('%s') | int }}"
+
+- name: Set time elapsed
+  when: upgrade_progress.Update is defined
+  ansible.builtin.set_fact:
+    time_elapsed: "{{ ((controller_current_time | int) + (offset | int)) - (system_start_time | int) }}"
+
+- name: Set time required
+  when: upgrade_progress.Update is defined
+  ansible.builtin.set_fact:
+    time_required: "{{ (system_estimated_completion_time | int) - (system_start_time | int) }}"
+
+- name: Set percent
+  when: upgrade_progress.Update is defined
+  ansible.builtin.set_fact:
+    percent_complete: "{{ ((time_elapsed | int) / (time_required | int)) }}"
+
+- name: Display upgrade progress
+  when: upgrade_progress.Update is defined
+  ansible.builtin.debug:
+    msg: "Upgrade progress: {{ ((percent_complete | float) * 100) | round(2) }}%"
+
+- name: Wait for next check
+  ansible.builtin.pause:
+    seconds: "{{ delay_period }}"
