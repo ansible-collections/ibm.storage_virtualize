@@ -4,6 +4,7 @@
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Rahul Pawar <rahul.p@ibm.com>
+#            Sumit Kumar Gupta <sumit.gupta@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -187,6 +188,7 @@ options:
 author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
     - Rahul Pawar(@rahul-p)
+    - Sumit Kumar Gupta(@sumitguptaibm)
 notes:
     - This module supports C(check_mode).
     - For unmap parameter, the option remotecopy_relationships has been deprecated from 8.7.1.0 onwards.
