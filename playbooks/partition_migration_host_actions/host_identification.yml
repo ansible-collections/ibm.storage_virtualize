@@ -127,10 +127,6 @@
       ansible.builtin.set_fact:
         matched_hosts: []
 
-    - name: Initialize an empty list.
-      ansible.builtin.set_fact:
-        matched_inventory_hosts: []
-
     - name: Map inventory_hostname with flash_systems host name based on WWPN.
       ansible.builtin.set_fact:
         matched_hosts: >-
@@ -139,7 +135,7 @@
             [{'inventory_hostname': inventory_hostname, 'fs_host_name': item.value.name, 'host_type': system_info.ansible_facts.ansible_system}]
           }}
       loop: "{{ vmd_output | dict2items }}"
-      when: item.value.wwpns | intersect(fc_host_wwpns)
+      when: item.value.wwpns | intersect(fc_host_wwpns) | length > 0
 
     - name: Print Filter matched hosts.
       ansible.builtin.debug:

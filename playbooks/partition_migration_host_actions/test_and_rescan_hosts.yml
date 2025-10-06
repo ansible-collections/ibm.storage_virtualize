@@ -12,7 +12,7 @@
 
 - name: Initialize extracted_hosts list
   ansible.builtin.set_fact:
-    extracted_hosts1: []
+    extracted_hosts1: {}
 
 - name: Extract relevant data
   ansible.builtin.set_fact:
@@ -54,12 +54,12 @@
   ansible.builtin.command:
     cmd: "ansible-playbook rescan_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
   changed_when: false
-  when: filtered_host_matched_list != []
+  when: filtered_host_matched_list | length > 0
 
 - name: Waiting for IO to stabilize.
   ansible.builtin.wait_for:
     timeout: "{{ io_stability_time | int }}"
-  when: filtered_host_matched_list != []
+  when: filtered_host_matched_list | length > 0
 
 - name: Run lspartition on flashsystem to verify the host discovry status
   ibm.storage_virtualize.ibm_svcinfo_command:

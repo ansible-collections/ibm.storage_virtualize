@@ -1,10 +1,9 @@
-<a id="readme-top"></a>
-
 # Automated Migration of Global Mirror & GMCV (Global Mirror with Change Volumes) Relationships & Consistency Groups to PBR (Policy-based Replication)
 
 This document runs through the Ansible playbooks required for the migration of Global Mirror and GMCV (Global Mirror with change volumes) relationships and consistency groups to PBR (Policy-based Replication).
 
 ## Table of Contents
+
 - [Objective](#objective)
 - [Prerequisites](#prerequisites)
 - [Overview](#overview)
@@ -12,10 +11,11 @@ This document runs through the Ansible playbooks required for the migration of G
 - [Variables](#variables)
 
 ## Objective
+
 Migrate Global Mirror & GMCV (Global Mirror with Change Volumes) relationships and consistency groups to PBR (Policy-based Replication) while maintaining a consistent secondary copy.
 
 ## Prerequisites
-- IBM Storage Virtualize Ansible Collection v2.5.0 or later must be installed.
+- IBM Storage Virtualize ansible collection v2.5.0 or above must be installed.
 - Both systems should support PBR. Supported builds are - 8.6.0.x or 8.7.0.x.
 - Both systems must have working GM/GMCV relationships and/or consistency groups (implying working partnerships).
 - Global Mirror relationships/consistency groups must be in `Consistent Synchronized` state while GMCV relationships/consistency groups must be in `Consistent Copying` state, if the state is `Inconsistent Copying` or `Inconsistent Stopped`, the playbook will try to bring these relationships/consistency groups into the required states, but may fail to do so if the state does not change in a pre-defined time interval.
@@ -23,6 +23,7 @@ Migrate Global Mirror & GMCV (Global Mirror with Change Volumes) relationships a
 - Pools given as input (which are to be linked), should have enough space to contain every volume which is to be migrated.
 
 ## Overview
+
 The suite of playbooks to migrate GM/GMCV to PBR performs following steps:
 - Setup PBR on the partnership
 - Link the specified pools
@@ -35,6 +36,7 @@ The suite of playbooks to migrate GM/GMCV to PBR performs following steps:
 > Migration of consistency groups will lead to creation of a single volume group, while migration of independent relationships (prefix-selected too) will create a new volume group for each relationship.
 
 ## Playbooks
+
 Migrating Global Mirror, GMCV to PBR currently has 6 executable playbooks - 
 - migrate_independent_relationships/main.yaml - For migrating a list of independent relationships.
 - migrate_independent_relationships/cleanup.yaml - For delayed cleanup of a list of independent relationships which have been already migrated.
@@ -44,8 +46,6 @@ Migrating Global Mirror, GMCV to PBR currently has 6 executable playbooks -
 - migrate_consistency_groups/cleanup.yaml - For delayed cleanup of a list of consistency groups which have been already migrated.
 >[!NOTE]
 > Only the .yaml files which do not begin with an underscore are meant to be executed as Ansible Playbooks.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 These playbooks can be found in the repository as - 
 ```
@@ -78,8 +78,6 @@ ibm.storage_virtualize
 ```
 >[!NOTE]
 > For delayed cleanup, a file named `inventory_cleanup_[ir/prefix/cg]_master_system_name_aux_system_name.ini` will be created which will contain the necessary information to clean up the GM/GMCV setup. Due to security concerns, security credentials will not be added to this file. Thus, before running the cleanup playbook, these credentials should be added to the file, and the name of the inventory file should be added to the vars_files section of the cleanup playbook.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Variables
 
@@ -127,7 +125,6 @@ ibm.storage_virtualize
 |consistency_groups_to_migrate|yes           |X        |Name of GMCV consistency group to migrate|
 
 ## Authors
-- Sumit Kumar Gupta (SUMIT.GUPTA16@ibm.com)
-- Prathamesh Deshpande (prathamesh.deshpande@ibm.com)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+- Sumit Kumar Gupta (SUMIT.GUPTA16@ibm.com)
+- Prathamesh Deshpande (prathamesh.deshpande1@ibm.com)

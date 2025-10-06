@@ -75,7 +75,7 @@ options:
     type: str
   filtervalue:
     description:
-    - Specifies (key=value) combination that helps in returning a subset of objects satisfying the condition.
+    - Specifies a set of one or more (key=value) combination separated by a colon that helps in returning a subset of objects satisfying the condition.
     type: str
   gather_subset:
     type: list
@@ -262,7 +262,7 @@ EXAMPLES = '''
     gather_subset: [vol, host]
     command_list: [lsvdiskcopy, lssite]
     objectname: all
-- name: Get list of candidate drives info using filtervale and gather_subset.
+- name: Get list of candidate drives info using filtervalue and gather_subset.
   ibm.storage_virtualize.ibm_svc_info:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
@@ -270,7 +270,7 @@ EXAMPLES = '''
     password: "{{ password }}"
     log_path: /tmp/ansible.log
     gather_subset: drive
-    filtervalue: "use=candidate"
+    filtervalue: "use=candidate:status=online"
 - name: Get list of replication type portsets info using filtervalue and command_list.
   ibm.storage_virtualize.ibm_svc_info:
     clustername: "{{ clustername }}"

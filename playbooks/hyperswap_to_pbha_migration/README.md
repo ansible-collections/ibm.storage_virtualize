@@ -1,5 +1,3 @@
-<a id="readme-top"></a>
-
 # Automated Migration of HyperSwap Volumes to Policy-Based High Availability (PBHA)
 
 This directory contains an Ansible playbook for automating the migration of HyperSwap volumes to Policy-Based High Availability (PBHA). The solution aims to simplify the migration process while ensuring data availability and minimal downtime.
@@ -18,7 +16,8 @@ This directory contains an Ansible playbook for automating the migration of Hype
 This automation simplifies the migration of HyperSwap volumes to PBHA by handling pool mappings, volume relationships, and high availability configurations, ensuring minimal downtime and reliable transition.
 
 # Prerequisites
-- IBM Storage Virtualize Ansible collection must be installed.
+
+- IBM Storage Virtualize ansible collection plugins must be installed.
 - Both primary and secondary clusters must be on a PBHA-supported SVC level. Supported SVC levels are: 8.6.0.X & 8.7.0.X
 
 # Playbooks
@@ -53,7 +52,6 @@ ibm.storage_virtualize
     └─...
 ...
 ```
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # Variables
 
@@ -124,7 +122,6 @@ secondary_cluster_port_id: 7
 secondary_cluster_subnet_prefix: 24
 rdma_partnership_type: ipv4
 ```
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # Migration Steps  
 
@@ -147,17 +144,15 @@ Tasks performed via this playbook:
 - Create a volume group and add the HyperSwap volumes to it.  
 - Create a partition, add volume group(s) to it, publish it and make it highly available by assigning HA replication policy.
 
-> [!Note]
+> [!NOTE]
 > After successfully executing the playbook, the quorum application will be ready for use. Please copy it to the any host. This may need to be run later in case of broken quorum. Please make sure the host has Java Runtime Environment (JRE) installed, as it is required to run the application.
 
 # Logs and Output
-- **Log File**: `HyperSwap_PBHA_migration_of_<system1>_and_<system2>.log` contains detailed information about the migration process.
 
+- **Log File**: `HyperSwap_PBHA_migration_of_<system1>_and_<system2>.log` contains detailed information about the migration process.
 - **JSON File:** `HyperSwap_volumes_of_<system_name>.json` required for subsequent steps. Do not delete unless the migration process is complete.
 
-
 # Authors:
-- Sumit Kumar Gupta (sumit.gupta16@ibm.com)  
-- Aditya Bhosale (aditya.bhosale5@ibm.com)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+- Sumit Kumar Gupta (sumit.gupta16@ibm.com)  
+- Aditya Bhosale (adityabhosale@ibm.com)

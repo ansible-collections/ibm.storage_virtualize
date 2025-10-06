@@ -1,6 +1,7 @@
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Rahul Pawar <rahul.p@ibm.com>
+#            Aditya Bhosale <adityabhosale@ibm.com>
 #
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -122,7 +123,7 @@ class TestIBMSVCUser(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_get_ip_info(self, mock_svc_authorize, soim):
+    def test_get_ip_info(self, mock_svc_authorize, svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -138,7 +139,7 @@ class TestIBMSVCUser(unittest.TestCase):
             'shareip': True,
             'state': 'present'
         }):
-            soim.return_value = [
+            svc_obj_info_mock.return_value = [
                 {
                     "id": "0",
                     "node_id": "1",
@@ -150,8 +151,6 @@ class TestIBMSVCUser(unittest.TestCase):
                     "prefix": "20",
                     "vlan": "",
                     "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
                 },
                 {
                     "id": "1",
@@ -164,55 +163,11 @@ class TestIBMSVCUser(unittest.TestCase):
                     "prefix": "20",
                     "vlan": "",
                     "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "2",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "2",
-                    "portset_name": "portset2",
-                    "IP_address": "10.0.1.3",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "3",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "3",
-                    "portset_name": "portset3",
-                    "IP_address": "10.0.1.4",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "4",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "4",
-                    "portset_name": "Portset4",
-                    "IP_address": "10.0.1.5",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
                 }
             ]
             ip = IBMSVCIp()
-            data = ip.get_ip_info()
-            self.assertEqual(data[0]["IP_address"], "10.0.1.1")
+            data = ip.get_ip_info("10.0.1.1")
+            self.assertEqual(data["IP_address"], "10.0.1.1")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -245,84 +200,15 @@ class TestIBMSVCUser(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_ip(self, mock_svc_authorize, svc_run_command_mock):
+    def test_create_ip_when_port_portset_node_absent(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
-            'vlan': 1,
-            'shareip': True,
-            'state': 'absent'
-        }):
-            svc_run_command_mock.return_value = None
-            ip = IBMSVCIp()
-            data = ip.remove_ip(0)
-            self.assertEqual(data, None)
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_when_state_absent(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
-            'vlan': 1,
-            'shareip': True
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_when_node_absent(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
-            'vlan': 1,
-            'shareip': True,
-            'state': 'present'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_when_port_absent(self, mock_svc_authorize, svc_run_command_mock):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'portset': 0,
             'ip_address': '10.0.1.1',
             'subnet_prefix': 20,
             'gateway': '10.10.10.10',
@@ -342,458 +228,362 @@ class TestIBMSVCUser(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_when_portset_absent(self, mock_svc_authorize, svc_run_command_mock):
+    def test_change_ip_with_valid_param(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
+            'old_ip_address': '10.1.1.11',
+            'ip_address': '10.1.1.12',
+            'subnet_prefix': 24,
+            'gateway': '10.1.1.1',
             'vlan': 1,
-            'shareip': True,
+            'state': 'present',
+        }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '10.1.1.11',
+                'prefix': '24',
+                'vlan': '',
+                'gateway': '',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_change_prefix(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '10.1.1.11',
+            'subnet_prefix': 28,
+            'state': 'present',
+        }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '10.1.1.11',
+                'prefix': '24',
+                'vlan': '',
+                'gateway': '',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_reset_gateway_vlan(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '10.1.1.11',
+            'subnet_prefix': 24,
+            'state': 'present',
+            'resetgateway': True,
+            'resetvlan': True
+        }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '10.1.1.11',
+                'prefix': '24',
+                'vlan': '60',
+                'gateway': '10.1.1.1',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_gateway_vlan(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '10.1.1.11',
+            'subnet_prefix': 24,
+            'state': 'present',
+            'gateway': '10.1.1.2',
+            'vlan': 70
+        }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '10.1.1.11',
+                'prefix': '24',
+                'vlan': '60',
+                'gateway': '10.1.1.1',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_update_portset(self, mock_svc_authorize, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '1.1.1.11',
+            'subnet_prefix': 24,
+            'node': 'node1',
+            'port': 2,
+            'portset': 'test_data2',
             'state': 'present'
         }):
-            svc_run_command_mock.return_value = {
-                'id': '0',
-                'message': 'IP Address, id [0], successfully created'
-            }
-            with pytest.raises(AnsibleExitJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['changed'])
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '1.1.1.11',
+                'prefix': '24',
+                'vlan': '60',
+                'gateway': '1.1.1.1',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                "IP 1.1.1.11 already exists. Portset cannot be changed. To create shared data IP, use shareip parameter."
+            )
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_when_ip_missing(self, mock_svc_authorize):
+    def test_failure_update_node_port(self, mock_svc_authorize, svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
-            'vlan': 1,
-            'shareip': True,
+            'ip_address': '1.1.1.11',
+            'subnet_prefix': 24,
+            'node': 'node2',
+            'port': 3,
+            'portset': 'portset0',
             'state': 'present'
         }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '1.1.1.11',
+                'prefix': '24',
+                'vlan': '60',
+                'gateway': '1.1.1.1',
+                'owner_id': '',
+                'owner_name': ''
+            }]
             with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_node_missing(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_port_missing(self, mock_svc_authorize, svc_run_command_mock, svc_obj_info):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleExitJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['changed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_portset_missing(self, mock_svc_authorize,
-                                         svc_run_command_mock,
-                                         svc_obj_info):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'ip_address': '10.0.1.1',
-            'state': 'absent'
-        }):
-            svc_obj_info.return_value = [
-                {
-                    "id": "0",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "0",
-                    "portset_name": "portset0",
-                    "IP_address": "10.0.1.1",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                }
-            ]
-            svc_run_command_mock.return_value = {
-                'id': '0',
-                'message': 'IP Address, id [0], successfully created'
-            }
-            with pytest.raises(AnsibleExitJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['changed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_ip_missing(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_subnet_present(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_gateway_present(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'gateway': '10.10.10.10',
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_vlan_present(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'vlan': 1,
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_remove_when_shareip_present(self, mock_svc_authorize):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'shareip': True,
-            'state': 'absent'
-        }):
-            with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertTrue(exc.value.args[0]['failed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_creation(self, mock_svc_authorize, soi, src):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'subnet_prefix': 20,
-            'gateway': '10.10.10.10',
-            'vlan': 1,
-            'shareip': True,
-            'state': 'present'
-        }):
-            soi.return_value = []
-            src.return_value = {
-                'id': '0',
-                'message': 'IP Address, id [0], successfully created'
-            }
-            with pytest.raises(AnsibleExitJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertEquall(exc.value.args[0]['changed'])
-
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_deletion(self, mock_svc_authorize, soi, src):
-        with set_module_args({
-            'clustername': 'clustername',
-            'domain': 'domain',
-            'username': 'username',
-            'password': 'password',
-            'node': 'node1',
-            'port': 1,
-            'portset': 0,
-            'ip_address': '10.0.1.1',
-            'state': 'absent'
-        }):
-            soi.return_value = [
-                {
-                    "id": "0",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "0",
-                    "portset_name": "portset0",
-                    "IP_address": "10.0.1.1",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "1",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "1",
-                    "portset_name": "portset1",
-                    "IP_address": "10.0.1.2",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "2",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "2",
-                    "portset_name": "portset2",
-                    "IP_address": "10.0.1.3",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "3",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "3",
-                    "portset_name": "portset3",
-                    "IP_address": "10.0.1.4",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "4",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "4",
-                    "portset_name": "Portset4",
-                    "IP_address": "10.0.1.5",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                }
-            ]
-            src.return_value = None
-            with pytest.raises(AnsibleExitJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertEqual(exc.value.args[0]['changed'], True)
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                "Update is not supported for parameter(s): node, port"
+            )
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_failure_deletion_when_multiple_IP_detected(self, mock_svc_authorize, soi):
+    def test_remove_ip_with_invalid_param(self, mock_svc_authorize, svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
+            'ip_address': '1.1.1.2',
             'node': 'node1',
             'port': 1,
-            'ip_address': '10.0.1.1',
             'subnet_prefix': 20,
             'gateway': '10.10.10.10',
             'vlan': 1,
             'shareip': True,
             'state': 'absent'
         }):
-            soi.return_value = [
-                {
-                    "id": "0",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "0",
-                    "portset_name": "portset0",
-                    "IP_address": "10.0.1.1",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "1",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "0",
-                    "portset_name": "portset0",
-                    "IP_address": "10.0.1.1",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "2",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "2",
-                    "portset_name": "portset2",
-                    "IP_address": "10.0.1.3",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "3",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "3",
-                    "portset_name": "portset3",
-                    "IP_address": "10.0.1.4",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                },
-                {
-                    "id": "4",
-                    "node_id": "1",
-                    "node_name": "node1",
-                    "port_id": "1",
-                    "portset_id": "4",
-                    "portset_name": "Portset4",
-                    "IP_address": "10.0.1.5",
-                    "prefix": "20",
-                    "vlan": "",
-                    "gateway": "",
-                    "owner_id": "",
-                    "owner_name": ""
-                }
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "IP_address": "1.1.1.1"},
+                {"id": "1", "IP_address": "1.1.1.2"}
             ]
             with pytest.raises(AnsibleFailJson) as exc:
-                ip = IBMSVCIp()
-                ip.apply()
-                self.assertEqual(exc.value.args[0]['failed'], True)
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                "The parameter ['subnet_prefix', 'gateway', 'vlan', 'shareip', 'node', 'port'] are not applicable when state is absent."
+            )
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_deletion_when_multiple_IP_detected(self, mock_svc_authorize, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '1.1.1.1',
+            'state': 'absent'
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "IP_address": "1.1.1.1", "portset_id": "0", "portset_name": "data_portset0"},
+                {"id": "1", "IP_address": "1.1.1.1", "portset_id": "1", "portset_name": "data_portset1"},
+                {"id": "2", "IP_address": "1.1.1.2", "portset_id": "2", "portset_name": "mgmt_portset0"}
+            ]
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                "Multiple objects found with IP 1.1.1.1. Please specify portset."
+            )
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_ip_address(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '1.1.1.2',
+            'state': 'absent'
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "IP_address": "1.1.1.1"},
+                {"id": "1", "IP_address": "1.1.1.2"}
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_ip_address_with_portset(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '1.1.1.1',
+            'portset': 'data_portset1',
+            'state': 'absent'
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "IP_address": "1.1.1.1", "portset_id": "0", "portset_name": "data_portset0"},
+                {"id": "1", "IP_address": "1.1.1.1", "portset_id": "1", "portset_name": "data_portset1"},
+                {"id": "2", "IP_address": "1.1.1.2", "portset_id": "2", "portset_name": "mgmt_portset0"}
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_ip_address_with_portset_idempotency(self, mock_svc_authorize, svc_obj_info_mock, svc_run_command_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'ip_address': '1.1.1.1',
+            'portset': 'data_portset1',
+            'state': 'absent'
+        }):
+            svc_obj_info_mock.return_value = [
+                {"id": "0", "IP_address": "1.1.1.1", "portset_id": "0", "portset_name": "data_portset0"}
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@
   tasks:
     - name: Fetch auth token for AMS cluster
       register: ams_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ ams_cluster_ip }}"
         username: "{{ ams_cluster_username }}"

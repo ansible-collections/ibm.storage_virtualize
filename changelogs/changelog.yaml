@@ -82,6 +82,12 @@ releases:
           of a subset of objects allowing a I(filtervalue)
       release_summary: Added support for drive state and task management, auto-download
         of security patches, and info enhancements.
+    modules:
+      - description: Manages changing drive's usability state to permissible state
+          (i.e. candidate, spare etc.) and perform drive tasks (i.e. format, erase,
+          recover, certify, trigger drive dump)
+        name: ibm_sv_manage_drive
+        namespace: ''
     release_date: '2024-06-28'
   2.5.0:
     changes:
@@ -208,3 +214,22 @@ releases:
         firmware upgrade and FlashSystem log collection, ansible compliance changes
         in unit-tests.
     release_date: '2025-08-28'
+  3.1.0:
+    changes:
+      bugfixes:
+        - ibm_svc_start_stop_flashcopy - Fixed flashcopy start issues when mapping belonged to
+          flashcopy consistency group
+        - ibm_svc_manage_volume - Fixed data-type conversion issue for grainsize
+        - ibm_svc_manage_ip - Fixed issues with IP address probe
+      minor_changes:
+        - ibm_svc_manage_ip - Changes for updating VLAN, gateway and IP address
+        - ibm_svc_utils - Improved error message for unreachable systems
+      release_summary: Added support for certificate management using new APIs, support for
+        updating management IP parameters (VLAN, gateway, and IP address), support for better
+        token security and ansible compliance changes.
+    modules:
+      - description: Manages system certificates and truststore for replication, high availability
+          and FlashSystem grid on IBM Storage Virtualize family systems
+        name: ibm_sv_manage_system_certificate
+        namespace: ''
+    release_date: '2025-10-08'

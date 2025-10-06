@@ -19,6 +19,7 @@
   tasks:
     - name: Fetch authorization token for aux
       register: auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ auxcluster }}"
         username: "{{ ausername }}"
@@ -34,6 +35,7 @@
         state: present
     - name: Fetch authorization token for master
       register: results
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clustername }}"
         username: "{{ username }}"

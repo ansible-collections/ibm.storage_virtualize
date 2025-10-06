@@ -1,11 +1,9 @@
-<a id="readme-top"></a>
+# IBM FlashSystem Configuration Replication using Ansible
 
-# Flashsystem Configuration Replication using Ansible
-
-This suite of playbooks helps users to replicate an existing Flashsystem's configuration onto a new Flashsystem.
-
+This suite of playbooks helps users to replicate an existing FlashSystem's configuration onto a new FlashSystem.
 
 ## Table of Contents
+
 - [Objective](#objective)
 - [Prerequisites](#prerequisites)
 - [Tasks Performed](#tasks-performed)
@@ -13,13 +11,16 @@ This suite of playbooks helps users to replicate an existing Flashsystem's confi
 - [Variables](#variables)
 
 ## Objective
-Replication of system configuration from one Flashsystem to another Flashsystem.
+
+Replication of system configuration from one FlashSystem to another FlashSystem.
 
 ## Prerequisites
-- IBM Storage Virtualize ansible collection version 2.2.0 or above must be installed.
+
+- IBM Storage Virtualize ansible collection v2.2.0 or above must be installed.
 - Python library jmespath must be installed.
 
 ## Tasks Performed
+
 - Set System name
 - Set up NTP server
 - Set up Timezone
@@ -29,6 +30,7 @@ Replication of system configuration from one Flashsystem to another Flashsystem.
 - Create Users
 
 ## Playbooks Overview
+
 ### 1. extract_src_cluster_config.yml:
    - This playbook is entry point, it takes `src_cluster_vars` file as an input and gathers cluster configuration and writes it onto `replication_vars` file in a format that can be consumed by `replicate_config_on_target_cluster.yml` playbook for replication.
    - To run this playbook:
@@ -71,9 +73,8 @@ Replication of system configuration from one Flashsystem to another Flashsystem.
    - Set target cluster details in target_cluster_vars
    - Run playbook replicate_config_on_target_cluster.yml
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Variables
+
 ### 1. vars/src_cluster_vars:
    - This file stores source cluster credentials, defines settable_fields required to extract from source cluster for specified entity, and formats raw extracted data to generate replication_vars file in desired format which will be provided as an input to `replicate_config_on_target_cluster.yml` playbook.
    - Fields to be set by user:
@@ -94,7 +95,7 @@ Replication of system configuration from one Flashsystem to another Flashsystem.
       ```
 
    > [!IMPORTANT]
-   > `user_default_password` value should be according to Flashsystem password policy
+   > `user_default_password` value should be according to FlashSystem password policy
    > 
    > To encrypt cluster_vars file:
    > ```
@@ -108,9 +109,8 @@ Replication of system configuration from one Flashsystem to another Flashsystem.
    > ```
 
 ## Authors
+
 - Ajinkya Nanavati (ananava1@in.ibm.com)
 - Devendra Mahajan (demahaj1@in.ibm.com)
 - Mohit Chitlange (mochitla@in.ibm.com)
 - Vrinda Dhakad (vrinda.dhakad@ibm.com)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>

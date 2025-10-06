@@ -295,7 +295,7 @@ class TestIBMSVCOwnershipgroup(unittest.TestCase):
         }):
             check_existing_ownership_mock.return_value = True
             svc_token_mock.return_value = {
-                'err': True,
+                'err': "httperror HTTP Error 500: Internal Server Error",
                 'out': 'Ownership group associated with one or more usergroup'
             }
             ownership = IBMSVCOwnershipgroup()

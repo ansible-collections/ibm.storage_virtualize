@@ -54,7 +54,6 @@ options:
         description:
             - Specifies the name of the node.
         type: str
-        required: true
     port:
         description:
             - Specifies a port ranging from 1 - 16 to which IP shall be assigned.
@@ -71,7 +70,7 @@ options:
     subnet_prefix:
         description:
             - Specifies the prefix of subnet mask.
-            - Applies when I(state=present).
+            - Required when I(state=present).
         type: int
     gateway:
         description:
@@ -83,6 +82,27 @@ options:
             - Specifies a vlan id ranging from 1 - 4096.
             - Applies when I(state=present).
         type: int
+    resetgateway:
+        description:
+            - Specifies whether to reset the gateway to None.
+            - Applies when I(state=present).
+        type: bool
+        default: false
+        version_added: '3.1.0'
+    resetvlan:
+        description:
+            - Specifies whether to reset the vlan to None.
+            - Applies when I(state=present).
+        type: bool
+        default: false
+        version_added: '3.1.0'
+    old_ip_address:
+        description:
+            - Specifies the old IP address to be changed.
+            - If not provided, the value of I(ip_address) will be used.
+            - Applies when I(state=present).
+        type: str
+        version_added: '3.1.0'
     shareip:
         description:
             - Specifies the flag when IP is shared between multiple portsets.
@@ -113,11 +133,36 @@ EXAMPLES = '''
    node: node1
    port: 1
    portset: portset0
-   ip_address: x.x.x.x
+   ip_address: x.x.x.a
    subnet_prefix: 20
-   gateway: x.x.x.x
+   gateway: x.x.x.y
    vlan: 1
    shareip: true
+   state: present
+- name: Change IP provisioning
+  ibm.storage_virtualize.ibm_svc_manage_ip:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   log_path: /tmp/ansible.log
+   portset: test_mgmt1
+   old_ip_address: x.x.x.a
+   ip_address: x.x.x.b
+   subnet_prefix: 20
+   gateway: x.x.x.y
+   vlan: 1
+   state: present
+- name: Reset Vlan and Gateway of an IP
+  ibm.storage_virtualize.ibm_svc_manage_ip:
+   clustername: "{{ cluster }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   log_path: /tmp/ansible.log
+   portset: test_mgmt1
+   ip_address: x.x.x.b
+   subnet_prefix: 20
+   resetgateway: true
+   resetvlan: true
    state: present
 - name: Remove IP provisioning
   ibm.storage_virtualize.ibm_svc_manage_ip:
@@ -125,9 +170,6 @@ EXAMPLES = '''
    username: "{{ username }}"
    password: "{{ password }}"
    log_path: /tmp/playbook.debug
-   node: node1
-   port: 1
-   portset: portset0
    ip_address: x.x.x.x
    state: absent
 - name: Create IP provisioning for management portset
@@ -138,9 +180,9 @@ EXAMPLES = '''
    log_path: /tmp/playbook.debug
    node: node1
    portset: mgmt_portset
-   ip_address: x.x.x.x
+   ip_address: x.x.x.a
    subnet_prefix: 20
-   gateway: x.x.x.x
+   gateway: x.x.x.y
    vlan: 1
    shareip: true
    state: present
@@ -159,7 +201,7 @@ class IBMSVCIp(object):
         argument_spec = svc_argument_spec()
         argument_spec.update(
             dict(
-                node=dict(type='str', required=True),
+                node=dict(type='str'),
                 state=dict(type='str', required=True, choices=['present', 'absent']),
                 port=dict(type='int'),
                 portset=dict(type='str'),
@@ -167,11 +209,24 @@ class IBMSVCIp(object):
                 subnet_prefix=dict(type='int'),
                 gateway=dict(type='str'),
                 vlan=dict(type='int'),
-                shareip=dict(type='bool')
+                shareip=dict(type='bool'),
+                old_ip_address=dict(type='str'),
+                resetgateway=dict(type='bool', default=False),
+                resetvlan=dict(type='bool', default=False)
             )
         )
 
-        self.module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
+        mutually_exclusive = [
+            ['gateway', 'resetgateway'],
+            ['vlan', 'resetvlan'],
+        ]
+        self.module = AnsibleModule(argument_spec=argument_spec,
+                                    required_if=[
+                                        ('state', 'present', ['ip_address', 'subnet_prefix']),
+                                        ('state', 'absent', ['ip_address'])
+                                    ],
+                                    mutually_exclusive=mutually_exclusive,
+                                    supports_check_mode=True)
 
         # logging setup
         log_path = self.module.params['log_path']
@@ -179,17 +234,20 @@ class IBMSVCIp(object):
         self.log = log.info
 
         # Required
-        self.node = self.module.params['node']
         self.state = self.module.params['state']
         self.ip_address = self.module.params.get('ip_address', False)
 
         # Optional
-        self.portset = self.module.params.get('portset', False)
-        self.subnet_prefix = self.module.params.get('subnet_prefix', False)
-        self.gateway = self.module.params.get('gateway', False)
-        self.vlan = self.module.params.get('vlan', False)
-        self.shareip = self.module.params.get('shareip', False)
-        self.port = self.module.params.get('port', False)
+        self.portset = self.module.params.get('portset', None)
+        self.subnet_prefix = self.module.params.get('subnet_prefix', None)
+        self.gateway = self.module.params.get('gateway', None)
+        self.vlan = self.module.params.get('vlan', None)
+        self.shareip = self.module.params.get('shareip', None)
+        self.port = self.module.params.get('port', None)
+        self.old_ip_address = self.module.params.get('old_ip_address', None)
+        self.resetgateway = self.module.params.get('resetgateway', False)
+        self.resetvlan = self.module.params.get('resetvlan', False)
+        self.node = self.module.params.get('node', None)
 
         # Initialize changed variable
         self.changed = False
@@ -207,58 +265,43 @@ class IBMSVCIp(object):
         )
 
     def basic_checks(self):
-        if not self.state:
-            self.module.fail_json(msg="The parameter [state] is required.")
-        if self.state == 'present':
-            required_when_present = {
-                'node': self.node,
-                'ip_address': self.ip_address,
-                'subnet_prefix': self.subnet_prefix
-            }
-            missing_present = [item for item, value in required_when_present.items() if not value]
-            if missing_present:
-                self.module.fail_json(msg="The parameter {0} is required when state is present.".format(missing_present))
         if self.state == 'absent':
-            required_when_absent = {
-                'node': self.node,
-                'ip_address': self.ip_address
-            }
             not_required_when_absent = {
+                'old_ip_address': self.old_ip_address,
                 'subnet_prefix': self.subnet_prefix,
                 'gateway': self.gateway,
                 'vlan': self.vlan,
-                'shareip': self.shareip
+                'shareip': self.shareip,
+                'node': self.node,
+                'port': self.port
             }
-            missing_absent = [item for item, value in required_when_absent.items() if not value]
-            if missing_absent:
-                self.module.fail_json(msg="The parameter {0} is required when state is absent.".format(missing_absent))
             not_applicable_absent = [item for item, value in not_required_when_absent.items() if value]
             if not_applicable_absent:
                 self.module.fail_json(msg="The parameter {0} are not applicable when state is absent.".format(not_applicable_absent))
 
-    def get_ip_info(self):
+    def get_ip_info(self, ip_address):
         all_data = self.restapi.svc_obj_info(cmd='lsip', cmdopts=None, cmdargs=None)
+        ip_data = [item for item in all_data if item['IP_address'] == ip_address]
+        ip_addr = None
+
+        if not ip_data:
+            self.log('No IP found')
+            return None
+
         if self.portset:
-            data = list(
-                filter(
-                    lambda item: item['node_name'] == self.node and
-                    item['port_id'] == str(self.port) and
-                    item['portset_name'] == self.portset and
-                    item['IP_address'] == self.ip_address, all_data
+            ip_addr = next((item for item in ip_data if item['portset_name'] == self.portset), None)
+            if not ip_addr and not self.shareip and self.state == 'present':
+                self.module.fail_json(
+                    msg="IP {0} already exists. Portset cannot be changed. To create shared data IP, use shareip parameter.".format(ip_address)
                 )
-            )
         else:
-            data = list(
-                filter(
-                    lambda item: item['node_name'] == self.node and
-                    item['port_id'] == str(self.port) and
-                    item['IP_address'] == self.ip_address, all_data
+            if len(ip_data) > 1:
+                self.module.fail_json(
+                    msg="Multiple objects found with IP {0}. Please specify portset.".format(ip_address)
                 )
-            )
-            if len(data) > 1:
-                self.module.fail_json(msg="Module could not find the exact IP with [node, port, ip_address]. Please also use [portset].")
-        self.log('GET: IP data: %s', data)
-        return data
+            ip_addr = ip_data[0]
+
+        return ip_addr
 
     def create_ip(self):
         if self.module.check_mode:
@@ -266,27 +309,75 @@ class IBMSVCIp(object):
             return
         command = 'mkip'
         command_options = {
-            'node': self.node,
-            'port': self.port,
             'ip': self.ip_address,
             'prefix': self.subnet_prefix
         }
-        if self.portset:
-            command_options['portset'] = self.portset
         if self.gateway:
             command_options['gw'] = self.gateway
-        if self.vlan:
-            command_options['vlan'] = self.vlan
-        if self.shareip:
-            command_options['shareip'] = self.shareip
+        for field in ['node', 'port', 'portset', 'vlan', 'shareip']:
+            value = getattr(self, field, None)
+            if value:
+                command_options[field] = value
+
         result = self.restapi.svc_run_command(command, command_options, cmdargs=None)
         self.log("create IP result %s", result)
-        if 'message' in result:
+        self.changed = True
+
+    def ip_probe(self, data):
+        props = {}
+
+        if self.old_ip_address and self.ip_address != data['IP_address']:
+            props['ip_address'] = self.ip_address
+        if self.subnet_prefix != int(data['prefix']):
+            props['prefix'] = self.subnet_prefix
+        if self.node and (self.node != data['node_name']):
+            props['node'] = self.node
+        if self.port and (self.port != int(data['port_id'])):
+            props['port'] = self.port
+
+        if self.gateway and (self.gateway != data['gateway']):
+            props['gateway'] = self.gateway
+        if self.resetgateway and data['gateway']:
+            props['gateway'] = ""
+        if self.vlan and (self.vlan != data['vlan']):
+            props['vlan'] = self.vlan
+        if self.resetvlan and data['vlan']:
+            props['vlan'] = ""
+
+        self.log("IP probe props='%s'", props)
+        return props
+
+    def update_ip(self, old_data, modify):
+        if self.module.check_mode:
             self.changed = True
-            self.log("create IP result message %s", result['message'])
-        else:
-            self.module.fail_json(
-                msg="Failed to create IP [%s]" % self.ip_address)
+            return
+
+        unsupported_parameters = ['node', 'port']
+        unsupported_exists = [param for param in unsupported_parameters if param in modify]
+        if unsupported_exists:
+            self.module.fail_json(msg=f"Update is not supported for parameter(s): {', '.join(unsupported_exists)}")
+
+        command = 'chip'
+        command_options = {}
+        command_options['ip'] = self.ip_address
+        cmdargs = [old_data['id']]
+
+        command_options['ip'] = modify.get('ip_address', old_data['IP_address'])
+        command_options['prefix'] = modify.get('prefix', old_data['prefix'])
+
+        if 'gateway' in modify and modify['gateway'] != "":
+            command_options['gw'] = modify['gateway']
+        elif not self.resetgateway and old_data['gateway']:
+            command_options['gw'] = old_data['gateway']
+
+        if 'vlan' in modify and modify['vlan'] != "":
+            command_options['vlan'] = modify['vlan']
+        elif not self.resetvlan and old_data['vlan']:
+            command_options['vlan'] = old_data['vlan']
+
+        self.restapi.svc_run_command(command, command_options, cmdargs)
+        self.log("IP parameters successfully changed.")
+        self.changed = True
 
     def remove_ip(self, ip_address_id):
         if self.module.check_mode:
@@ -297,21 +388,47 @@ class IBMSVCIp(object):
         cmdargs = [ip_address_id]
         self.restapi.svc_run_command(command, command_options, cmdargs)
         self.changed = True
-        self.log("removed IP '%s'", self.ip_address)
+        self.log("IP removed")
 
     def apply(self):
         msg = None
         self.basic_checks()
+
+        ip_data = None
+        if self.old_ip_address:
+            if self.old_ip_address == self.ip_address:
+                ip_data = self.get_ip_info(self.old_ip_address)
+            else:
+                old_data = self.get_ip_info(self.old_ip_address)
+                new_data = self.get_ip_info(self.ip_address)
+                if not old_data:
+                    self.module.fail_json(msg="Ip address [{0}] does not exists.".format(self.old_ip_address))
+                elif new_data:
+                    self.module.fail_json(msg="Ip address [{0}] already exists.".format(self.ip_address))
+                else:
+                    ip_data = old_data
+        else:
+            ip_data = self.get_ip_info(self.ip_address)
+
         if self.state == 'present':
-            self.create_ip()
-            msg = "IP address {0} has been created.".format(self.ip_address)
-        elif self.state == 'absent':
-            ip_data = self.get_ip_info()
+            if not ip_data:
+                self.create_ip()
+                msg = "IP address {0} has been created.".format(self.ip_address)
+            else:
+                modify = self.ip_probe(ip_data)
+                if modify:
+                    self.update_ip(ip_data, modify)
+                    msg = "IP address {0} changed.".format(self.ip_address)
+                else:
+                    msg = 'No modifications done.'
+        else:
             if ip_data:
-                self.remove_ip(ip_data[0]['id'])
+                self.remove_ip(ip_data['id'])
                 msg = "IP address {0} has been removed.".format(self.ip_address)
             else:
                 msg = "IP address {0} does not exist.".format(self.ip_address)
+                if self.portset:
+                    msg = "IP address {0} with specified portset does not exist.".format(self.ip_address)
 
         self.module.exit_json(msg=msg, changed=self.changed)
 

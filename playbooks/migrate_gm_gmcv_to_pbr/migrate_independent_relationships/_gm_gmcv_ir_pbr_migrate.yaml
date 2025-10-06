@@ -9,7 +9,7 @@
     objectname: "{{ item }}"
     log_path: "{{ logpath }}"
 - name: Migrate each relationship
-  when: rel_info.RemoteCopy != None and rel_info.RemoteCopy.copy_type == "global"
+  when: rel_info.RemoteCopy is not None and rel_info.RemoteCopy.copy_type == "global"
   block:
     - name: Set fact relationship type to GMCV if it is GMCV
       ansible.builtin.set_fact:

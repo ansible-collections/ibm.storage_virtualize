@@ -8,6 +8,7 @@
   tasks:
     - name: Fetch auth token for primary cluster
       register: primary_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clusters[0].cluster_ip }}"
         username: "{{ clusters[0].cluster_username }}"
@@ -16,6 +17,7 @@
 
     - name: Fetch auth token for secondary cluster
       register: secondary_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clusters[1].cluster_ip }}"
         username: "{{ clusters[1].cluster_username }}"

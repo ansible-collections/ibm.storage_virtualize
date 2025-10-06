@@ -22,6 +22,7 @@
   tasks:
     - name: Get auth token
       register: results
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clustername }}"
         username: "{{ username }}"

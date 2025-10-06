@@ -15,6 +15,7 @@
    # Fetch auth tokens on both master and aux systems
     - name: Fetch auth token for master
       register: master_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ master_clustername }}"
         username: "{{ master_username }}"
@@ -22,6 +23,7 @@
         log_path: "{{ logpath }}"
     - name: Fetch auth token for aux
       register: aux_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ aux_clustername }}"
         username: "{{ aux_username }}"
