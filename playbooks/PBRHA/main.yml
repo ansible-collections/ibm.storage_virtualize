@@ -12,6 +12,7 @@
 
     - name: Fetch auth token for HA AMS cluster
       register: ha_ams_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clusters[0].clustername }}"
         username: "{{ clusters[0].username }}"
@@ -20,6 +21,7 @@
 
     - name: Fetch auth token for DR cluster
       register: dr_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clusters[1].clustername }}"
         username: "{{ clusters[1].username }}"

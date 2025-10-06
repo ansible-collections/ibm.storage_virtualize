@@ -4,6 +4,32 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.1.0
+======
+
+Release Summary
+---------------
+
+Added support for certificate management using new APIs, support for updating management IP parameters (VLAN, gateway, and IP address), support for better token security and ansible compliance changes.
+
+Minor Changes
+-------------
+
+- ibm_svc_manage_ip - Changes for updating VLAN, gateway and IP address
+- ibm_svc_utils - Improved error message for unreachable systems
+
+Bugfixes
+--------
+
+- ibm_svc_manage_ip - Fixed issues with IP address probe
+- ibm_svc_manage_volume - Fixed data-type conversion issue for grainsize
+- ibm_svc_start_stop_flashcopy - Fixed flashcopy start issues when mapping belonged to flashcopy consistency group
+
+New Modules
+-----------
+
+- ibm_sv_manage_system_certificate - Manages system certificates and truststore for replication, high availability and FlashSystem grid on IBM Storage Virtualize family systems
+
 v3.0.0
 ======
 
@@ -157,6 +183,11 @@ Bugfixes
 - ibm_svc_manage_callhome - Setting censorcallhome does not work
 - ibm_svc_utils - REST API timeout due to slow response
 - ibm_svc_utils - Return correct error in case of error code 500
+
+New Modules
+-----------
+
+- ibm_sv_manage_drive - Manages changing drive's usability state to permissible state (i.e. candidate, spare etc.) and perform drive tasks (i.e. format, erase, recover, certify, trigger drive dump)
 
 v2.3.1
 ======

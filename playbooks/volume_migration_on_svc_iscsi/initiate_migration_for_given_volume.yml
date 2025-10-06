@@ -7,12 +7,14 @@
   tasks:
     - name: Fetch authorization token for source
       register: src_token
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ src_cluster_ip }}"
         username: "{{ src_cluster_username }}"
         password: "{{ src_cluster_password }}"
     - name: Fetch authorization token for destination
       register: dest_token
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ dest_cluster_ip }}"
         username: "{{ dest_cluster_username }}"

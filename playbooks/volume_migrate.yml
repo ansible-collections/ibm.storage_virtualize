@@ -22,12 +22,14 @@
   tasks:
     - name: Fetch authorization token for aux
       register: auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ auxcluster }}"
         username: "{{ auxusername }}"
         password: "{{ auxpassword }}"
     - name: Fetch authorization token for master
       register: results
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ clustername }}"
         username: "{{ username }}"

@@ -186,14 +186,15 @@ class IBMSVCFlashcopyStartStop(object):
             merged_result = data
         return merged_result
 
-    def start_fc(self):
+    def start_fc(self, fcdata):
         cmd = ''
         if self.isgroup:
             cmd = 'startfcconsistgrp'
         else:
             cmd = 'startfcmap'
         cmdopts = {}
-        cmdopts['prep'] = True
+        if fcdata['status'] != 'prepared':
+            cmdopts['prep'] = True
         if self.force:
             cmdopts["force"] = self.force
         self.log("Starting fc mapping.. Command %s opts %s", cmd, cmdopts)
@@ -216,10 +217,10 @@ class IBMSVCFlashcopyStartStop(object):
         msg = None
         fcdata = self.get_existing_fcmapping()
         if fcdata:
-            if self.state == "started" and fcdata["start_time"] == "":
+            if self.state == "started" and fcdata['status'] in ['idle_or_copied', 'prepared', 'stopped']:
                 self.log("[%s] exists, but requested state is 'started'", self.name)
                 changed = True
-            elif self.state == "stopped" and fcdata["start_time"] != "":
+            elif self.state == "stopped" and fcdata['status'] != 'stopped':
                 self.log("[%s] exists, but requested state is 'stopped'", self.name)
                 changed = True
         if changed:
@@ -227,25 +228,24 @@ class IBMSVCFlashcopyStartStop(object):
                 msg = 'skipping changes due to check mode.'
             else:
                 if self.state == "started":
-                    self.start_fc()
+                    self.start_fc(fcdata)
                     msg = "fc [%s] has been started" % self.name
                 elif self.state == "stopped":
                     self.stop_fc()
                     msg = "fc [%s] has been stopped" % self.name
         else:
             if fcdata:
-                if self.state == "started" or self.state == "stopped":
-                    self.log("[%s] exists, but currently in [%s] state", self.name, fcdata["status"])
-                    if self.isgroup:
-                        msg = "FlashCopy Consistency Group [%s] is in [%s] state." % (self.name, fcdata["status"])
-                    else:
-                        msg = "FlashCopy Mapping [%s] is in [%s] state." % (self.name, fcdata["status"])
+                self.log("[%s] exists, but currently in [%s] state", self.name, fcdata["status"])
+                if self.isgroup:
+                    msg = "FlashCopy Consistency Group [%s] is in [%s] state." % (self.name, fcdata["status"])
+                else:
+                    msg = "FlashCopy Mapping [%s] is in [%s] state." % (self.name, fcdata["status"])
             else:
-                if self.state == "started" or self.state == "stopped":
-                    if self.isgroup:
-                        msg = "FlashCopy Consistency Group [%s] does not exist." % self.name
-                    else:
-                        msg = "FlashCopy Mapping [%s] does not exist." % self.name
+                if self.isgroup:
+                    msg = "FlashCopy Consistency Group [%s] does not exist." % self.name
+                else:
+                    msg = "FlashCopy Mapping [%s] does not exist." % self.name
+                self.module.fail_json(msg=msg)
         self.module.exit_json(msg=msg, changed=changed)
 
 

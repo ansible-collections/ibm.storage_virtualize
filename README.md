@@ -1,19 +1,10 @@
-# Ansible Collection - ibm.storage_virtualize
+# IBM Storage Virtualize Ansible Collection
 
 [![Code of conduct](https://img.shields.io/badge/code%20of%20conduct-Ansible-silver.svg)](https://docs.ansible.com/ansible/latest/community/code_of_conduct.html )
 
+## Description
+
 This collection provides a series of Ansible modules and plugins for interacting with the IBM Storage Virtualize family products. These products include the IBM SAN Volume Controller, IBM FlashSystem family members built with IBM Storage Virtualize (FlashSystem 5xxx, 7xxx, 9xxx), IBM Storwize family, and IBM Storage Virtualize for Public Cloud. For more information regarding these products, see [IBM Documentation](https://www.ibm.com/docs/).
-
-## Communication
-
-* Join the Ansible forum:
-  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please use appropriate tags.
-  * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
-  * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events.
-
-* The Ansible [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn): used to announce releases and important changes.
-
-For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
 
 ## Requirements
 
@@ -44,6 +35,7 @@ To use a module from the IBM Storage Virtualize collection, please reference the
 ---
 - name: Using the IBM Storage Virtualize collection
   hosts: localhost
+  gather_facts: false
   tasks:
     - name: Gather info from storage
       ibm.storage_virtualize.ibm_svc_info:
@@ -60,12 +52,12 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 ```yaml
 ---
 - name: Using the IBM Storage Virtualize collection
-  gather_facts: no
-  connection: local
   hosts: localhost
+  gather_facts: false
+  collections: ibm.storage_virtualize
   tasks:
     - name: Gather info from storage
-      ibm.storage_virtualize.ibm_svc_info:
+      ibm_svc_info:
         clustername: x.x.x.x
         domain:
         username: username
@@ -74,7 +66,7 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
         gather_subset: all
 ```
 
-## Supported Resources
+## Resources Information
 
 ### Modules
 
@@ -112,7 +104,7 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 - ibm_sv_manage_cloud_backup - Manages cloud backups on Storage Virtualize systems
 - ibm_sv_manage_drive - Manages drive state changes, tasks and dump
 - ibm_sv_manage_fc_partnership - Manages Fibre Channel (FC) partnership on Storage Virtualize systems
-- ibm_sv_manage_flashsystem_grid - Manages Flashsystem grid operations such as creating and managing members
+- ibm_sv_manage_flashsystem_grid - Manages FlashSystem grid operations such as creating and managing members
 - ibm_sv_manage_fcportsetmember - Manages addition or removal of ports from the Fibre Channel (FC) portsets on Storage Virtualize systems
 - ibm_sv_manage_ip_partnership - Manages IP partnership configuration on Storage Virtualize systems
 - ibm_sv_manage_provisioning_policy - Manages provisioning policy configuration on Storage Virtualize systems
@@ -124,6 +116,7 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 - ibm_sv_manage_storage_partition - Manages storage partition configuration on Storage Virtualize systems
 - ibm_sv_manage_syslog_server - Manages syslog server configuration on Storage Virtualize systems
 - ibm_sv_manage_truststore_for_replication - Manages certificate trust stores for replication on Storage Virtualize family systems
+- ibm_sv_manage_system_certificate - Manages system certificates and truststore for replication, high availability and FlashSystem grid on Storage Virtualize systems
 - ibm_sv_restore_cloud_backup - Restores cloud backups on Storage Virtualize systems
 - ibm_sv_switch_replication_direction - Switches the replication direction on Storage Virtualize systems
 
@@ -152,15 +145,33 @@ The modules in the IBM Storage Virtualize Ansible collection leverage REST APIs 
 
 ## Releasing, Versioning, and Deprecation
 
-1. IBM Storage Virtualize Ansible Collection releases follow a quarterly release cycle.
+1. IBM Storage Virtualize Ansible Collection releases follow a quarterly release cycle, with details available in the [changelog](https://github.com/ansible-collections/ibm.storage_virtualize/blob/develop/CHANGELOG.rst).
 2. IBM Storage Virtualize Ansible Collection releases follow [semantic versioning](https://semver.org/).
 3. IBM Storage Virtualize Ansible modules deprecation cycle is aligned with [Ansible](https://docs.ansible.com/ansible/latest/dev_guide/module_lifecycle.html).
+
+## Testing
+The `tests/` directory contains configuration for running sanity and integration tests using ansible-test.
 
 ## Contributing
 
 Currently we are not accepting community contributions.
 Though, you may periodically review this content to learn when and how contributions can be made in the future.
 IBM Storage Virtualize Ansible Collection maintainers can follow the [Maintainer guidelines](https://docs.ansible.com/ansible/devel/community/maintainers.html).
+
+## Support
+
+This collection is entitled to support through the Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner. If the collection has been obtained either from Galaxy or GitHub, you can raise a GitHub Issue on this repository for support.
+
+## Communication
+
+* Join the Ansible forum: 
+  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please use appropriate tags.
+  * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
+  * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events.
+
+* The Ansible [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn): used to announce releases and important changes.
+
+For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
 
 ## License
 

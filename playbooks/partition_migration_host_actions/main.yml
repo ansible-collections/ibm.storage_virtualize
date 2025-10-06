@@ -22,7 +22,6 @@
         command: "lspartition -gui -json"
         log_path: "{{ logpath }}"
       register: partition_info
-      when: "'flash_systems' in group_names"
 
     - name: Clean the lspartition output
       ansible.builtin.set_fact:
@@ -39,7 +38,7 @@
       ####################################
 
     - name: Fetch Data for host identification.
-      when: lspartition_output | selectattr('migration_status', 'equalto', 'awaiting_user_input')
+      when: (lspartition_output | selectattr('migration_status', 'equalto', 'awaiting_user_input') | list | length) > 0
       block:
 
         - name: Fetch enclosure serial number
@@ -84,7 +83,7 @@
 
         - name: Initialize extracted_hosts list.
           ansible.builtin.set_fact:
-            extracted_hosts: []
+            extracted_hosts: {}
 
         - name: Extract relevant host data for the identified partition.
           ansible.builtin.set_fact:
@@ -100,11 +99,13 @@
                 })
               }}
           loop: "{{ shared_targetports_output.results }}"
-          when: item.Host is not none and item.Host.nodes[0].WWPN is defined
-
+          when: item.Host is not none and
+                item.Host.nodes is defined and
+                (item.Host.nodes | length) > 0 and
+                item.Host.nodes[0].WWPN is defined
 
         - name: Process extracted host data if not empty.
-          when: extracted_hosts != []
+          when: extracted_hosts | length > 0
           block:
 
             - name: Create path to save tmp
@@ -194,23 +195,23 @@
       ####################################
 
     - name: Host rescan action if host_rescan_requested event raised.
-      when: lspartition_output | selectattr('user_action_type', 'equalto', 'host_rescan_requested')
+      when: (lspartition_output | selectattr('user_action_type', 'equalto', 'host_rescan_requested') | list | length) > 0
       block:
 
         - name: Check extracted_hosts is empty.
-          when: extracted_hosts != []
+          when: extracted_hosts | length > 0
           block:
 
             - name: Call rescan playbook based on hosts discovery status.
               ansible.builtin.command:
                 cmd: "ansible-playbook rescan_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
               changed_when: false
-              when: lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan')
+              when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0
 
             - name: Waiting for IO to stabilize.
               ansible.builtin.wait_for:
                 timeout: "{{ io_stability_time | int }}"
-              when: lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan')
+              when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0
 
             - name: Run lspartition on flashsystem to verify the host discovry status.
               ibm.storage_virtualize.ibm_svcinfo_command:
@@ -275,11 +276,11 @@
       ####################################
 
     - name: Commit migrating when commit_or_rollback event raised.
-      when: lspartition_output | selectattr('user_action_type', 'equalto', 'commit_or_rollback')
+      when: (lspartition_output | selectattr('user_action_type', 'equalto', 'commit_or_rollback') | list | length) > 0
       block:
 
         - name: Validate multipth on target system.
-          when: extracted_hosts != [] and min_active_path != 0 and not is_windows_host and not is_esxi_host
+          when: extracted_hosts | length > 0 and min_active_path != 0 and not is_windows_host and not is_esxi_host
           block:
 
             - name: Fetch WWNN for Target system.
@@ -311,7 +312,7 @@
                     })
                   }}
               loop: "{{ targetports_data_tgt }}"
-              when: item.targetports_data_tgt is not none
+              when: item is not none
 
             - name: Write extrated data to file to send to verify_multipath_devices playbook.
               delegate_to: localhost

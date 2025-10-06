@@ -1,5 +1,3 @@
-<a id="readme-top"></a>
-
 # Playbook to Setup Policy-Based Replication (PBR)
 
 ## Table of Contents
@@ -10,19 +8,23 @@
 - [Variables](#variables)
 
 ## Objective
-  - Set up mTLS and configure Policy Based Replication between 2 Flashsystems.
+
+- Set up mTLS and configure Policy Based Replication between 2 FlashSystems.
 
 ## Prerequisites
-  - IBM Storage Virtualize ansible collection plugins must be installed.
-  - FC or IP partnership must be present between the clusters.
-  - Host must be present on primary cluster.
+
+- IBM Storage Virtualize ansible collection plugins must be installed.
+- FC or IP partnership must be present between the clusters.
+- Host must be present on primary cluster.
 
 ## Tasks Performed
+
 - These playbooks set up mTLS and configure Policy Based Replication between a primary cluster and the secondary cluster.
 - These playbook is designed to set up mTLS on both the site and configure Policy Based Replication between source cluster to destination cluster. This is designed in a way that it creates Data Reduction Pool, links them, creates provision policy and replication policy. 
 - These playbooks also creates multiple Volumes with specified prefix along with volume group and maps all of them to the specified host.
 
 ## Playbooks Overview
+
 ### 1. main.yml:
   - This is the main file to be executed using: `ansible-playbook main.yml`
   - It leverages other files for PBR configuration. It executes `create_mTLS.yml` and `drp_pool_setup.yml` and then creates volume group and associated volumes with volume_prefix name, specified in `pbr_inventory.ini`. It also maps all the volumes to specified host.
@@ -43,9 +45,8 @@
       svctask mkdistributedarray -level raid1 -driveclass 0 -drivecount 2 mdg0 (used drive 0 and drive 1) 
       ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Variables
+
 ### These variables should be defined in your pbr_inventory.ini file,
 
 | Parameter                    | Description                                                                                                                     |
@@ -58,11 +59,8 @@
 | `number_of_volumes`        | Number of volumes to be created between clusters.                                                                                |
 | `log_path`                  | Specifies the log path for the playbook. Defaults to `/tmp/ansiblePB.debug` if not provided.                                    |
 
-
-
 ## Authors
+
 - Akshada Thorat  (akshada.thorat@ibm.com)
 - Sandip Rajbanshi (sandip.rajbanshi@ibm.com)
 - Lavanya C R (lavanya.c.r1@ibm.com)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>

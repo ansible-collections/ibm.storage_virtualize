@@ -15,6 +15,7 @@
     # Fetch tokens from both for authentication
     - name: Fetch auth token for master
       register: master_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ master_clustername }}"
         username: "{{ master_username }}"
@@ -22,6 +23,7 @@
         log_path: "{{ logpath }}"
     - name: Fetch auth token for aux
       register: aux_auth
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ aux_clustername }}"
         username: "{{ aux_username }}"
@@ -54,7 +56,7 @@
         objectname: "{{ aux_system.System.name }}"
         log_path: "{{ logpath }}"
     - name: Fail if partnership is not found between master and aux
-      when: partnership_info is not defined or partnership_info.Partnership == None
+      when: partnership_info is not defined or partnership_info.Partnership is None
       ansible.builtin.fail:
         msg: "Partnership not found between master and aux"
     # ------------

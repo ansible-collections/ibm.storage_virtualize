@@ -18,6 +18,7 @@
     # Authenticate and fetch the token for the primary cluster
     - name: Fetch auth token for Primary Cluster
       register: primary_cluster_auth_token
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ primary_clustername }}"
         username: "{{ primary_cluster_username }}"

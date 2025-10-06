@@ -7,7 +7,7 @@
     objectname: "{{ item }}"
     log_path: "{{ logpath }}"
 - name: Delete specified relationships
-  when: rel_info.RemoteCopy != None
+  when: rel_info.RemoteCopy is not none
   block:
     - name: Stop relationship
       ibm.storage_virtualize.ibm_svc_start_stop_replication:

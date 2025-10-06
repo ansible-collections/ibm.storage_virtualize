@@ -7,7 +7,7 @@
     objectname: "{{ cg_cleanup }}"
     log_path: "{{ logpath }}"
 - name: Cleanup each consistency group
-  when: cg_info.RCConsistgrp != None
+  when: cg_info.RCConsistgrp is not none
   block:
     - name: Stop consistency groups
       ibm.storage_virtualize.ibm_svc_start_stop_replication:

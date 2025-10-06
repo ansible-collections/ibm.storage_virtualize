@@ -1,5 +1,3 @@
-<a id="readme-top"></a>
-
 # Playbook to collect IBM FlashSystem logs
 
 ## Table of Contents
@@ -47,5 +45,3 @@ ibm.storage_virtualize
 
 ## Author
 - Akshada Thorat  (akshada.thorat@ibm.com)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>

@@ -1,8 +1,7 @@
-<a id="readme-top"></a>
-
 # Move Existing Objects into Policy-Based High Availability (PBHA)
 
 ## Table of Contents
+
 - [Objective](#objective)
 - [Prerequisites](#prerequisites)
 - [Tasks Performed](#tasks-performed)
@@ -10,24 +9,28 @@
 - [Variables](#variables)
 
 ## Objective
-  Move **existing single-cluster objects** into **Policy-Based High Availability (PBHA)** environment.
+
+Move **existing single-cluster objects** into **Policy-Based High Availability (PBHA)** environment.
 
 ## Prerequisites
-  - IBM Storage Virtualize ansible collection plugins must be installed.
-  - Pool on secondary cluster must have enough space for data that is in source volumegroup(s) on primary cluster. Here, source volumegroup(s) points to volumegroup(s) that are being added into partition for high-availability.
-  - Volumes must be added to volumegroup before running the playbooks.
+
+- IBM Storage Virtualize ansible collection plugins must be installed.
+- Pool on secondary cluster must have enough space for data that is in source volumegroup(s) on primary cluster. Here, source volumegroup(s) points to volumegroup(s) that are being added into partition for high-availability.
+- Volumes must be added to volumegroup before running the playbooks.
 
 ## Tasks Performed
-  - Setup mTLS
-  - Setup FC partnership between 2 clusters
-  - Create a draft partition
-  - Add a new or existing volumegroup in draft partition
-  - Add a new or existing host in a draft partition
-  - Publish draft partition
-  - Create a replication policy between IO-groups of 2 clusters
-  - Assign replication policy to partition
+
+- Setup mTLS
+- Setup FC partnership between 2 clusters
+- Create a draft partition
+- Add a new or existing volumegroup in draft partition
+- Add a new or existing host in a draft partition
+- Publish draft partition
+- Create a replication policy between IO-groups of 2 clusters
+- Assign replication policy to partition
 
 ## Playbooks Overview
+
 There are total 4 files used for moving existing objects in PBHA, and decommission_partition.yml is for decommissioning the partition.
 ### 1. main.yml:
   - This is the main file to be executed using: `ansible-playbook main.yml`
@@ -50,12 +53,11 @@ There are total 4 files used for moving existing objects in PBHA, and decommissi
   >[!NOTE]
   > When last task (i.e. assigning HA replication policy to partition) is completed, objects are replicated to secondary cluster's pool and data copy starts immediately from primary cluster to secondary. Time taken by data-synchronization is dependent on amount of data. After sync is complete, 'lspartition' output shows ha_status=established and link_status=synchronized.
 
-  > [!Note] 
+  > [!NOTE]
   > After successfully executing the playbook, the quorum application will be ready for use. Please copy it to the any host. This may need to be run later in case of broken quorum. Please make sure the host has Java Runtime Environment (JRE) installed, as it is required to run the application.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Variables
+
 ### These variables should be defined in your inventory.ini file,
 | Parameter              | Description                                                                 |
 |------------------------|-----------------------------------------------------------------------------|
@@ -80,6 +82,5 @@ There are total 4 files used for moving existing objects in PBHA, and decommissi
 | `keep_volumegroups`    | Boolean (`true`/`false`) to retain volume groups.                           |
 
 ## Authors
-Sumit Kumar Gupta (sumit.gupta16@ibm.com)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Sumit Kumar Gupta (sumit.gupta16@ibm.com)

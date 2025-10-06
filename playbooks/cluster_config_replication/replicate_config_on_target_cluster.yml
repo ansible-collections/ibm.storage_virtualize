@@ -9,6 +9,7 @@
   tasks:
     - name: Fetch authorization token for target cluster
       register: dest_token
+      no_log: true
       ibm.storage_virtualize.ibm_svc_auth:
         clustername: "{{ cluster_ip }}"
         username: "{{ cluster_username }}"

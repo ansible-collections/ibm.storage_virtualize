@@ -1,10 +1,9 @@
-<a id="readme-top"></a>
-
 # Automated Firmware Upgrade of IBM FlashSystem Using Ansible Playbook
 
 This document explains the Ansible playbook required for upgrading IBM FlashSystem firmware. The playbooks are designed to automate the upgrade process, ensuring a smooth and efficient transition to the latest software version.
 
 ## Table of Contents
+
 - [Prerequisites](#prerequisites)
 - [Overview](#overview)
 - [Variables](#variables)
@@ -16,6 +15,7 @@ This document explains the Ansible playbook required for upgrading IBM FlashSyst
 - The desired firmware version must be downloaded from IBM Support website.
 
 ## Overview
+
 The playbook to upgrade IBM FlashSystem firmware performs the following steps:
 - Copies the Upgrade Test Utility to the system.
 - Verifies whether system can be upgraded to desired firmware update from current firmware level.
@@ -76,8 +76,7 @@ upgrade_test_util_src_path: /Users/IBM_INSTALL_FROM_8.5_AND_LATER_upgradetest_46
 > The playbook uses SCP to transfer the firmware package to the FlashSystem. If Ansible controller supports SFTP, remove the `-O` flag before running the playbook.
 
 ## Authors
-- Sumit Kumar Gupta (SUMIT.GUPTA16@ibm.com)
-- Aditya Bhosale (aditya.bhosale5@ibm.com)
-- Prathamesh Deshpande (prathamesh.deshpande@ibm.com)
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+- Sumit Kumar Gupta (SUMIT.GUPTA16@ibm.com)
+- Aditya Bhosale (adityabhosale@ibm.com)
+- Prathamesh Deshpande (prathamesh.deshpande1@ibm.com)

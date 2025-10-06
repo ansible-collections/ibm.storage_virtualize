@@ -127,7 +127,7 @@
               ansible.builtin.set_fact:
                 tool_stats: "{{ error_line | regex_findall('\\d+') }}"
 
-            - name: Fail when any errors are found or if warnings are found and ignore_warnings is not set
+            - name: Fail if any errors or warnings are found
               ansible.builtin.fail:
                 msg: >
                   WARNING: The tool (svcupgradetest) has found {{ tool_stats[0] }} errors and {{ tool_stats[1] }} warnings.
@@ -209,7 +209,7 @@
 
     - name: Check and display upgrade progress
       ansible.builtin.include_tasks: _upgrade_status.yaml
-      loop: "{{ range(0, retry_attempts | int) }}"
+      loop: "{{ range(0, retry_attempts | int) | list }}"
       when: upgrade_progress.Update is not defined or upgrade_progress.Update.status != 'success'
 
     - name: Stop if operation has not succeeded

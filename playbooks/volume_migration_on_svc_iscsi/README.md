@@ -1,5 +1,3 @@
-<a id="readme-top"></a>
-
 # iSCSI Host-Attached Volume Migration
 
 ## Table of Contents
@@ -10,28 +8,30 @@
 - [Variables](#variables)
 
 ## Objective
-Migrate volumes from one Flashsystem to another Flashsystem in application-transparent manner, with target host as iSCSI.
 
+Migrate volumes from one FlashSystem to another FlashSystem in application-transparent manner, with target host as iSCSI.
 
 ## Prerequisites
+
 - IBM Storage Virtualize ansible collection plugins must be installed.
 
 ## Tasks Performed
+
 - Migrate a volume from a source IBM FlashSystem cluster to a destination FlashSystem cluster.
 - Support both Fibre Channel (FC) or iSCSI host-mapped volumes on the source cluster.
 - Map the migrated volume to an iSCSI host on the destination cluster.
 
-
 ## Playbooks Overview
+
 ### 1. initiate_migration_for_given_volume.yml:
    - This playbook initiates the migration.
    - Most importantly, it also starts data copy from source cluster to destination cluster.
 
 ### 2. create_iscsi_host_map_vol_switch.yml:
    - Execute this playbook only once the relationship created by above playbook is in `consistent_syncronized` state.
-   - Create an iSCSI host on flashsystem from iqn defined in variable application_host_iqn from `vol_migration_vars.txt` file.
+   - Create an iSCSI host on FlashSystem from iqn defined in variable application_host_iqn from `vol_migration_vars.txt` file.
    - Configuring ip on each node for iSCSI host connectivity.
-   - Establish iSCSI session from host to flashsystem nodes.
+   - Establish iSCSI session from host to FlashSystem nodes.
    - Maps the volume to the Host and starts scsi rescan on the host.
    - Switch replication direction of a migration relationship once host is mapped.
    - Again rescan the volume on the host to get the updated path details.
@@ -41,11 +41,9 @@ Migrate volumes from one Flashsystem to another Flashsystem in application-trans
 > [!IMPORTANT]
 > Do **not** execute `create_iscsi_host_map_vol_switch.yml` until the volume relationship is in the **consistent_synchronized** state.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ## Variables
-### These variables should be defined in your vol_migration_vars.txt file,
 
+### These variables should be defined in your vol_migration_vars.txt file,
 
 | Variable                         | Description                                                                                 |
 |----------------------------------|---------------------------------------------------------------------------------------------|
@@ -72,11 +70,8 @@ Migrate volumes from one Flashsystem to another Flashsystem in application-trans
 | `host_name`                    | Hostname used for creating the host object on the destination cluster. |
 | `rel_name`                     | Name of the relationship to be created between source and destination clusters.             |
 
-
-
 ## Authors:
+
 - Ajinkya Nanavati (ananava1@in.ibm.com)
 - Mohit Chitlange (mochitla@in.ibm.com)
 - Devendra Mahajan (demahaj1@in.ibm.com)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>

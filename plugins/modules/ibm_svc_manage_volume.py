@@ -859,7 +859,7 @@ class IBMSVCvolume(object):
                 props['type'] = {'status': True}
 
         if self.grainsize:
-            if self.grainsize != int(data[1].get('grainsize')):
+            if self.grainsize != int(data[1].get('grainsize') or 0):
                 props['grainsize'] = {'status': True}
 
         self.log("Properties to be changed: %s", props)
