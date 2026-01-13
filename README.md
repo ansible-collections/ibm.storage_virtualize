@@ -8,7 +8,7 @@ This collection provides a series of Ansible modules and plugins for interacting
 
 ## Requirements
 
-- Ansible version 2.15 or higher
+- Ansible version 2.16 or higher
 - Python 3.10 or higher for controller nodes
 
 ## Installation
@@ -101,6 +101,7 @@ Alternatively, you can add a full namepsace and collection name in the `collecti
 - ibm_svcinfo_command - Runs svcinfo CLI command on Storage Virtualize systems over SSH session
 - ibm_svctask_command - Runs svctask CLI command(s) on Storage Virtualize systems over SSH session
 - ibm_sv_manage_awss3_cloudaccount - Manages Amazon S3 cloud account configuration on Storage Virtualize systems
+- ibm_sv_manage_clone - Manages clone and thinclone of volume and volumegroup
 - ibm_sv_manage_cloud_backup - Manages cloud backups on Storage Virtualize systems
 - ibm_sv_manage_drive - Manages drive state changes, tasks and dump
 - ibm_sv_manage_fc_partnership - Manages Fibre Channel (FC) partnership on Storage Virtualize systems

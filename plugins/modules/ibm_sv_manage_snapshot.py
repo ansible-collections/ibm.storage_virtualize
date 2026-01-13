@@ -23,7 +23,7 @@ description:
 options:
     clustername:
         description:
-            - The hostname or management IP of the Storage Virtualize system.
+            - The hostname or management IP or Partition IP of the Storage Virtualize system.
         required: true
         type: str
     domain:
@@ -129,6 +129,7 @@ notes:
       To create a new group of host accessible volumes from a snapshot,
       use M(ibm.storage_virtualize.ibm_svc_manage_volumegroup) module.
     - In case of restoring local snapshots present before establishing high availability (HA), HA sync will be stopped till the snapshots gets restored.
+    - This module supports logging in via partition IP.
 '''
 
 EXAMPLES = '''

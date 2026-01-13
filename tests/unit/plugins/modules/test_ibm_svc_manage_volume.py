@@ -1095,16 +1095,10 @@ class TestIBMSVCvolume(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
-           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_for_creating_deduplicated_volume(self, auth_mock, c1, c2, c3, c4):
+    def test_failure_create_volume_with_deduplicated(self, svc_authorize_mock, svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -1115,18 +1109,14 @@ class TestIBMSVCvolume(unittest.TestCase):
             'size': '1',
             'unit': 'gb',
             'pool': 'test_pool',
-            'iogrp': 'io_grp0, io_grp1',
             'deduplicated': True,
         }):
-            c3.return_value = []
-            c4.return_value = {
-                'id': '25',
-                'message': 'Volume, id [25], successfully created'
-            }
-            with pytest.raises(AnsibleExitJson) as exc:
+            svc_obj_info_mock.side_effect = [{}]
+            with pytest.raises(AnsibleFailJson) as exc:
                 v = IBMSVCvolume()
                 v.apply()
-            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Parameter [deduplicated] is invalid without [thin] or [compressed]")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
@@ -2668,6 +2658,259 @@ class TestIBMSVCvolume(unittest.TestCase):
                 v.apply()
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'], "value of grainsize must be one of: 32, 64, 128, 256, got: 55")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_with_cache(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'thin': True,
+            'cache': 'none'
+        }):
+            svc_obj_info_mock.side_effect = [{}]
+            svc_run_command_mock.return_value = {
+                'id': '26',
+                'message': 'Volume, id [26], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volume_with_cache(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'thin': True,
+            'cache': 'readwrite'
+        }):
+            svc_obj_info_mock.side_effect = [
+                [
+                    {"mdisk_grp_name": "test_pool", "capacity": "1073741824", "RC_name": "", "type": "striped", "cache": "none"},
+                    {"se_copy": "yes", "compressed_copy": "no"}
+                ]
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_with_preferrednode(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'preferrednode': 'node1',
+            'iogrp': 'io_grp0'
+        }):
+            svc_obj_info_mock.side_effect = [
+                # lsvdisk OP:
+                {},
+                # lsiogrp OP:
+                [
+                    {"id": "0", "name": "io_grp0", "node_count": "2"},
+                    {"id": "1", "name": "io_grp1", "node_count": "0"},
+                    {"id": "2", "name": "io_grp2", "node_count": "0"},
+                    {"id": "3", "name": "io_grp3", "node_count": "0"},
+                    {"id": "4", "name": "recovery_io_grp", "node_count": "0"}
+                ]
+            ]
+            svc_run_command_mock.return_value = {
+                'id': '27',
+                'message': 'Volume, id [27], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_volume_with_preferrednode(self, svc_authorize_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'preferrednode': 'node1'
+        }):
+            svc_obj_info_mock.side_effect = [{}]
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Parameter [preferrednode] is only valid with a single iogrp.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_update_volume_with_preferrednode(self, svc_authorize_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'preferrednode': 'node2',
+            'iogrp': 'io_grp0'
+        }):
+            svc_obj_info_mock.side_effect = [
+                # lsvdisk OP:
+                [
+                    {"mdisk_grp_name": "test_pool", "capacity": "1073741824", "RC_name": "", "type": "striped", "preferred_node_name": "node1"},
+                    {"real_capacity": "1073741824", "compressed_copy": "yes"}
+                ],
+                # lsiogrp OP:
+                [
+                    {"id": "0", "name": "io_grp0", "node_count": "2"},
+                    {"id": "1", "name": "io_grp1", "node_count": "0"},
+                    {"id": "2", "name": "io_grp2", "node_count": "0"},
+                    {"id": "3", "name": "io_grp3", "node_count": "0"},
+                    {"id": "4", "name": "recovery_io_grp", "node_count": "0"}
+                ],
+                # lsrcrelationship OP:
+                [
+                    {"vdisk_id": "28", "vdisk_name": "test_volume", "IO_group_id": "0", "IO_group_name": "io_grp0"}
+                ]
+            ]
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Update not supported for parameter(s): preferrednode")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_with_autoexpand(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'autoexpand': 'off',
+            'thin': True
+        }):
+            svc_obj_info_mock.side_effect = [{}]
+            svc_run_command_mock.return_value = {
+                'id': '28',
+                'message': 'Volume, id [28], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volume_with_autoexpand(self, svc_authorize_mock, svc_run_command_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'autoexpand': 'on',
+        }):
+            svc_obj_info_mock.side_effect = [
+                [
+                    {"mdisk_grp_name": "test_pool", "capacity": "1073741824", "RC_name": "", "type": "striped", "cache": "none"},
+                    {"real_capacity": "1073741820", "compressed_copy": "no", "autoexpand": "off"}
+                ]
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_volume_with_autoexpand(self, svc_authorize_mock, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'autoexpand': 'off',
+        }):
+            svc_obj_info_mock.side_effect = [{}]
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Parameter [autoexpand] is invalid without [thin]")
 
 
 if __name__ == '__main__':

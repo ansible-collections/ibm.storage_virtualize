@@ -35,7 +35,7 @@ options:
         type: str
     clustername:
         description:
-            - The hostname or management IP of the Storage Virtualize system.
+            - The hostname or management IP or Partition IP of the Storage Virtualize system.
         required: true
         type: str
     domain:
@@ -201,6 +201,9 @@ author:
 notes:
     - This module supports C(check_mode).
     - scsi option is deprecated from 8.5.0.0. Instead of scsi, use iscsi and fcscsi as the case may be.
+    - This module supports logging in via partition IP.
+    - Parameters not supported when logged in via partition IP are 'site', 'iogrp', 'partition', 'nopartition', 'draftpartition',
+      'site', 'nosite'.
 '''
 
 EXAMPLES = '''
@@ -476,7 +479,6 @@ class IBMSVChost(object):
                 ('partition', 'nopartition'),
                 ('draftpartition', 'nodraftpartition'),
                 ('draftpartition', 'partition'),
-                ('nqn', 'partition')
             )
             for param1, param2 in mutually_exclusive:
                 if getattr(self, param1) and getattr(self, param2):
@@ -670,9 +672,6 @@ class IBMSVChost(object):
                 self.iscsiname and self.fdminame) or (self.nqn and self.fdminame):
             self.module.fail_json(msg="You have to pass only one parameter among fcwwpn, nqn, iscsiname and fdminame to the module.")
 
-        if self.hostcluster and self.partition:
-            self.module.fail_json(msg='Mutually exclusive parameters: hostcluster and partition')
-
         if self.draftpartition:
             self.module.fail_json(msg='[draftpartition] is not a supported parameter while creating host')
         elif self.nodraftpartition:
@@ -790,8 +789,10 @@ class IBMSVChost(object):
         self.log("updating host '%s'", self.name)
         if 'hostcluster' in modify:
             self.addhostcluster()
+            modify.remove('hostcluster')
         elif 'nohostcluster' in modify:
             self.removehostcluster(host_data)
+            modify.remove('nohostcluster')
 
         cmd = 'chhost'
         cmdopts = {}

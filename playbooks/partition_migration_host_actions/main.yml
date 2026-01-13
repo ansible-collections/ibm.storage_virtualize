@@ -7,6 +7,7 @@
     - vars.yml
   vars:
     are_all_hosts_in_inventory: true
+    commit_flag: true
   serial: 1
   tasks:
 
@@ -22,6 +23,7 @@
         command: "lspartition -gui -json"
         log_path: "{{ logpath }}"
       register: partition_info
+      when: "'flash_systems' in group_names"
 
     - name: Clean the lspartition output
       ansible.builtin.set_fact:
@@ -83,9 +85,10 @@
 
         - name: Initialize extracted_hosts list.
           ansible.builtin.set_fact:
-            extracted_hosts: {}
+            extracted_hosts: []
+            extracted_hosts_tmp: []
 
-        - name: Extract relevant host data for the identified partition.
+        - name: Extract relevant fc host data for the identified partition.
           ansible.builtin.set_fact:
             extracted_hosts: >-
               {{
@@ -94,19 +97,107 @@
                     "inventory_hostname": inventory_hostname,
                     "name": item.Host.name,
                     "wwpns": item.Host.nodes | default([]) | map(attribute='WWPN') | list,
-                    "partition": item.Host.partition_name | default("")
+                    "partition": item.Host.partition_name | default(""),
+                    "type": "FC"
                   }
                 })
               }}
           loop: "{{ shared_targetports_output.results }}"
-          when: item.Host is not none and
-                item.Host.nodes is defined and
-                (item.Host.nodes | length) > 0 and
-                item.Host.nodes[0].WWPN is defined
+          when: item.Host is not none and item.Host.nodes[0].WWPN is defined
+
+        - name: Extract relevant iSCSI host data for the identified partition.
+          ansible.builtin.set_fact:
+            extracted_hosts: >-
+              {{
+                extracted_hosts | combine({
+                  item.Host.id | int: {
+                    "inventory_hostname": inventory_hostname,
+                    "name": item.Host.name,
+                    "iscsi_name": item.Host.nodes | default([]) | map(attribute='iscsi_name') | list,
+                    "partition": item.Host.partition_name | default(""),
+                    "portset_name":item.Host.portset_name,
+                    "type": 'iscsi'
+                  }
+                })
+              }}
+          loop: "{{ shared_targetports_output.results }}"
+          when: item.Host is not none and item.Host.nodes[0].iscsi_name is defined
+
+        - name: Gather lsportset information from flashsystem.
+          ibm.storage_virtualize.ibm_svc_info:
+            gather_subset: "portset"
+            clustername: "{{ ansible_host }}"
+            username: "{{ ansible_user }}"
+            password: "{{ ansible_password }}"
+            objectname: "{{ item.value.portset_name }}"
+            log_path: "{{ logpath }}"
+          changed_when: false
+          register: portset_info
+          loop: "{{ extracted_hosts | dict2items }}"
+          when: item.value.type == 'iscsi'
+
+        - name: Build host entries for extracted_hosts
+          ansible.builtin.set_fact:
+            extracted_hosts_tmp: >-
+              {{
+                extracted_hosts_tmp | default([]) + [
+                  {
+                    (item.item.key | string): (
+                      item.item.value | combine(
+                        (
+                          {'replication_portset_link_uid': item.Portset.replication_portset_link_uid}
+                          if item.item.value.type == 'iscsi'
+                          else {}
+                        )
+                      )
+                    )
+                  }
+                ]
+              }}
+          loop: "{{ portset_info.results }}"
+          when: item.item is defined and item.item.value is defined
+
+        - name: Combine extracted_hosts_tmp into a single dict
+          ansible.builtin.set_fact:
+            extracted_hosts: "{{ extracted_hosts_tmp | default([]) | combine }}"
 
         - name: Process extracted host data if not empty.
-          when: extracted_hosts | length > 0
+          when: extracted_hosts != []
           block:
+
+            - name: Gather lsip information from flashsystem.
+              ibm.storage_virtualize.ibm_svcinfo_command:
+                clustername: "{{ ansible_host }}"
+                username: "{{ ansible_user }}"
+                password: "{{ ansible_password }}"
+                command: "lsip -json"
+                log_path: "{{ logpath }}"
+              register: ip_info
+
+            - name: Convert raw ip_info.stdout string to structured data
+              ansible.builtin.set_fact:
+                ip_info_parsed: "{{ ip_info.stdout | from_json }}"
+
+            - name: Add iscsi_ips to extracted_hosts
+              ansible.builtin.set_fact:
+                extracted_hosts: >-
+                  {%- set updated_hosts = {} -%}
+                  {%- for key, host in extracted_hosts.items() -%}
+                    {%- set _host = host.copy() -%}
+                    {%- if 'type' in _host and _host['type'] == 'iscsi' and 'portset_name' in _host -%}
+                      {%- set ips = [] -%}
+                      {%- for ip in ip_info_parsed -%}
+                        {%- if 'portset_name' in ip and
+                                (ip['portset_name'] | string | lower | trim) == (_host['portset_name'] | string | lower | trim) and
+                                'IP_address' in ip -%}
+                          {%- set _ = ips.append(ip['IP_address']) -%}
+                        {%- endif -%}
+                      {%- endfor -%}
+                      {%- set _ = _host.update({'iscsi_ips': ips}) -%}
+                    {%- endif -%}
+                    {%- set _ = updated_hosts.update({ key: _host }) -%}
+                  {%- endfor -%}
+                  {{ updated_hosts }}
 
             - name: Create path to save tmp
               ansible.builtin.set_fact:
@@ -140,10 +231,24 @@
 
             - name: Call Host_identification playbook to fetch list of host mapped to flashsystem.
               ansible.builtin.command:
-                cmd: "ansible-playbook host_identification.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
+                cmd: >
+                  ansible-playbook host_identification.yml
+                  -i {{ inventory_file }}
+                  -e 'file_name={{ file_path }}
+                  json_file=svc_host_obj_list_present.json
+                  location_flag=target'
               changed_when: false
 
-            - name: Read data povided by host_identification.yml playbook from file.
+            - name: Check if file directory exists
+              ansible.builtin.stat:
+                path: "{{ file_path }}/matched_hosts.json"
+              register: matched_host_dir
+
+            - name: End play if condition not met
+              ansible.builtin.meta: end_play
+              when: not matched_host_dir.stat.exists
+
+            - name: Read data provided by host_identification.yml playbook from file.
               ansible.builtin.slurp:
                 src: "{{ file_path }}/matched_hosts.json"
               register: host_matched_list
@@ -161,7 +266,7 @@
                 is_esxi_host: "{{ 'VMkernel' in (host_matched_list_processed | map(attribute='host_type') | list) }}"
                 extracted_hosts_length: "{{ extracted_hosts.keys() | length }}"
 
-            - name: Set signle host flage for migration
+            - name: Set single host flag for migration
               ansible.builtin.set_fact:
                 single_host_present_flag: "{{ (extracted_hosts_length | int == 1 and deployment_type == 'single_host_migre') | bool }}"
 
@@ -173,11 +278,11 @@
                   ansible.builtin.set_fact:
                     inventory_hosts: "{{ groups[hosts_name] | list }}"
 
-                - name: Extract host which are not presrnt in inventory file
+                - name: Extract host which are not present in inventory file
                   ansible.builtin.set_fact:
                     host_not_in_inventory: "{{ host_matched_inventory_hosts | intersect(inventory_hosts) }}"
 
-                - name: Extract length of host which are not presrnt in inventory file
+                - name: Extract length of host which are not present in inventory file
                   ansible.builtin.set_fact:
                     host_not_in_inventory_length: "{{ host_not_in_inventory | length }}"
 
@@ -199,21 +304,35 @@
       block:
 
         - name: Check extracted_hosts is empty.
-          when: extracted_hosts | length > 0
+          when: extracted_hosts != []
           block:
+
+            - name: Extract FC inventory hostname
+              ansible.builtin.set_fact:
+                fc_hosts: "{{ host_matched_list_processed | selectattr('connection', 'equalto', 'FC') | map(attribute='inventory_hostname') | list }}"
+
+            - name: Extract iSCSI inventory hostname
+              ansible.builtin.set_fact:
+                iscsi_hosts: "{{ host_matched_list_processed | selectattr('connection', 'equalto', 'iscsi') | map(attribute='inventory_hostname') | list }}"
 
             - name: Call rescan playbook based on hosts discovery status.
               ansible.builtin.command:
                 cmd: "ansible-playbook rescan_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
               changed_when: false
-              when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0
+              when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0 and fc_hosts | length != 0
+
+            - name: Call discovery playbook based on hosts discovery status.
+              ansible.builtin.command:
+                cmd: "ansible-playbook discover_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }} rescan_flag=no'"
+              changed_when: false
+              when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0 and iscsi_hosts | length != 0
 
             - name: Waiting for IO to stabilize.
               ansible.builtin.wait_for:
                 timeout: "{{ io_stability_time | int }}"
               when: (lspartition_output | selectattr('hosts_discovery_status', 'equalto', 'need_rescan') | list | length) > 0
 
-            - name: Run lspartition on flashsystem to verify the host discovry status.
+            - name: Run lspartition on flashsystem to verify the host discovery status.
               ibm.storage_virtualize.ibm_svcinfo_command:
                 clustername: "{{ ansible_host }}"
                 username: "{{ ansible_user }}"
@@ -226,10 +345,10 @@
               ansible.builtin.set_fact:
                 partition_in_progress_info_output: "{{ (partition_in_progress_info.stdout | from_json) }}"
 
-            - name: Rescan triggerd upto 5 times.
+            - name: Rescan triggered up to 5 times.
               when: partition_in_progress_info_output['hosts_discovery_status'] != 'ready'
               block:
-                - name: Read data povided by host_identification.yml playbook from file.
+                - name: Read data provided by host_identification.yml playbook from file.
                   ansible.builtin.slurp:
                     src: "{{ file_path }}/matched_hosts.json"
                   register: host_matched_list
@@ -279,8 +398,8 @@
       when: (lspartition_output | selectattr('user_action_type', 'equalto', 'commit_or_rollback') | list | length) > 0
       block:
 
-        - name: Validate multipth on target system.
-          when: extracted_hosts | length > 0 and min_active_path != 0 and not is_windows_host and not is_esxi_host
+        - name: Validate multipath on target system.
+          when: extracted_hosts != [] and min_active_path != 0 and not is_windows_host and not is_esxi_host
           block:
 
             - name: Fetch WWNN for Target system.
@@ -308,25 +427,26 @@
                       item.id | int: {
                         "name": item.name,
                         "WWNN": item.WWNN,
+                        "iscsi_name": item.iscsi_name,
                       }
                     })
                   }}
               loop: "{{ targetports_data_tgt }}"
               when: item is not none
 
-            - name: Write extrated data to file to send to verify_multipath_devices playbook.
+            - name: Write extracted data to file to send to verify_multipath_devices playbook.
               delegate_to: localhost
               ansible.builtin.copy:
                 content: "{{ targetports_output_tgt | to_nice_json }}"
                 dest: "{{ file_path }}/vmd_output.json"
                 mode: '0600'
 
-            - name: Call verify multipth devices playbook.
+            - name: Call verify multipath devices playbook.
               ansible.builtin.command:
                 cmd: "ansible-playbook verify_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
               changed_when: false
 
-            - name: Read output data genrated by verify_multipath_devices playbook.
+            - name: Read output data generated by verify_multipath_devices playbook.
               ansible.builtin.slurp:
                 src: "{{ file_path }}/vmd_output_final_out.json"
               register: json_data
@@ -337,10 +457,13 @@
 
             - name: Set commit flag based on min_active_path.
               ansible.builtin.set_fact:
-                commit_flag: "{{ parsed_data['data'] | selectattr('non_compliant_devices', 'equalto', []) |
-                  list | length > 0 }}"
                 non_compliant_names: "{{ parsed_data['data'] | selectattr('non_compliant_devices', 'ne', []) |
                   map(attribute='active_paths_on_tgt.inventory_name') | list }}"
+
+            - name: Set commit flag based on min_active_path.
+              ansible.builtin.set_fact:
+                commit_flag: false
+              when: non_compliant_names | length > 0
 
             - name: Print non-compliant inventory names.
               ansible.builtin.debug:
@@ -361,13 +484,234 @@
                   - "extracted_hosts_length {{ extracted_hosts_length }}"
                   - "deployment_type {{ deployment_type }}"
 
-            - name: Complete migration (on target system) by running migration action.
-              ibm.storage_virtualize.ibm_sv_manage_storage_partition:
-                clustername: "{{ ansible_host }}"
-                username: "{{ ansible_user }}"
-                password: "{{ ansible_password }}"
-                name: "{{ partition_name }}"
-                migrationaction: fixeventwithchecks
-                state: present
-                log_path: "{{ logpath }}"
+            - name: Commit and logout block
               when: commit_flag and are_all_hosts_in_inventory and single_host_present_flag
+              block:
+
+                - name: Set facts for partition name.
+                  ansible.builtin.set_fact:
+                    partition_name: "{{ migrating_partition[0]['name'] }}"
+
+                - name: Run lspartition on flashsystem to source cluster information.
+                  ibm.storage_virtualize.ibm_svcinfo_command:
+                    clustername: "{{ ansible_host }}"
+                    username: "{{ ansible_user }}"
+                    password: "{{ ansible_password }}"
+                    command: "lspartition -gui -json {{ partition_name }}"
+                    log_path: "{{ logpath }}"
+                  register: partition_in_progress_info
+
+                - name: Clean the lspartition output.
+                  ansible.builtin.set_fact:
+                    partition_in_progress_info_output: "{{ (partition_in_progress_info.stdout | from_json) }}"
+
+                - name: Fetch cluster IP for source system.
+                  ibm.storage_virtualize.ibm_svc_info:
+                    gather_subset: "partnership"
+                    clustername: "{{ ansible_host }}"
+                    username: "{{ ansible_user }}"
+                    password: "{{ ansible_password }}"
+                    objectname: "{{ partition_in_progress_info_output['location1_system_id'] }}"
+                    log_path: "{{ logpath }}"
+                  register: partnership_info
+
+                - name: Cleaning up ip addr
+                  ansible.builtin.set_fact:
+                    ip_only: "{{  partnership_info.Partnership['console_IP'].split(':')[0] }}"
+
+                - name: Find matching hostname for the user-provided IP   # # noqa run-once[task]
+                  ansible.builtin.set_fact:
+                    matched_host: "{{ item }}"
+                  loop: "{{ groups['flash_systems'] }}"
+                  when: hostvars[item].ansible_host == ip_only
+                  run_once: true
+
+                - name: Source side ip logout block
+                  when: matched_host is defined and matched_host | length != 0
+                  block:
+
+                    - name: Setting up source credential
+                      ansible.builtin.set_fact:
+                        source_ansible_host: "{{ hostvars[matched_host]['ansible_host'] }}"
+                        source_ansible_user: "{{ hostvars[matched_host]['ansible_user'] }}"
+                        source_ansible_password: "{{ hostvars[matched_host]['ansible_password'] }}"
+                      delegate_to: "{{ matched_host | default('localhost') }}"
+
+                    - name: Setting up source credential safely
+                      ansible.builtin.set_fact:
+                        source_ansible_host: "{{ hostvars[matched_host | default('')]['ansible_host'] | default('') }}"
+                        source_ansible_user: "{{ hostvars[matched_host | default('')]['ansible_user'] | default('') }}"
+                        source_ansible_password: "{{ hostvars[matched_host | default('')]['ansible_password'] | default('') }}"
+                      when: matched_host is defined and matched_host in hostvars
+
+                    - name: Gather lshost information from flashsystem.
+                      ibm.storage_virtualize.ibm_svc_info:
+                        clustername: "{{ source_ansible_host }}"
+                        username: "{{ source_ansible_user }}"
+                        password: "{{ source_ansible_password }}"
+                        log_path: "{{ logpath }}"
+                        gather_subset: "host"
+                        filtervalue: 'partition_name={{ partition_name }}'
+                      register: lshost_output
+                      changed_when: false
+
+                    - name: Gather details of each host on flashsystem.
+                      ibm.storage_virtualize.ibm_svc_info:
+                        gather_subset: "host"
+                        clustername: "{{ source_ansible_host }}"
+                        username: "{{ source_ansible_user }}"
+                        password: "{{ source_ansible_password }}"
+                        objectname: "{{ item.id }}"
+                        log_path: "{{ logpath }}"
+                      changed_when: false
+                      register: shared_targetports_output
+                      loop: "{{ lshost_output.Host }}"
+
+                    - name: Initialize extracted_hosts_form_source list.
+                      ansible.builtin.set_fact:
+                        extracted_hosts_form_source: {}
+                        extracted_hosts_form_source_tmp: []
+
+                    - name: Extract relevant iscsi host data for the identified partition for extracted_hosts_form_source.
+                      ansible.builtin.set_fact:
+                        extracted_hosts_form_source: >-
+                          {{
+                            extracted_hosts_form_source | combine({
+                              item.Host.id | int: {
+                                "inventory_hostname": inventory_hostname,
+                                "name": item.Host.name,
+                                "iscsi_name": item.Host.nodes | default([]) | map(attribute='iscsi_name') | list,
+                                "partition": item.Host.partition_name | default(""),
+                                "portset_name":item.Host.portset_name,
+                                "type": 'iscsi'
+                              }
+                            })
+                          }}
+                      loop: "{{ shared_targetports_output.results }}"
+                      when: item.Host is not none and item.Host.nodes[0].iscsi_name is defined
+
+                    - name: Process extracted host data if not empty.
+                      when: extracted_hosts_form_source | length != 0
+                      block:
+
+                        - name: Gather lsportset information from flashsystem.
+                          ibm.storage_virtualize.ibm_svc_info:
+                            gather_subset: "portset"
+                            clustername: "{{ source_ansible_host }}"
+                            username: "{{ source_ansible_user }}"
+                            password: "{{ source_ansible_password }}"
+                            objectname: "{{ item.value.portset_name }}"
+                            log_path: "{{ logpath }}"
+                          changed_when: false
+                          register: portset_info
+                          loop: "{{ extracted_hosts_form_source | dict2items }}"
+                          when: item.value.type == 'iscsi'
+
+                        - name: Build host entries for extracted_hosts_form_source
+                          ansible.builtin.set_fact:
+                            extracted_hosts_form_source_tmp: >-
+                              {{
+                                extracted_hosts_form_source_tmp | default([]) + [
+                                  {
+                                    (item.item.key | string): (
+                                      item.item.value | combine(
+                                        (
+                                          {'replication_portset_link_uid': item.Portset.replication_portset_link_uid}
+                                          if item.item.value.type == 'iscsi'
+                                          else {}
+                                        )
+                                      )
+                                    )
+                                  }
+                                ]
+                              }}
+                          loop: "{{ portset_info.results }}"
+                          when: item.item is defined and item.item.value is defined
+
+                        - name: Combine extracted_hosts_form_source into a single dict
+                          ansible.builtin.set_fact:
+                            extracted_hosts_form_source: "{{ extracted_hosts_form_source_tmp | default([]) | combine }}"
+
+                        - name: Gather lsip information from flashsystem.
+                          ibm.storage_virtualize.ibm_svcinfo_command:
+                            clustername: "{{ source_ansible_host }}"
+                            username: "{{ source_ansible_user }}"
+                            password: "{{ source_ansible_password }}"
+                            command: "lsip -json"
+                            log_path: "{{ logpath }}"
+                          register: ip_info
+
+                        - name: Convert raw ip_info.stdout string to structured data
+                          ansible.builtin.set_fact:
+                            ip_info_parsed: "{{ ip_info.stdout | from_json }}"
+
+                        - name: Add iscsi_ips to extracted_hosts
+                          ansible.builtin.set_fact:
+                            extracted_hosts_form_source: >-
+                              {%- set updated_hosts = {} -%}
+                              {%- for key, host in extracted_hosts_form_source .items() -%}
+                                {%- set _host = host.copy() -%}
+                                {%- if 'type' in _host and _host['type'] == 'iscsi' and 'portset_name' in _host -%}
+                                  {%- set ips = [] -%}
+                                  {%- for ip in ip_info_parsed -%}
+                                    {%- if 'portset_name' in ip and
+                                            (ip['portset_name'] | string | lower | trim) == (_host['portset_name'] | string | lower | trim) and
+                                            'IP_address' in ip -%}
+                                      {%- set _ = ips.append(ip['IP_address']) -%}
+                                    {%- endif -%}
+                                  {%- endfor -%}
+                                  {%- set _ = _host.update({'iscsi_ips': ips}) -%}
+                                {%- endif -%}
+                                {%- set _ = updated_hosts.update({ key: _host }) -%}
+                              {%- endfor -%}
+                              {{ updated_hosts }}
+
+                        - name: Write extracted_hosts_form_source  information to file.
+                          ansible.builtin.copy:
+                            content: "{{ extracted_hosts_form_source | to_nice_json }}"
+                            dest: "{{ file_path }}/svc_host_obj_list_present_source.json"
+                            mode: '0600'
+                          delegate_to: localhost
+
+                        - name: Call Host_identification playbook to fetch list of host mapped to flashsystem.
+                          ansible.builtin.command:
+                            cmd: >
+                              ansible-playbook host_identification.yml
+                              -i {{ inventory_file }}
+                              -e 'file_name={{ file_path }}
+                              json_file=svc_host_obj_list_present_source.json
+                              location_flag=source'
+                          changed_when: false
+
+                - name: Complete migration (on target system) by running migration action.
+                  ibm.storage_virtualize.ibm_sv_manage_storage_partition:
+                    clustername: "{{ ansible_host }}"
+                    username: "{{ ansible_user }}"
+                    password: "{{ ansible_password }}"
+                    name: "{{ partition_name }}"
+                    migrationaction: fixeventwithchecks
+                    state: present
+                    log_path: "{{ logpath }}"
+                  when: matched_host is defined and matched_host | length != 0
+
+                - name: Wait for either migration_status = "" to complete the migration
+                  ibm.storage_virtualize.ibm_svc_info:
+                    clustername: "{{ ansible_host }}"
+                    username: "{{ ansible_user }}"
+                    password: "{{ ansible_password }}"
+                    gather_subset: partition
+                    objectname: "{{ partition_name }}"
+                  register: lspartition_out
+                  until: lspartition_out.Partition['migration_status'] == ''
+                  retries: 60
+                  delay: 30
+
+                - name: Call iscsi_logout playbook to logout
+                  ansible.builtin.command:
+                    cmd: "ansible-playbook iscsi_logout.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
+                  changed_when: false
+                  when:
+                    - matched_host is defined
+                    - matched_host | length > 0
+                    - extracted_hosts_form_source is defined
+                    - extracted_hosts_form_source | length > 0

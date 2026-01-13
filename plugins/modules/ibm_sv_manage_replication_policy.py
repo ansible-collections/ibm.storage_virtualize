@@ -22,7 +22,7 @@ description:
 options:
     clustername:
         description:
-            - The hostname or management IP of the Storage Virtualize system.
+            - The hostname or management IP or Partition IP of the Storage Virtualize system.
         required: true
         type: str
     domain:
@@ -115,6 +115,7 @@ notes:
     - If both systems support HA snapshots, ha_snapshots will be enabled implicitly while creating replication policy with topology "2-site-ha".
     - Error Considerations
         - CMMVC1255E The command failed because the specified topology does not support highly-available snapshots
+    - This module supports logging in via partition IP.
 '''
 
 EXAMPLES = '''

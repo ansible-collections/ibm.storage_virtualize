@@ -4,6 +4,25 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.2.0
+======
+
+Release Summary
+---------------
+
+Added support for looging in using the partition IP address across volume, volumegroup, host, hostcluster, snapshot, replication, and GAM modules, modified partition_migration_host_actions playbook for iSCSI hosts and added support for volume parameters autoexpand, preferrednode and cache.
+
+Minor Changes
+-------------
+
+- ibm_sv_manage_replication_policy - Enabled support for logging in via partition ip
+- ibm_svc_manage_volume - Added support for autoexpand, preferrednode and cache parameters
+
+New Modules
+-----------
+
+- ibm_sv_manage_clone - This module manages clone and thinclone of volume and volumegroup.
+
 v3.1.0
 ======
 
