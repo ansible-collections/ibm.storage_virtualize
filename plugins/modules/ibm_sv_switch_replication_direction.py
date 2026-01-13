@@ -21,7 +21,7 @@ description:
 options:
     clustername:
         description:
-            - The hostname or management IP of the Storage Virtualize system.
+            - The hostname or management IP or partition IP of the Storage Virtualize system.
         required: true
         type: str
     domain:
@@ -68,6 +68,7 @@ author:
     - Shilpi Jain(@Shilpi-J)
 notes:
     - This module supports C(check_mode).
+    - This module supports loggin via partitio IP.
 '''
 
 EXAMPLES = '''

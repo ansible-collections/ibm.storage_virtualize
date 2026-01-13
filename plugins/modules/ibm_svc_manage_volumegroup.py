@@ -33,7 +33,7 @@ options:
         type: str
     clustername:
         description:
-            - The hostname or management IP of the Storage Virtualize system.
+            - The hostname or management IP or Partition IP of the Storage Virtualize system.
         required: true
         type: str
     domain:
@@ -239,6 +239,7 @@ notes:
     - This module supports C(check_mode).
     - Safeguarded policy and snapshot policy cannot be used at the same time.
       Therefore, the parameters I(snapshotpolicy) and I(safeguardpolicyname) are mutually exclusive.
+    - This module supports logging in via partition IP.
 '''
 
 EXAMPLES = '''

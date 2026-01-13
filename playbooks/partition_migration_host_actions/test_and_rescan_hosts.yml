@@ -12,9 +12,10 @@
 
 - name: Initialize extracted_hosts list
   ansible.builtin.set_fact:
-    extracted_hosts1: {}
+    extracted_hosts1: []
+    extracted_hosts_tmp1: []
 
-- name: Extract relevant data
+- name: Extract relevant fc host data for the identified partition.
   ansible.builtin.set_fact:
     extracted_hosts1: >-
       {{
@@ -24,44 +25,130 @@
             "name": item.Host.name,
             "wwpns": item.Host.nodes | default([]) | map(attribute='WWPN') | list,
             "partition": item.Host.partition_name | default(""),
-            "discovery_status": item.Host.discovery_status
+            "discovery_status": item.Host.discovery_status,
+            "type": "FC"
           }
         })
       }}
   loop: "{{ shared_targetports_output1.results }}"
-  when: item.Host.partition_name == partition_name and  item.Host.discovery_status != 'ready'
+  when: item.Host.partition_name == partition_name and item.Host.discovery_status != 'ready' and item.Host.nodes[0].WWPN is defined
 
-
-- name: Extract all host names from extracted_hosts
+- name: Extract relevant iscsi host data for the identified partition.
   ansible.builtin.set_fact:
-    extracted_host_names: "{{ extracted_hosts1.values() | map(attribute='name') | list }}"
+    extracted_hosts1: >-
+      {{
+        extracted_hosts | combine({
+          item.Host.id | int: {
+            "inventory_hostname": inventory_hostname,
+            "name": item.Host.name,
+            "iscsi_name": item.Host.nodes | default([]) | map(attribute='iscsi_name') | list,
+            "partition": item.Host.partition_name | default(""),
+            "portset_name":item.Host.portset_name,
+            "type": 'iscsi'
+          }
+        })
+      }}
+  loop: "{{ shared_targetports_output.results }}"
+  when: item.Host.partition_name == partition_name and item.Host.discovery_status != 'ready' and item.Host.nodes[0].iscsi_name is defined
 
-- name: Filter host_matched_list_processed based on extracted_hosts
+- name: Build host entries for extracted_hosts
   ansible.builtin.set_fact:
-    filtered_host_matched_list: "{{ host_matched_list_processed | selectattr('fs_host_name', 'in', extracted_host_names) | list }}"
+    extracted_hosts_tmp1: >-
+      {{
+        extracted_hosts_tmp | default([]) + [
+          {
+            (item.item.key | string): (
+              item.item.value | combine(
+                (
+                  {'replication_portset_link_uid': item.Portset.replication_portset_link_uid}
+                  if item.item.value.type == 'iscsi'
+                  else {}
+                )
+              )
+            )
+          }
+        ]
+      }}
+  loop: "{{ portset_info.results }}"
+  when: item.item is defined and item.item.value is defined
 
-- name: Debug filtered_host_matched_list
+- name: Combine extracted_hosts_tmp into a single dict
+  ansible.builtin.set_fact:
+    extracted_hosts1: "{{ extracted_hosts_tmp1 | default([]) | combine }}"
+
+# for fc hosts
+- name: Extract all fc host names from extracted_hosts1
+  ansible.builtin.set_fact:
+    extracted_host_names_fc: "{{ extracted_hosts1.values() | selectattr('type', 'equalto', 'FC') | map(attribute='name') | list }}"
+
+- name: Filter host_matched_list_processed_fc based on extracted_hosts1
+  ansible.builtin.set_fact:
+    filtered_host_matched_list_fc: >-
+      {{
+        host_matched_list_processed
+        | selectattr('fs_host_name', 'defined')
+        | selectattr('fs_host_name', 'in', extracted_host_names_fc)
+        | list
+      }}
+
+- name: Debug filtered_host_matched_list_fc
   ansible.builtin.debug:
-    var: filtered_host_matched_list
+    var: filtered_host_matched_list_fc
 
-- name: Save filtered hosts to JSON file
+- name: Save filtered hosts fc to JSON file
   ansible.builtin.copy:
-    content: "{{ filtered_host_matched_list | to_nice_json }}"
+    content: "{{ filtered_host_matched_list_fc | to_nice_json }}"
     dest: "{{ file_path }}/matched_hosts.json"
     mode: '0644'
+  when: filtered_host_matched_list_fc != []
 
-- name: Check and include rescan tasks if needed then rescan the multipth
+- name: Check and include rescan tasks if needed then rescan the multipath
   ansible.builtin.command:
     cmd: "ansible-playbook rescan_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }}'"
   changed_when: false
-  when: filtered_host_matched_list | length > 0
+  when: filtered_host_matched_list_fc != []
 
 - name: Waiting for IO to stabilize.
   ansible.builtin.wait_for:
     timeout: "{{ io_stability_time | int }}"
-  when: filtered_host_matched_list | length > 0
+  when: filtered_host_matched_list_fc != []
 
-- name: Run lspartition on flashsystem to verify the host discovry status
+# for iscsi hosts
+- name: Extract all host names from extracted_hosts
+  ansible.builtin.set_fact:
+    extracted_host_names_iscsi: "{{ extracted_hosts1.values() | selectattr('type', 'equalto', 'iscsi') | map(attribute='name') | list }}"
+
+- name: Filter host_matched_list_processed based on extracted_hosts
+  ansible.builtin.set_fact:
+    filtered_host_matched_list_iscsi: >-
+      {{
+        host_matched_list_processed
+        | selectattr('iscsi_host_name', 'defined')
+        | selectattr('iscsi_host_name', 'in', extracted_host_names_iscsi)
+        | list
+      }}
+- name: Debug filtered_host_matched_list
+  ansible.builtin.debug:
+    var: filtered_host_matched_list_iscsi
+
+- name: Save filtered hosts iscsi to JSON file
+  ansible.builtin.copy:
+    content: "{{ filtered_host_matched_list_iscsi | to_nice_json }}"
+    dest: "{{ file_path }}/matched_hosts.json"
+    mode: '0644'
+
+- name: Check and include rescan tasks if needed then rescan the multipath
+  ansible.builtin.command:
+    cmd: "ansible-playbook discover_multipath_devices.yml -i {{ inventory_file }} -e 'file_name={{ file_path }} rescan_flag=yes'"
+  changed_when: false
+  when: filtered_host_matched_list_iscsi != []
+
+- name: Waiting for IO to stabilize.
+  ansible.builtin.wait_for:
+    timeout: "{{ io_stability_time | int }}"
+  when: filtered_host_matched_list_iscsi != []
+
+- name: Run lspartition on flashsystem to verify the host discovery status
   ibm.storage_virtualize.ibm_svcinfo_command:
     clustername: "{{ ansible_host }}"
     username: "{{ ansible_user }}"

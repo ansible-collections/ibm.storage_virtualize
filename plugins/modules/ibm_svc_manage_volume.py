@@ -31,7 +31,7 @@ options:
     type: str
   clustername:
     description:
-      - The hostname or management IP of the Storage Virtualize system.
+      - The hostname or management IP or Partition IP of the Storage Virtualize system.
     required: true
     type: str
   domain:
@@ -185,6 +185,26 @@ options:
     choices: [32, 64, 128, 256]
     type: int
     version_added: '3.0.0'
+  preferrednode:
+    description:
+      - Specifies the preferred node name that is used to access the volume.
+      - When not specified, the system selects the preferred node automatically.
+    type: str
+    version_added: '3.2.0'
+  cache:
+    description:
+      - Specifies the caching options for the volume.
+      - When not specified, the default value is 'readwrite'.
+    type: str
+    choices: [readwrite, readonly, none]
+    version_added: '3.2.0'
+  autoexpand:
+    description:
+      - Specifies whether thin-provisioned volume copies automatically expand their real capacities.
+      - If specified as off, works as `noautoexpand`.
+    type: str
+    choices: ['on', 'off']
+    version_added: '3.2.0'
 author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
     - Rahul Pawar(@rahul-p)
@@ -194,6 +214,8 @@ notes:
     - For unmap parameter, the option remotecopy_relationships has been deprecated from 8.7.1.0 onwards.
     - CMMVC9855E The command failed because one of more of the specified volumes does not exist.
       This error occurs when the user-provided volume(s) do not exist.
+    - This module supports logging in via partition IP.
+    - To create a clone or thinclone of a Volume, please refer to ibm_sv_manage_clone module.
 '''
 
 EXAMPLES = r'''
@@ -424,7 +446,10 @@ class IBMSVCvolume(object):
                 type=dict(type='str', required=False, choices=['clone', 'thinclone']),
                 fromsourcevolume=dict(type='str', required=False),
                 allow_hs=dict(type='bool', default=False),
-                grainsize=dict(type='int', required=False, choices=[32, 64, 128, 256])
+                grainsize=dict(type='int', required=False, choices=[32, 64, 128, 256]),
+                preferrednode=dict(type='str', required=False),
+                cache=dict(type='str', required=False, choices=['readwrite', 'readonly', 'none']),
+                autoexpand=dict(type='str', required=False, choices=['on', 'off'])
             )
         )
 
@@ -459,6 +484,9 @@ class IBMSVCvolume(object):
         self.fromsourcevolume = self.module.params['fromsourcevolume']
         self.unmap = self.module.params['unmap']
         self.grainsize = self.module.params['grainsize']
+        self.preferrednode = self.module.params['preferrednode']
+        self.cache = self.module.params['cache']
+        self.autoexpand = self.module.params['autoexpand']
 
         # internal variable
         self.changed = False
@@ -477,25 +505,24 @@ class IBMSVCvolume(object):
     # assemble iogrp
     def assemble_iogrp(self):
         if self.iogrp:
-            temp = []
-            invalid = []
-            active_iogrp = []
-            existing_iogrp = []
-            if self.iogrp:
-                existing_iogrp = [item.strip() for item in self.iogrp.split(',') if item]
-            uni_exi_iogrp = set(existing_iogrp)
-            if len(existing_iogrp) != len(uni_exi_iogrp):
+            input_iogrps = [item.strip() for item in self.iogrp.split(',') if item]
+            self.len_input_iogrps = len(input_iogrps)
+            if self.len_input_iogrps != len(set(input_iogrps)):
                 self.module.fail_json(msg='Duplicate iogrp detected.')
-            active_iogrp = [item['name'] for item in self.restapi.svc_obj_info('lsiogrp', None, None) if int(item['node_count']) > 0]
-            for item in existing_iogrp:
-                item = item.strip()
-                if item not in active_iogrp:
-                    invalid.append(item)
+
+            self.active_iogrp = [item['name'] for item in self.restapi.svc_obj_info('lsiogrp', None, None) if int(item['node_count']) > 0]
+
+            valid_iogrp = []
+            invalid_iogrp = []
+            for item in input_iogrps:
+                if item not in self.active_iogrp:
+                    invalid_iogrp.append(item)
                 else:
-                    temp.append(item)
-            if invalid:
-                self.module.fail_json(msg='Empty or non-existing iogrp detected: {0}'.format(invalid))
-            self.iogrp = temp
+                    valid_iogrp.append(item)
+            if invalid_iogrp:
+                self.module.fail_json(msg='Empty or non-existing iogrp detected: {0}'.format(invalid_iogrp))
+
+            self.iogrp = valid_iogrp
 
     # Validate mandatory parameters of the module
     def mandatory_parameter_validation(self):
@@ -515,7 +542,7 @@ class IBMSVCvolume(object):
     def volume_deletion_parameter_validation(self):
         invalids = ('pool', 'size', 'iogrp', 'buffersize', 'volumegroup', 'novolumegroup',
                     'thin', 'compressed', 'deduplicated', 'old_name', 'enable_cloud_snapshot',
-                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume', 'warning', 'grainsize')
+                    'cloud_account_name', 'allow_hs', 'type', 'fromsourcevolume', 'warning', 'grainsize', 'preferrednode', 'cache', 'autoexpand')
 
         invalid_params = ', '.join((param for param in invalids if getattr(self, param)))
 
@@ -544,8 +571,17 @@ class IBMSVCvolume(object):
         if self.grainsize and not self.thin:
             self.module.fail_json(msg='Parameter [grainsize] is invalid without [thin]')
 
+        if self.deduplicated and not (self.thin or self.compressed):
+            self.module.fail_json(msg='Parameter [deduplicated] is invalid without [thin] or [compressed]')
+
+        if self.preferrednode and (not self.iogrp or self.len_input_iogrps != 1):
+            self.module.fail_json(msg='Parameter [preferrednode] is only valid with a single iogrp.')
+
+        if self.autoexpand and (not self.thin and not self.compressed):
+            self.module.fail_json(msg='Parameter [autoexpand] is invalid without [thin]')
+
         missing = []
-        if self.type and self.fromsourcevolume:
+        if self.type:
             if not self.pool:
                 missing = ['pool']
             if self.size:
@@ -580,7 +616,10 @@ class IBMSVCvolume(object):
             "type": self.type,
             "fromsourcevolume": self.fromsourcevolume,
             "warning": self.warning,
-            "grainsize": self.grainsize
+            "grainsize": self.grainsize,
+            "preferrednode": self.preferrednode,
+            "cache": self.cache,
+            "autoexpand": self.autoexpand
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -709,6 +748,12 @@ class IBMSVCvolume(object):
             cmdopts['name'] = self.name
         if self.warning:
             cmdopts['warning'] = str(self.warning) + '%'
+        if self.preferrednode:
+            cmdopts['preferrednode'] = self.preferrednode
+        if self.cache:
+            cmdopts['cache'] = self.cache
+        if self.autoexpand == 'off':
+            cmdopts['noautoexpand'] = True
         if self.type:
             cmdopts['type'] = self.type
             snapshot_id = self.create_transient_snapshot()
@@ -754,6 +799,7 @@ class IBMSVCvolume(object):
     # function to probe an existing volume
     def probe_volume(self, data):
         props = {}
+
         # check for changes in iogrp
         if self.iogrp:
             input_iogrp = set(self.iogrp)
@@ -803,33 +849,17 @@ class IBMSVCvolume(object):
                 props['novolumegroup'] = {
                     'status': True
                 }
-        # check for change in -thin parameter
-        if self.thin is not None:
-            if self.thin is True:
-                # a standard volume or a compressed volume
-                if (data[0]['capacity'] == data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'yes'):
-                    props['thin'] = {
-                        'status': True
-                    }
-            else:
-                if (data[0]['capacity'] != data[1]['real_capacity']) or (data[1]['compressed_copy'] == 'no'):
-                    props['thin'] = {
-                        'status': True
-                    }
-        # check for change in -compressed parameter
-        if self.compressed is True:
-            # not a compressed volume
-            if data[1]['compressed_copy'] == 'no':
-                props['compressed'] = {
-                    'status': True
-                }
-        # check for change in -deduplicated parameter
-        if self.deduplicated is True:
-            # not a deduplicated volume
-            if data[1]['deduplicated_copy'] == 'no':
-                props['deduplicated'] = {
-                    'status': True
-                }
+
+        # check for change in thin, compressed and deduplicated
+        for attr, field in (('thin', 'se_copy'),
+                            ('compressed', 'compressed_copy'),
+                            ('deduplicated', 'deduplicated_copy')):
+            val = getattr(self, attr)
+            if val is not None:
+                current = str(data[1].get(field)).lower() == 'yes'
+                if bool(val) != current:
+                    props[attr] = {'status': True}
+
         # check for change in pool
         if self.pool:
             if self.pool != data[0]['mdisk_grp_name']:
@@ -861,6 +891,15 @@ class IBMSVCvolume(object):
         if self.grainsize:
             if self.grainsize != int(data[1].get('grainsize') or 0):
                 props['grainsize'] = {'status': True}
+
+        if self.preferrednode and self.preferrednode != data[0].get('preferred_node_name'):
+            props['preferrednode'] = self.preferrednode
+
+        if self.cache and self.cache != data[0].get('cache'):
+            props['cache'] = self.cache
+
+        if self.autoexpand and self.autoexpand != data[1].get('autoexpand'):
+            props['autoexpand'] = self.autoexpand
 
         self.log("Properties to be changed: %s", props)
         return props
@@ -944,13 +983,13 @@ class IBMSVCvolume(object):
     # function to update an existing volume
     def update_volume(self, modify):
         # raise error for unsupported parameter(s)
-        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'fromsourcevolume', 'grainsize']
+        unsupported_parameters = ['pool', 'thin', 'compressed', 'deduplicated', 'fromsourcevolume', 'grainsize', 'preferrednode']
         unsupported_exists = [param for param in unsupported_parameters if param in modify]
         if unsupported_exists:
             self.module.fail_json(msg=f"Update not supported for parameter(s): {', '.join(unsupported_exists)}")
 
-        invalid_params = ['warning', 'cloud_backup', 'volumegroup', 'novolumegroup', 'size']
-        mutually_exclusive_params = [param for param in invalid_params if param in modify]
+        invalid_together = ['warning', 'cloud_backup', 'volumegroup', 'novolumegroup', 'size', 'cache', 'autoexpand']
+        mutually_exclusive_params = [param for param in invalid_together if param in modify]
 
         # If any 2 conflicting parameters are passed, return error
         if len(mutually_exclusive_params) > 1:
@@ -997,6 +1036,11 @@ class IBMSVCvolume(object):
                         cmdopts['unit'] = self.unit
                 else:
                     self.expand_volume(modify['size']['expand'])
+
+        if 'cache' in modify:
+            cmdopts['cache'] = modify['cache']
+        if 'autoexpand' in modify:
+            cmdopts['autoexpand'] = modify['autoexpand']
 
         if cmdopts:
             self.restapi.svc_run_command(

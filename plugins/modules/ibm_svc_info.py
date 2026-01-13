@@ -32,7 +32,7 @@ author:
 options:
   clustername:
     description:
-    - The hostname or management IP of the
+    - The hostname or management IP or Partition IP of the
       Storage Virtualize system.
     type: str
     required: true
@@ -189,6 +189,7 @@ notes:
     - This module supports C(check_mode).
     - If both I(gather_subset) and I(command_list) are not specified, ibm_svc_info will list information about I(default) objects.
     - I(lsroute) and I(lsarraylba) commands are not covered.
+    - This module supports logging in via partition IP.
 '''
 
 EXAMPLES = '''
