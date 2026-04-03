@@ -1,0 +1,162 @@
+###################################################
+# Play 1: Pre-flight - Validate Switch Connectivity
+###################################################
+- name: Pre-flight - Validate switch connectivity and credentials
+  hosts: switches
+  gather_facts: false
+  connection: network_cli
+  any_errors_fatal: true
+  serial: 1
+  vars:
+    ansible_network_os: cisco.nxos.nxos
+    ansible_become: true
+    ansible_become_method: enable
+  tasks:
+
+    - name: Add switch SSH key if missing
+      ansible.builtin.shell: |
+        ssh-keygen -F {{ ansible_host }} >/dev/null ||
+        ssh-keyscan -H {{ ansible_host }} >> ~/.ssh/known_hosts
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Validate switch connectivity and gather facts
+      block:
+        - name: Collect NX-OS facts
+          cisco.nxos.nxos_facts:
+            gather_subset:
+              - min
+
+        - name: Report switch validation result
+          ansible.builtin.debug:
+            msg: >-
+              [{{ inventory_hostname }}] ({{ ansible_host }}) -
+              Switch reachable and credentials valid.
+              Hostname: {{ ansible_net_hostname }}
+              NX-OS Version: {{ ansible_net_version }}
+
+      rescue:
+        - name: Report validation failure
+          ansible.builtin.fail:
+            msg: |
+              ============================================================
+              PRE-FLIGHT VALIDATION FAILED: {{ inventory_hostname }}
+              ============================================================
+              Host : {{ ansible_host }}
+              User : {{ ansible_user }}
+
+              Possible causes:
+                - Incorrect username or password in inventory
+                - Switch is unreachable at {{ ansible_host }}
+
+              Fix: Check credentials in your inventory file for [switches]
+              ============================================================
+
+###################################################
+# Main: Cisco SAN Zoning - Cluster Data Collection and Zone Sync
+###################################################
+- name: Cisco SAN Zoning - Cluster Data Collection
+  hosts: clusters
+  gather_facts: false
+  connection: local
+  tasks:
+
+      ###################################################
+      # Gather Data from FlashSystem Cluster
+      ##################################################
+
+    - name: Fetch authorization token for cluster
+      register: cluster_auth_info
+      no_log: true
+      ibm.storage_virtualize.ibm_svc_auth:
+        clustername: "{{ ansible_host }}"
+        username: "{{ ansible_user }}"
+        password: "{{ ansible_password }}"
+
+    - name: Fetch Host Zone, FC Port and Target Port data
+      register: cluster_info
+      ibm.storage_virtualize.ibm_svc_info:
+        clustername: "{{ ansible_host }}"
+        token: "{{ cluster_auth_info.token }}"
+        command_list: [lshostzone, lsportfc, lstargetportfc, lssystem]
+        objectname: all
+
+# ===============================
+# Sample CLI Output for Reference
+# ===============================
+#
+# lshostzone CLI output:-
+# +----+---------+------------+------------------+------------------+------------+--------------+------------+------------------+--------------------+---
+# | id | host_id | host_name  | host_wwpn        | host_fabric      | portset_id | portset_name | io_port_id | ioport_fabric    | recommended_config |
+# +----+---------+------------+------------------+------------------+------------+--------------+------------+------------------+--------------------+---
+# | 0  |    0    |   host0    | 30000020FF0A1B01 | 20020010AABBCC01 |     4      |     ps-1     |     6      | 20020010AABBCC01 |  zone_not_needed   |
+# | 1  |    0    |   host0    | 30000020FF0A1B01 | 20020010AABBCC01 |     4      |     ps-1     |     7      | 20020010AABBCC01 |  zone_needed       |
+# | 2  |    1    |   host1    | 30000020FF0A1B02 | 20020010AABBCC01 |     4      |     ps-1     |     6      | 20020010AABBCC01 |  zone_needed       |
+# | 3  |    1    |   host1    | 30000020FF0A1B02 | 20020010AABBCC01 |     4      |     ps-1     |     7      | 20020010AABBCC01 |  zone_not_needed   |
+# +----+---------+------------+------------------+------------------+------------+--------------+------------+------------------+--------------------+---
+# ---+-----------------+-------------+---------------------------+
+#    | applied_config  | zone_status | disruptive_change_pending |
+# ---+-----------------+-------------+---------------------------+
+#    | zone_needed     |  not_zoned  |            yes            |
+#    | zone_needed     |  not_zoned  |            no             |
+#    | zone_needed     |  not_zoned  |            no             |
+#    | zone_not_needed |  not_zoned  |            no             |
+# ---+-----------------+-------------+---------------------------+
+
+
+# lsportfc CLI output:-
+# +----+---------------+---------+------+------------+---------+-----------+------------------+---------+--------+------------------+------+--------+---
+# | id | fc_io_port_id | port_id | type | port_speed | node_id | node_name | WWPN             | nportid | status | switch_WWPN      | fpma | vlanid |
+# +----+---------------+---------+------+------------+---------+-----------+------------------+---------+--------+------------------+------+--------+---
+# | 5  |       6       |    6    |  fc  |    32Gb    |    1    |   node1   | 600507700C32AB10 | 4B022D  | active | 20020010AABBCC01 | N/A  |  N/A   |
+# | 6  |       7       |    7    |  fc  |    32Gb    |    1    |   node1   | 600507700C33AB13 | 4B022A  | active | 20020010AABBCC01 | N/A  |  N/A   |
+# +----+---------------+---------+------+------------+---------+-----------+------------------+---------+--------+------------------+------+--------+---
+# ---+---------+------------+---------------+------------------+-----------------+------------------+-----------------------------+----------------+
+#    | fcf_MAC | attachment | cluster_use   | adapter_location | adapter_port_id | fabric_WWN       | fabric_auto_zone_capability | port_max_speed |
+# ---+---------+------------+---------------+------------------+-----------------+------------------+-----------------------------+----------------+
+#    |   N/A   |   switch   | local_partner |        3         |        2        | 200100083131C0B1 |     incompatible_fabric     |      32Gb      |
+#    |   N/A   |   switch   | local_partner |        3         |        3        | 200100083131C0B1 |     incompatible_fabric     |      32Gb      |
+# ---+---------+------------+---------------+------------------+-----------------+------------------+-----------------------------+----------------+
+
+
+# lstargetportfc CLI output:-
+# +----+------------------+------------------+---------+----------------+-----------------+---------+-------------------+-------------+----------+---
+# | id | WWPN             | WWNN             | port_id | owning_node_id | current_node_id | nportid | host_io_permitted | virtualized | protocol |
+# +----+------------------+------------------+---------+----------------+-----------------+---------+-------------------+-------------+----------+---
+# | 16 | 600507700C32AB10 | 600507700C00AB10 |    6    |       1        |        1        | 4B022D  |        no         |     no      |   scsi   |
+# | 17 | 600507700C36AB11 | 600507700C00AB10 |    6    |       1        |        1        | 4B022E  |        yes        |     yes     |   scsi   |
+# | 18 | 600507700C3AAB12 | 600507700C00AB10 |    6    |       1        |        1        | 4B022F  |        yes        |     yes     |   nvme   |
+# | 19 | 600507700C33AB13 | 600507700C00AB10 |    7    |       1        |        1        | 4B022A  |        no         |     no      |   scsi   |
+# | 20 | 600507700C37AB14 | 600507700C00AB10 |    7    |       1        |        1        | 4B022B  |        yes        |     yes     |   scsi   |
+# | 21 | 600507700C3BAB15 | 600507700C00AB10 |    7    |       1        |        1        | 4B022C  |        yes        |     yes     |   nvme   |
+# | 22 | 600507700C34AB16 | 600507700C00AB10 |    8    |       1        |        1        | 010D00  |        no         |     no      |   scsi   |
+# | 23 | 600507700C38AB17 | 600507700C00AB10 |    8    |       1        |        1        | 010D01  |        yes        |     yes     |   scsi   |
+# | 24 | 600507700C3CAB18 | 600507700C00AB10 |    8    |       1        |        1        | 010D02  |        yes        |     yes     |   nvme   |
+# +----+------------------+------------------+---------+----------------+-----------------+---------+-------------------+-------------+----------+---
+# ---+--------------------+---------------+------------+--------------+
+#    | fc_ioport_id_count | portset_count | host_count | active_login |
+# ---+--------------------+---------------+------------+--------------+
+#    |         6          |       0       |     0      |      0       |
+#    |         6          |       2       |     2      |      1       |
+#    |         6          |       2       |     0      |      0       |
+#    |         7          |       0       |     0      |      0       |
+#    |         7          |       2       |     2      |      2       |
+#    |         7          |       2       |     0      |      0       |
+#    |         8          |       0       |     0      |      0       |
+#    |         8          |       1       |     0      |      0       |
+#    |         8          |       1       |     0      |      0       |
+# ---+--------------------+---------------+------------+--------------+
+
+    - name: Initiate zone synchronization for {{ inventory_hostname }}
+      ansible.builtin.command: >
+        ansible-playbook cisco_zone_sync.yaml
+        -i {{ ansible_inventory_sources[0] }}
+        --extra-vars '{"cluster_info": {{ cluster_info | to_json }} }'
+        -e "cluster_user={{ inventory_hostname }}"
+        -vvv
+      changed_when: false
+
+    - name: Report zone synchronization complete
+      ansible.builtin.debug:
+        msg: >-
+          [{{ inventory_hostname }}] Zone synchronization completed successfully.

@@ -207,7 +207,7 @@ options:
         version_added: 2.2.0
     fromsourcevolumes:
         description:
-            - Specifies colon-separated list of the parent volumes.
+            - Specifies colon-separated list of the parent volumes name/UID.
             - When combined with the type parameter and a snapshot, this allows the user to create a volumegroup with a
               subset of those volumes whose image is present in a snapshot.
             - Applies when I(state=present) to create volumegroup clone or thinclone, from subset of volumes of snapshot.

@@ -4,6 +4,7 @@
 # Copyright (C) 2021 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
 #            Lavanya C R <lavanya.c.r1@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -167,9 +168,27 @@ options:
         type: str
         version_added: 2.6.0
         choices: [ 'yes', 'no' ]
+    anomalysnapshot:
+        description:
+            - Specifies whether a volume group snapshot will be triggered in case of Ransomware Threat Detection (RTD).
+        type: str
+        version_added: 3.3.0
+        choices: [ 'on', 'off' ]
+    anomalysnapshotretentiondays:
+        description:
+            - Indicates the retention in days to be used for the volume group snapshot created in case of RTD.
+        type: int
+        version_added: 3.3.0
+    latestsnapshotextensiondays:
+        description:
+            - Specifies number of extension days to be applied to the latest valid volume group snapshot's retention in
+              case of RTD.
+        type: int
+        version_added: 3.3.0
 author:
     - Shilpi Jain (@Shilpi-J)
     - Lavanya C R (@lavanyacr)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
     - Error Considerations
@@ -253,6 +272,14 @@ EXAMPLES = '''
     log_path: /tmp/playbook.debug
     iscsiauthmethod: none
     chapsecret: ""
+- name: Turn on anomalysnapshot, set retentiondays to 5 days and extend latest valid snapshot to 8 days.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    anomalysnapshot: 'on'
+    anomalysnapshotretentiondays: 5
+    latestsnapshotextensiondays: 8
 '''
 
 RETURN = '''#'''
@@ -290,6 +317,9 @@ class IBMSVCInitialSetup(object):
                 easytier=dict(type='int'),
                 encryption=dict(type='str', choices=['on', 'off']),
                 cloud=dict(type='int'),
+                anomalysnapshot=dict(type='str', choices=['on', 'off']),
+                anomalysnapshotretentiondays=dict(type='int'),
+                latestsnapshotextensiondays=dict(type='int')
             )
         )
 
@@ -330,6 +360,11 @@ class IBMSVCInitialSetup(object):
         self.easytier = self.module.params.get('easytier', '')
         self.cloud = self.module.params.get('cloud', '')
         self.encryption = self.module.params.get('encryption', '')
+
+        # anomalysnapshot related parameters
+        self.anomalysnapshot = self.module.params.get('anomalysnapshot', '')
+        self.anomalysnapshotretentiondays = self.module.params.get('anomalysnapshotretentiondays', '')
+        self.latestsnapshotextensiondays = self.module.params.get('latestsnapshotextensiondays', '')
 
         self.restapi = IBMSVCRestApi(
             module=self.module,
@@ -645,6 +680,25 @@ class IBMSVCInitialSetup(object):
         else:
             self.message += " No license Changes."
 
+    def anomaly_setup(self):
+        cmdopts = {}
+        if self.anomalysnapshot:
+            cmdopts['anomalysnapshot'] = self.anomalysnapshot
+        if self.anomalysnapshotretentiondays:
+            cmdopts['anomalysnapshotretentiondays'] = self.anomalysnapshotretentiondays
+        if self.latestsnapshotextensiondays:
+            cmdopts['latestsnapshotextensiondays'] = self.latestsnapshotextensiondays
+
+        if self.module.check_mode:
+            self.changed = True
+            return
+
+        self.restapi.svc_run_command(
+            'chanomalydetection', cmdopts, None)
+        self.changed = True
+        self.log("Anomaly snapshot configuration updated: %s", cmdopts)
+        self.message += " Anomaly snapshot configuration updated."
+
     def apply(self):
         msg = None
         modify = []
@@ -672,6 +726,10 @@ class IBMSVCInitialSetup(object):
         if self.license_key:
             feature_data = self.get_feature_info()
             self.license_key_update(feature_data)
+
+        # For anomaly snapshot configuration
+        if self.anomalysnapshot or self.anomalysnapshotretentiondays or self.latestsnapshotextensiondays:
+            self.anomaly_setup()
 
         if self.changed:
             if self.module.check_mode:

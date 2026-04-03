@@ -20,7 +20,7 @@ version_added: "1.6.0"
 options:
   name:
     description:
-      - Specifies the name to assign to the new volume.
+      - Specifies the name to assign to the new volume or name/UID to manage an existing volume.
     required: true
     type: str
   state:
@@ -102,7 +102,7 @@ options:
     type: str
   fromsourcevolume:
     description:
-      - Specifies the volume name in the snapshot used to pre-populate clone or thinclone volume.
+      - Specifies the volume name/UID in the snapshot used to pre-populate clone or thinclone volume.
       - Valid when I(state=present), to create a thinclone or clone volume.
       - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
     type: str
@@ -147,7 +147,7 @@ options:
     version_added: 2.7.0
   old_name:
     description:
-      - Specifies the old name of the volume during renaming.
+      - Specifies the old name/UID of the volume during renaming.
       - Valid when I(state=present), to rename an existing volume.
     type: str
     version_added: '1.9.0'
@@ -1058,7 +1058,10 @@ class IBMSVCvolume(object):
         if not old_volume_data and not volume_data:
             self.module.fail_json(msg="Volume [{0}] does not exists.".format(self.old_name))
         elif old_volume_data and volume_data:
-            self.module.fail_json(msg="Volume [{0}] already exists.".format(self.name))
+            if old_volume_data[0].get('vdisk_UID') == volume_data[0].get('vdisk_UID'):
+                msg = "Volume [{0}] already renamed.".format(self.name)
+            else:
+                self.module.fail_json(msg="Volume [{0}] already exists.".format(self.name))
         elif not old_volume_data and volume_data:
             msg = "Volume with name [{0}] already exists.".format(self.name)
         elif old_volume_data and not volume_data:

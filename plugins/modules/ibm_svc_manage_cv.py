@@ -30,7 +30,7 @@ options:
     type: str
   cvname:
     description:
-      - Specifies the name to assign to the master or auxiliary change volume.
+      - Specifies the name to assign or UID to manage to the master or auxiliary change volume.
     required: true
     type: str
   basevolume:

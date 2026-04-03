@@ -48,7 +48,7 @@ options:
         type: str
     target_volume_name:
         description:
-            - Specifies the volume name to restore onto.
+            - Specifies the volume name/UID to restore onto.
         type: str
         required: true
     source_volume_uid:
