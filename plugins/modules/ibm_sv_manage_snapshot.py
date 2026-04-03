@@ -73,7 +73,7 @@ options:
         type: str
     src_volume_names:
         description:
-            - Specifies the name of the volumes for which the snapshots are to be created.
+            - Specifies the name/UID of the volumes for which the snapshots are to be created.
             - List of volume names can be specified with the delimiter colon.
             - Valid when I(state=present), to create a snapshot.
         type: str

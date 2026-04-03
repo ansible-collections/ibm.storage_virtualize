@@ -78,7 +78,7 @@ options:
         type: str
     fromsourcevolumes:
         description:
-            - Specifies colon-separated list of the parent volumes.
+            - Specifies colon-separated list of the parent volumes name/UID.
             - The parameters I(fromsourcevolumes) is mandatory for clone volumes and optional for clone volume groups
               while creating clone.
         type: str
@@ -123,7 +123,7 @@ notes:
 
 EXAMPLES = r'''
 - name: Create a clone of a volume from snapshot
-  ibm.storage_virtualize.ibm_svc_manage_clone:
+  ibm.storage_virtualize.ibm_sv_manage_clone:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
     username: "{{ username }}"
@@ -139,7 +139,7 @@ EXAMPLES = r'''
     preferrednode: "node1"
     volumegroup: "Vg1"
 - name: Create a clone of a volumegroup from snapshot
-  ibm.storage_virtualize.ibm_svc_manage_clone:
+  ibm.storage_virtualize.ibm_sv_manage_clone:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
     username: "{{ username }}"
@@ -154,7 +154,7 @@ EXAMPLES = r'''
     partition: "ptn1"
     ownershipgroup: "grp1"
 - name: Create a clone of volume vector from snapshot
-  ibm.storage_virtualize.ibm_svc_manage_clone:
+  ibm.storage_virtualize.ibm_sv_manage_clone:
     clustername: "{{ clustername }}"
     domain: "{{ domain }}"
     username: "{{ username }}"
@@ -404,7 +404,6 @@ class IBMSVClone(object):
                 )
         else:
             if 'pool' in props:
-                self.log("SGR pool in props")
                 # volumegroup's pool cannot be changed after creation
                 if self.check_volumes_in_pool(self.name, self.pool):
                     del props['pool']

@@ -65,12 +65,12 @@ options:
         type: str
     source:
         description:
-            - Specifies the name of the source volume.
+            - Specifies the name/UID of the source volume.
             - Required when I(state=present), to create a FlashCopy mapping.
         type: str
     target:
         description:
-            - Specifies the name of the target volume.
+            - Specifies the name/UID of the target volume.
             - Required when I(state=present), to create a FlashCopy mapping.
         type: str
     mdiskgrp:

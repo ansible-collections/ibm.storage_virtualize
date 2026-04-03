@@ -32,12 +32,12 @@ options:
     version_added: '1.11.0'
   source_volume:
     description:
-    - Specifies the name of the existing source volume to be used in migration.
+    - Specifies the name/UID of the existing source volume to be used in migration.
     - Required when I(state=initiate) or I(state=cleanup) or I(type_of_migration=across_pools).
     type: str
   target_volume:
     description:
-    - Specifies the name of the volume to be created on the target system.
+    - Specifies the name/UID of the volume to be created on the target system.
     - Required when I(state=initiate).
     type: str
   clustername:

@@ -339,7 +339,7 @@ class IBMSVCIp(object):
             props['gateway'] = self.gateway
         if self.resetgateway and data['gateway']:
             props['gateway'] = ""
-        if self.vlan and (self.vlan != data['vlan']):
+        if isinstance(self.vlan, int) and (self.vlan != (int(data.get('vlan') or 0))):
             props['vlan'] = self.vlan
         if self.resetvlan and data['vlan']:
             props['vlan'] = ""
@@ -397,16 +397,22 @@ class IBMSVCIp(object):
         ip_data = None
         if self.old_ip_address:
             if self.old_ip_address == self.ip_address:
-                ip_data = self.get_ip_info(self.old_ip_address)
+                self.old_ip_address = None
+
+            old_data = self.get_ip_info(self.old_ip_address) if self.old_ip_address else None
+            new_data = self.get_ip_info(self.ip_address)
+
+            if old_data and new_data:
+                self.module.fail_json(msg="Both IP '{0}' and '{1}' exist. Cannot update IP address.".format(self.old_ip_address, self.ip_address))
+
+            if not old_data:
+                if not new_data:
+                    self.module.fail_json(msg="IP '{0}' does not exist.".format(self.old_ip_address))
+
+                self.log("IP '%s' already exists. Continuing updates on it.", self.ip_address)
+                ip_data = new_data
             else:
-                old_data = self.get_ip_info(self.old_ip_address)
-                new_data = self.get_ip_info(self.ip_address)
-                if not old_data:
-                    self.module.fail_json(msg="Ip address [{0}] does not exists.".format(self.old_ip_address))
-                elif new_data:
-                    self.module.fail_json(msg="Ip address [{0}] already exists.".format(self.ip_address))
-                else:
-                    ip_data = old_data
+                ip_data = old_data
         else:
             ip_data = self.get_ip_info(self.ip_address)
 

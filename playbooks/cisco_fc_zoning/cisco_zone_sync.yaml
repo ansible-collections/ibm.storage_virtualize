@@ -1,0 +1,552 @@
+- name: Cisco SAN Zoning - zone sync
+  hosts: switches
+  gather_facts: false
+  connection: network_cli
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: cisco.nxos.nxos
+    ansible_become: true
+    ansible_become_method: enable
+
+  tasks:
+
+    - name: Add switch SSH key if missing
+      ansible.builtin.shell: |
+        ssh-keygen -F {{ hostvars[inventory_hostname].ansible_host }} >/dev/null ||
+        ssh-keyscan -H {{ hostvars[inventory_hostname].ansible_host }} >> ~/.ssh/known_hosts
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Gather VSAN and Zoneset configuration from switch
+      cisco.nxos.nxos_command:
+        commands:
+          - show fcdomain | grep 'VSAN\| Running fabric name'
+          - show zoneset active | grep -w 'zoneset'
+      register: switch_vsan_zoneset_info
+
+      # ===============================
+      # Sample Output
+      # ===============================
+      #
+      # show fcdomain | grep 'VSAN\| Running fabric name'
+      #           "VSAN 2",
+      #           "        Running fabric name: 20:02:00:08:31:31:c0:c1",
+      #           "VSAN 20",
+      #           "        Running fabric name: 20:14:00:08:31:31:c0:c1"
+      #
+      # show zoneset active | grep -w 'zoneset'
+      #           "zoneset name FS_cluster_000003052451E19D vsan 2",
+      #           "zoneset name ZS_VSAN20 vsan 20"
+      #
+      # switch_vsan_zoneset_info.stdout_lines
+      # [
+      #       [
+      #           "VSAN 2",
+      #           "        Running fabric name: 20:02:00:08:31:31:c0:c1",
+      #           "VSAN 20",
+      #           "        Running fabric name: 20:14:00:08:31:31:c0:c1"
+      #       ],
+      #       [
+      #           "zoneset name FS_cluster_000003052451E19D vsan 2",
+      #           "zoneset name ZS_VSAN20 vsan 20"
+      #       ]
+      # ]
+
+
+    - name: Map Fabric Name to VSAN ID
+      ansible.builtin.set_fact:
+        fabric_vsan_mapping: >-
+          {# Init empty dicts #}
+          {%- set fabric_to_vsan = {} -%}
+          {%- set vsan_to_fabric = {} -%}
+
+          {# Loop through output of show fcdomain in pairs: [VSAN line, Fabric line] #}
+          {%- for i in range(0, switch_vsan_zoneset_info.stdout_lines[0] | length, 2) -%}
+
+            {%- set vsan = switch_vsan_zoneset_info.stdout_lines[0][i].split(' ')[1].strip() -%}
+            {%- set fabric = switch_vsan_zoneset_info.stdout_lines[0][i+1].split(':', 1)[1].strip().replace(':','').upper() -%}
+            {%- set _ = fabric_to_vsan.update({fabric: vsan}) -%}
+            {%- set _ = vsan_to_fabric.update({vsan: fabric}) -%}
+
+          {%- endfor -%}
+
+          {{ {
+            "fabric_to_vsan": fabric_to_vsan,
+            "vsan_to_fabric": vsan_to_fabric
+          } }}
+
+      # ===============================
+      # fabric_vsan_mapping (sample output)
+      # ===============================
+      #
+      # {
+      #   "fabric_to_vsan": {
+      #     "200200083131C0C1": "2",
+      #     "201400083131C0C1": "20"
+      #   },
+      #   "vsan_to_fabric": {
+      #     "2":  "200200083131C0C1",
+      #     "20": "201400083131C0C1"
+      #   }
+      # }
+
+
+    - name: Map Vsan - Active Zoneset
+      ansible.builtin.set_fact:
+        vsan_zoneset_map: >-
+          {# Build dict: {vsan_id: zoneset_name} from show zoneset active cli #}
+          {%- set result = {} -%}
+
+          {# Loop through output of show zoneset active #}
+          {%- for line in switch_vsan_zoneset_info.stdout_lines[1] -%}
+
+            {%- if 'zoneset name' in line and 'vsan' in line -%}
+
+              {%- set words = line.split() -%}
+              {%- set zoneset_index = words.index('name') + 1 -%}
+              {%- set vsan_index = words.index('vsan') + 1 -%}
+              {%- set zoneset_name = words[zoneset_index] -%}
+              {%- set vsan_id = words[vsan_index] -%}
+              {%- set _ = result.update({vsan_id: zoneset_name}) -%}
+
+            {%- endif -%}
+
+          {%- endfor -%}
+          {{ result }}
+
+      # ===============================
+      # vsan_zoneset_map (sample output)
+      # ===============================
+      #
+      # {
+      #   "2":  "FS_cluster_000003052451E19D",
+      #   "20": "ZS_VSAN20"
+      # }
+
+
+    - name: Map vsan - Target Port data
+      ansible.builtin.set_fact:
+        vsan_targetports_map: >-
+          {# Initialize empty dict for results #}
+          {%- set result = {} -%}
+
+          {# Loop through all VSANs #}
+          {%- for vsan in vsan_zoneset_map.keys() -%}
+
+            {# Get fabric WWN corresponding to this VSAN #}
+            {%- set fabric = fabric_vsan_mapping.vsan_to_fabric[vsan] -%}
+
+            {# Collect all fc_io_port_ids in this fabric #}
+            {%- set fc_ioportids = cluster_info.Portfc
+                                    | selectattr('fabric_WWN', 'equalto', fabric)
+                                    | map(attribute='fc_io_port_id')
+                                    | list -%}
+
+            {# Find target ports whose fc_io_port_id belongs to this fabric #}
+            {%- set ports = cluster_info.Targetportfc
+                            | selectattr('fc_io_port_id', 'in', fc_ioportids)
+                            | list -%}
+
+            {# Add mapping: vsan -> list of target port data #}
+            {%- set _ = result.update({vsan: ports}) -%}
+
+          {%- endfor -%}
+          {{ result }}
+
+      # ===============================
+      # vsan_targetports_map (sample output)
+      # ===============================
+      #
+      # "2": [
+      #   {
+      #     "WWNN":               "300307680C00BC5A",
+      #     "WWPN":               "300307680C36BC5A",
+      #     "active_login_count": "0",
+      #     "current_node_id":    "1",
+      #     "fc_io_port_id":      "6",
+      #     "host_count":         "2",
+      #     "host_io_permitted":  "yes",
+      #     "id":                 "17",
+      #     "nportid":            "4B032E",
+      #     "owning_node_id":     "1",
+      #     "port_id":            "6",
+      #     "portset_count":      "2",
+      #     "protocol":           "scsi",
+      #     "virtualized":        "yes"
+      #   },
+      #   {
+      #     "WWNN":               "300307680C00BC5A",
+      #     "WWPN":               "300307680C37BC5A",
+      #     "active_login_count": "1",
+      #     "current_node_id":    "1",
+      #     "fc_io_port_id":      "7",
+      #     "host_count":         "2",
+      #     "host_io_permitted":  "yes",
+      #     "id":                 "20",
+      #     "nportid":            "4B032B",
+      #     "owning_node_id":     "1",
+      #     "port_id":            "7",
+      #     "portset_count":      "2",
+      #     "protocol":           "scsi",
+      #     "virtualized":        "yes"
+      #   }
+      # ],
+      #
+      # "20": []
+
+    - name: Set zone prefix and zone id
+      ansible.builtin.set_fact:
+        zone_prefix: >-
+            {{  (cluster_info.System.auto_zone_prefix | trim) + '_IBM_SV'
+                if (cluster_info.System.auto_zone_prefix | trim) != ""
+                else 'IBM_SV'
+             }}
+        zone_id: '00'
+
+    - name: Fetch existing zones for the particular Principle Member
+      cisco.nxos.nxos_command:
+        commands: >-
+          {# Initialize an empty list of CLI commands #}
+          {%- set result = [] -%}
+
+          {# Iterate through each VSAN and its mapped target ports #}
+          {%- for vsan, targetports in vsan_targetports_map.items() -%}
+
+            {# For every port in this VSAN, build a zone-check command #}
+            {%- for port in targetports -%}
+
+              {# Command format: show zone name <zone_prefix>_<WWPN>_<zone_id> vsan <vsan> #}
+              {%- set zone_name = zone_prefix ~ "_" ~ port.WWPN ~ "_" ~ zone_id -%}
+              {%- set _ = result.append("show zone name " ~ zone_name ~ " vsan " ~ vsan) -%}
+
+            {%- endfor -%}
+
+          {%- endfor -%}
+          {{ result }}
+      register: existing_zones_raw
+
+      # ===============================
+      # existing_zones_raw.stdout_lines (sample output)
+      # ===============================
+      #
+      # [
+      #   [
+      #     "zone name IBM_SVC_300307680C00BC5A_300307680C36BC5A vsan 2",
+      #     "  pwwn 30:03:07:68:0c:36:bc:5a",
+      #     "  pwwn 40:00:00:10:9b:0f:db:f4"
+      #   ],
+      #   [
+      #     "zone name IBM_SVC_300307680C00BC5A_300307680C37BC5A vsan 2",
+      #     "  pwwn 30:03:07:68:0c:37:bc:5a",
+      #     "  pwwn 40:00:00:10:9b:0f:db:f5"
+      #   ],
+      #   [
+      #     "zone name IBM_SVC_300307690C005D2E_300307690C365D2E vsan 20",
+      #     "  pwwn 30:03:07:69:0c:36:5d:2e",
+      #     "  pwwn 40:00:00:10:9b:0f:db:f4"
+      #   ]
+      # ]
+
+
+    - name: Parse existing zones from active zoneset
+      ansible.builtin.set_fact:
+        vsan_existing_zone_map: >-
+          {# Initialize result dict: {vsan_id: {zone_name: [pwwns]}} #}
+          {%- set result = {} -%}
+
+          {# Loop through command outputs from previous task #}
+          {%- for lines in existing_zones_raw.stdout_lines -%}
+
+            {# Skip if CLI returned "Zone not present" #}
+            {%- if "Zone not present" not in lines[0] -%}
+
+              {# Extract zone name and VSAN ID from the first line #}
+              {%- set words = lines[0].split() -%}
+              {%- set zone_name = words[2] -%}
+              {%- set vsan_id = words[4] -%}
+
+              {# Collect all PWWN members from the remaining lines #}
+              {%- set zone_members = [] -%}
+              {%- for line in lines[1:] -%}
+                {%- if 'pwwn' in line -%}
+                  {%- set pwwn = line.split()[1] -%}
+                  {%- set _ = zone_members.append(pwwn) -%}
+                {%- endif -%}
+              {%- endfor -%}
+
+              {# Build entry: {zone_name: [unique pwwns]} #}
+              {%- set zone_entry = {zone_name: zone_members | unique} -%}
+
+              {# Merge into result for this VSAN:
+                  - If vsan_id exists -> update it
+                  - Else -> create new entry
+              #}
+              {%- if vsan_id in result -%}
+                {%- set _ = result[vsan_id].update(zone_entry) -%}
+              {%- else -%}
+                {%- set _ = result.update({vsan_id: zone_entry}) -%}
+              {%- endif -%}
+
+            {%- endif -%}
+
+          {%- endfor -%}
+          {{ result }}
+
+      # ===============================
+      # vsan_existing_zone_map (sample output)
+      # ===============================
+      #
+      # {
+      #   "2": {
+      #     "IBM_SVC_300307680C005D2E_300307680C365D2E": [
+      #       "30:03:07:68:0c:36:5d:2e",
+      #       "40:00:00:10:9b:0f:db:f4"
+      #     ],
+      #     "IBM_SVC_300307680C005D2E_300307680C375D2E": [
+      #       "30:03:07:68:0c:37:5d:2e",
+      #       "40:00:00:10:9b:0f:db:f5"
+      #     ]
+      #   },
+      #
+      #   "20": {
+      #     "IBM_SVC_300307690C00AC4A_300307690C36AC4A": [
+      #       "30:03:07:69:0c:36:ac:4a",
+      #       "40:00:00:10:9b:0f:db:f4"
+      #     ]
+      #   }
+      # }
+
+
+    - name: Create New Zone definition from Cluster - Host Zone data
+      ansible.builtin.set_fact:
+        vsan_new_zone_map: >-
+          {# Namespace holds:
+            - result: final dict {vsan_id: {zone_name: [members]}}
+            - new_zones: temporary dict per fabric
+          #}
+          {%- set glob_vars = namespace(result={}, new_zones={}) -%}
+
+          {# Iterate over each fabric #}
+          {%- for fabric in fabric_vsan_mapping.fabric_to_vsan.keys() -%}
+
+            {# Get VSAN ID for this fabric #}
+            {%- set vsan = fabric_vsan_mapping.fabric_to_vsan[fabric] -%}
+
+            {# Reset zones for this fabric before building new ones #}
+            {%- set glob_vars.new_zones = {} -%}
+
+            {# Select host zone entry in this fabric that require zoning #}
+            {%- set host_zone = cluster_info.Hostzone
+              | selectattr('ioport_fabric', 'equalto', fabric)
+              | selectattr('recommended_config', 'equalto', 'zone_needed')
+              | list
+            -%}
+
+            {# Iterate through each host zone entry needing zoning #}
+            {%- for item1 in host_zone -%}
+
+              {#
+                Find the corresponding target port wwpn from fcioportid present
+                in host zone entry. Check host zone output for better clarity.
+              #}
+              {%- set target_ports = cluster_info.Targetportfc
+                | selectattr('fc_io_port_id', 'equalto', item1.io_port_id)
+                | selectattr('protocol', 'equalto', 'scsi')
+                | selectattr('virtualized', 'equalto', 'yes')
+                | list
+              -%}
+
+              {# Iterate through each target port #}
+              {%- for item2 in target_ports -%}
+
+                {%- set item_key = item2.WWPN -%}
+
+                {# Zone naming convention: <zone_prefix>_<WWPN> #}
+                {%- set zone_name = zone_prefix ~ "_" ~ item2.WWPN ~ "_" ~ zone_id -%}
+
+                {# Zone members:
+                  - target WWPN (formatted with colons, lowercased)
+                  - host WWPN (formatted with colons, lowercased)
+                  - If zone already exists, append instead of overwrite
+                #}
+                {%- set glob_vars.new_zones = glob_vars.new_zones
+                  | combine({
+                      zone_name: (
+                        (glob_vars.new_zones[zone_name]
+                          if glob_vars.new_zones[zone_name] is defined
+                          else [item2.WWPN | regex_replace('(..)(?=.)', '\\1:') | lower])
+                        + [item1.host_wwpn | regex_replace('(..)(?=.)', '\\1:') | lower]
+                      )
+                    })
+                -%}
+
+              {%- endfor -%}
+
+            {%- endfor -%}
+
+            {# Add this fabrics zones to the final result under its VSAN #}
+            {%- set _ = glob_vars.result.update({vsan: glob_vars.new_zones}) -%}
+          {%- endfor -%}
+
+          {{ glob_vars.result }}
+
+      # ===============================
+      # vsan_new_zone_map (sample output)
+      # ===============================
+      #
+      # {
+      #   "2": {
+      #     "IBM_SVC_300307680C005D2E_300307680C365D2E": [
+      #       "30:03:07:68:0c:36:5d:2e",
+      #       "40:00:00:10:9b:0f:db:f4",
+      #       "40:00:00:10:9b:0f:db:f5"
+      #     ]
+      #   },
+      #
+      #   "20": {
+      #     "IBM_SVC_300307690C00AC4A_300307690C36AC4A": [
+      #       "30:03:07:69:0c:36:ac:4a",
+      #       "40:00:00:10:9b:0f:db:f4",
+      #       "40:00:00:10:9b:0f:db:f5"
+      #     ]
+      #   }
+      # }
+
+
+    - name: Build zoning update definition per VSAN
+      ansible.builtin.set_fact:
+        zone_zoneset_details: >-
+          {# Final structure: list of zone/zoneset updates for each VSAN #}
+          {%- set zone_zoneset_details = [] -%}
+
+          {# Iterate over each fabric #}
+          {%- for fabric in fabric_vsan_mapping.fabric_to_vsan.keys() -%}
+
+            {# Set vsan, active_zoneset #}
+            {%- set vsan = fabric_vsan_mapping.fabric_to_vsan[fabric] -%}
+            {%- set active_zoneset =  vsan_zoneset_map[vsan] -%}
+
+            {# Temp lists to collect zone and zoneset changes for this VSAN #}
+            {%- set zones = [] -%}
+            {%- set zoneset_members = [] -%}
+
+            {# Existing zones in this VSAN (from switch) #}
+            {% set old_zones = {} %}
+            {% if vsan_existing_zone_map[vsan] is defined %}
+                {% set old_zones = vsan_existing_zone_map[vsan] %}
+            {% endif %}
+
+            {# New zones in this VSAN (from cluster - lshostzone) #}
+            {% set new_zones = {} %}
+            {% if vsan_new_zone_map[vsan] is defined %}
+                {% set new_zones = vsan_new_zone_map[vsan] %}
+            {% endif %}
+
+            {# --- Compare new zones against existing zones --- #}
+            {% for key, value in new_zones.items() %}
+
+              {%- set existing_members   = (old_zones[key] if old_zones[key] is defined else []) -%}
+              {%- set new_def_members    = value -%}
+              {%- set cisco_zone_members = [] -%}
+
+              {# Find members to remove: in existing but not in new definition #}
+              {%- set mem_to_remove =  existing_members | reject('in', new_def_members) | list -%}
+
+              {# Find members to add: in new definition but not in existing #}
+              {%- set mem_to_add    =  new_def_members | reject('in', existing_members) | list -%}
+
+              {# Build member entries for removal #}
+              {%- for wwpn in mem_to_remove -%}
+                {%- set _ = cisco_zone_members.append({'remove': True, 'pwwn': wwpn }) -%}
+              {%- endfor -%}
+
+              {# Build member entries for addition #}
+              {%- for wwpn in mem_to_add -%}
+                {%- set _ = cisco_zone_members.append({'remove': False, 'pwwn': wwpn }) -%}
+              {%- endfor -%}
+
+              {# Only create zone entry if there are changes #}
+              {%- if cisco_zone_members | length > 0 -%}
+                {%- set zone_entry = {'name': key, 'members': cisco_zone_members, 'remove': False} -%}
+                {%- set _ = zones.append(zone_entry) -%}
+                {%- set _ = zoneset_members.append({'name': key, 'remove': False}) -%}
+              {%- endif -%}
+
+            {% endfor %}
+
+            {# --- Identify zones that exist on switch but not in new definition -> remove them --- #}
+            {% set zones_to_be_removed = old_zones.keys() | reject('in', new_zones.keys()) | list  %}
+
+            {% for zone in zones_to_be_removed %}
+
+              {%- set zone_entry = {'name': zone, 'members': [], 'remove': True} -%}
+              {%- set _ = zones.append(zone_entry) -%}
+              {%- set _ = zoneset_members.append({'name': zone, 'remove': True}) -%}
+
+            {% endfor %}
+
+            {# Define the zoneset structure #}
+            {%- set zoneset = {'action': 'activate', 'name': active_zoneset, 'members': zoneset_members} -%}
+
+            {# Only include the zone/zoneset entry if there are any changes #}
+            {%- if zones | length > 0 -%}
+              {%- set cur_zone_zoneset_det = {'mode': 'basic', 'vsan': vsan, 'zone': zones, 'zoneset': [zoneset]} -%}
+              {%- set _ = zone_zoneset_details.append(cur_zone_zoneset_det) -%}
+            {%- endif -%}
+
+          {%- endfor -%}
+
+          {{ zone_zoneset_details | to_json }}
+
+      # ===============================
+      # zone_zoneset_details (sample output)
+      # ===============================
+      #
+      # [
+      #   {
+      #     "mode": "basic",
+      #     "vsan": "2",
+      #     "zone": [
+      #       {
+      #         "members": [
+      #           [
+      #             {
+      #               "pwwn": "40:00:00:10:9b:0f:db:f5",
+      #               "remove": false
+      #             }
+      #           ]
+      #         ],
+      #         "name": "IBM_SVC_300307680C005D2E_300307680C365D2E",
+      #         "remove": false
+      #       },
+      #       {
+      #         "members": [],
+      #         "name": "IBM_SVC_300307680C005D2E_300307680C375D2E",
+      #         "remove": true
+      #       }
+      #     ],
+      #     "zoneset": [
+      #       {
+      #         "action": "activate",
+      #         "members": [
+      #           {
+      #             "name": "IBM_SVC_300307680C005D2E_300307680C365D2E",
+      #             "remove": false
+      #           },
+      #           {
+      #             "name": "IBM_SVC_300307680C005D2E_300307680C375D2E",
+      #             "remove": true
+      #           }
+      #         ],
+      #         "name": "FS_cluster_000003052451E19D"
+      #       }
+      #     ]
+      #   }
+      # ]
+
+
+    - name: Send Zone Creation request
+      cisco.nxos.nxos_zone_zoneset:
+        # Pass in the computed zone/zoneset changes built in the previous task
+        zone_zoneset_details: "{{ zone_zoneset_details | from_json }}"
+      when: (zone_zoneset_details | from_json) != []

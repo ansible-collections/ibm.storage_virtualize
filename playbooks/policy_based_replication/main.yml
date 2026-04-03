@@ -33,7 +33,14 @@
 
     - name: Create mdiskgrp_drp and provisionpolicy on both the clusters
       ansible.builtin.include_tasks: drp_pool_setup.yml
-      loop: "{{ clusters_data }}"
+      loop:
+        - token: "{{ primary_auth.token }}"
+          cluster_ip: "{{ clusters_data[0].cluster_ip }}"
+          pool_name: "{{ clusters_data[0].pool_name | default('mdg0') }}"
+
+        - token: "{{ secondary_auth.token }}"
+          cluster_ip: "{{ clusters_data[1].cluster_ip }}"
+          pool_name: "{{ clusters_data[1].pool_name | default('mdg0') }}"
       no_log: true
 
     - name: Get mdisk info

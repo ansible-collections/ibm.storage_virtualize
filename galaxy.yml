@@ -2,15 +2,17 @@
 
 namespace: ibm
 name: storage_virtualize
-version: 3.2.0
+version: 3.3.0
 readme: README.md
 authors:
   - Sumit Kumar Gupta (github.com/sumitguptaibm)
-  - Lavanya C R (github.com/lavanyacr)
   - Sandip G Rajbanshi (github.com/Sandip-Rajbanshi)
   - Rahul Pawar (github.com/rahul-p)
   - Aditya Bhosale (github.com/adityabhosale)
+  - Dhirender Singh (github.com/dhirendersingh19)
 description: Ansible Collections for IBM Storage Virtualize
+dependencies:
+  ansible.windows: ">=3.0.0"
 license_file: LICENSE
 tags:
 # tags so people can search for collections https://galaxy.ansible.com/search

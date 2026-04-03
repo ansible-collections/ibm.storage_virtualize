@@ -19,7 +19,7 @@ version_added: "1.4.0"
 options:
   name:
     description:
-      - Specifies the name to assign to the new volume.
+      - Specifies the name/UID to assign to the new volume.
     required: true
     type: str
   state:

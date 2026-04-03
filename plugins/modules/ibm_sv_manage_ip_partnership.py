@@ -94,6 +94,7 @@ options:
     compressed:
         description:
             - Specifies whether compression is enabled for this partnership.
+            - C(compressed=yes) is not supported on FS5060, FS5600, FS7600, FS9600 platforms.
             - Valid when I(state=present).
         choices: [ 'yes', 'no' ]
         type: str

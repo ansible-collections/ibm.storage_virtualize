@@ -214,7 +214,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host4test
+    name: iscsi_host0
     state: present
     iscsiname: iqn.1994-05.com.redhat:2e358e438b8a
     iogrp: 0:1:2:3
@@ -229,7 +229,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host4test
+    name: host0
     state: present
     hostcluster: hostcluster0
 - name: Define a new FC host
@@ -239,7 +239,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host4test
+    name: fc_host0
     state: present
     fcwwpn: 100000109B570216:1000001AA0570266
     iogrp: 0:1:2:3
@@ -252,7 +252,7 @@ EXAMPLES = '''
     domain: "{{ domain }}"
     username: "{{ username }}"
     password: "{{ password }}"
-    old_name: "host4test"
+    old_name: "old_host_name"
     name: "new_host_name"
     state: "present"
 - name: Create an iSCSI host
@@ -262,7 +262,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host_name
+    name: iscsi_host0
     iscsiname: iqn.1994-05.com.redhat:2e358e438b8a,iqn.localhost.hostid.7f000001
     state: present
 - name: Create a tcpnvme host
@@ -272,7 +272,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host_name
+    name: tcpnvme_host0
     protocol: tcpnvme
     nqn: nqn.2014-08.org.nvmexpress:NVMf:uuid:644f51bf-8432-4f59-bb13-5ada20c06397
     state: present
@@ -283,7 +283,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: new_host_name
+    name: host0
     state: absent
 - name: Add existing host to draft partition
   ibm.storage_virtualize.ibm_svc_host:
@@ -292,7 +292,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host_name
+    name: host0
     state: prersent
     draftpartition: partition_name
 - name: Remove a host from a draft partition
@@ -302,7 +302,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host_name
+    name: host0
     state: present
     nodraftpartition: 'True'
 - name: Create a fcnvme host
@@ -312,7 +312,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: host_name
+    name: fcnvme_host0
     protocol: fcnvme
     nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
     portset: portset_name
@@ -324,7 +324,7 @@ EXAMPLES = '''
     username: "{{ username }}"
     password: "{{ password }}"
     log_path: /tmp/playbook.debug
-    name: ansible_host
+    name: fdmi_host0
     fdminame: Ansible-Host-1
     state: present
 - name: Create a host with preferred location.
@@ -352,6 +352,30 @@ EXAMPLES = '''
     state: present
     name: host0
     site: ""
+- name: Create a fcnvme host inside a partition
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: fcnvme_host0
+    protocol: fcnvme
+    nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
+    portset: postset0
+    state: present
+- name: Create a tcpnvme host inside a partition
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: tcpnvme_host0
+    protocol: tcpnvme
+    nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
+    portset: postset0
+    state: present
 '''
 
 RETURN = '''#'''
