@@ -4,13 +4,32 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.3.0
+======
+
+Release Summary
+---------------
+
+Added support for addressing volume via UID in volume, volumegroup, host, clone, mirror volume, migration, cloud_backup, flashcopy, snapshot, and vol_map modules, added playbook for Fibre Channel zoning for Cisco SAN switches.
+
+Minor Changes
+-------------
+
+- ibm_svc_initial_setup - Added support for managing anomaly settings
+- ibm_svc_manage_volume - Added support for addressing volume via UID
+
+Bugfixes
+--------
+
+- ibm_svc_manage_ip - Fixed issue related to VLAN while updating
+
 v3.2.0
 ======
 
 Release Summary
 ---------------
 
-Added support for looging in using the partition IP address across volume, volumegroup, host, hostcluster, snapshot, replication, and GAM modules, modified partition_migration_host_actions playbook for iSCSI hosts and added support for volume parameters autoexpand, preferrednode and cache.
+Added support for logging in using the partition IP address across volume, volumegroup, host, hostcluster, snapshot, replication, and GAM modules, modified partition_migration_host_actions playbook for iSCSI hosts and added support for volume parameters autoexpand, preferrednode and cache.
 
 Minor Changes
 -------------
