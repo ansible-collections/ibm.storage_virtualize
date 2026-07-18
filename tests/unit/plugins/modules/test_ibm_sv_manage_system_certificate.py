@@ -351,9 +351,9 @@ class TestIBMSVManageSystemCert(unittest.TestCase):
             cmd_args_for_remote = mock_execute_command.call_args_list[6].args[0]
             cmd_args_for_remote_1 = mock_execute_command.call_args_list[7].args[0]
 
-            self.assertTrue('-export' in cmd_args_for_remote)
-            self.assertTrue('-exportrootcacert' in cmd_args_for_primary)
-            self.assertTrue('/tmp/certificate_system2.pem' in cmd_args_for_remote_1)
+            self.assertTrue('-exportrootcacert' in cmd_args_for_remote)
+            self.assertTrue('-export' in cmd_args_for_primary)
+            self.assertTrue('/tmp/rootcacertificate_system2.pem' in cmd_args_for_remote_1)
             mock_execute_command.reset_mock()
 
         '''
@@ -691,5 +691,5 @@ class TestIBMSVManageSystemCert(unittest.TestCase):
             self.assertEqual(mock_execute_command.call_count, 8)
 
             self.assertTrue('-restapi' in cmd_args_for_remote)
-            self.assertTrue('-flashgrid' in cmd_args_for_primary)
+            self.assertTrue('-restapi' in cmd_args_for_primary)
             mock_execute_command.reset_mock()

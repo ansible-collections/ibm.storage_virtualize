@@ -3,6 +3,7 @@
 
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -56,8 +57,13 @@ options:
         type: str
     name:
         description:
-            - Specifies a unique name of the snapshot policy.
+            - Specifies a unique name or UUID of the snapshot policy.
             - Not applicable when I(state=suspend) or I(state=resume).
+        type: str
+    old_name:
+        description:
+            - Specifies the old name or UUID of the snapshot policy during renaming.
+            - Valid when I(state=present), to rename an existing snapshot policy.
         type: str
     backupunit:
         description:
@@ -93,6 +99,7 @@ options:
         type: bool
 author:
     - Shilpi Jain(@Shilpi-J)
+    - Sandip Gulab Rajbanshi (@sandip-rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -135,8 +142,7 @@ RETURN = '''#'''
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
-    IBMSVCRestApi, svc_argument_spec,
-    get_logger
+    IBMSVCRestApi, is_uuid, svc_argument_spec, get_logger
 )
 from ansible.module_utils._text import to_native
 
@@ -153,6 +159,9 @@ class IBMSVCSnapshotPolicy:
                     choices=['present', 'absent', 'suspend', 'resume']
                 ),
                 name=dict(
+                    type='str',
+                ),
+                old_name=dict(
                     type='str',
                 ),
                 backupunit=dict(
@@ -179,6 +188,7 @@ class IBMSVCSnapshotPolicy:
 
         # Required parameters
         self.name = self.module.params['name']
+        self.old_name = self.module.params.get('old_name')
         self.state = self.module.params['state']
         self.backupunit = self.module.params.get('backupunit', '')
         self.backupinterval = self.module.params.get('backupinterval', '')
@@ -211,13 +221,23 @@ class IBMSVCSnapshotPolicy:
 
     def basic_checks(self):
         if self.state == 'present':
-            fields = ['name', 'backupinterval', 'backupstarttime', 'retentiondays', 'backupunit']
-            exists = list(filter(lambda x: not getattr(self, x), fields))
+            if not self.name:
+                self.module.fail_json(msg="Missing mandatory parameter: name")
 
-            if any(exists):
-                self.module.fail_json(
-                    msg="State is present but following parameters are missing: {0}".format(', '.join(exists))
-                )
+            fields = ['backupinterval', 'backupstarttime', 'retentiondays', 'backupunit']
+            if self.old_name:
+                exists = [field for field in fields if getattr(self, field)]
+                if exists:
+                    self.module.fail_json(
+                        msg="Parameters {0} not supported while renaming a snapshot policy.".format(exists)
+                    )
+            else:
+                exists = list(filter(lambda x: not getattr(self, x), fields))
+
+                if any(exists):
+                    self.module.fail_json(
+                        msg="State is present but following parameters are missing: {0}".format(', '.join(exists))
+                    )
 
             if self.removefromvolumegroups:
                 self.module.fail_json(
@@ -241,6 +261,14 @@ class IBMSVCSnapshotPolicy:
 
     def policy_exists(self):
         merged_result = {}
+        if is_uuid(self.name):
+            policy_data = self.restapi.svc_obj_info(
+                cmd='lssnapshotpolicy',
+                cmdopts=None,
+                cmdargs=[self.name])
+            if policy_data:
+                self.name = policy_data[0].get('name')
+
         data = self.restapi.svc_obj_info(
             cmd='lssnapshotschedule',
             cmdopts=None,
@@ -256,7 +284,42 @@ class IBMSVCSnapshotPolicy:
 
         return merged_result
 
+    def snapshotpolicy_rename(self, policy_data):
+        msg = None
+        old_policy_data = self.restapi.svc_obj_info(
+            cmd='lssnapshotpolicy',
+            cmdopts=None,
+            cmdargs=[self.old_name]
+        )
+        if not old_policy_data and not policy_data:
+            self.module.fail_json(msg="Snapshot policy [{0}] does not exist.".format(self.old_name))
+        elif old_policy_data and policy_data:
+            old_name_from_sys = old_policy_data[0].get('name') if isinstance(old_policy_data, list) else old_policy_data.get('name')
+            if old_name_from_sys == policy_data.get('policy_name'):
+                msg = "Snapshot policy [{0}] already renamed.".format(self.name)
+            else:
+                self.module.fail_json(msg="Snapshot policy [{0}] already exists.".format(self.name))
+        elif not old_policy_data and policy_data:
+            if is_uuid(self.old_name):
+                self.module.fail_json(msg="Snapshot policy with UUID [{0}] does not exist.".format(self.old_name))
+            msg = "Snapshot policy with name [{0}] already exists.".format(self.name)
+        elif old_policy_data and not policy_data:
+            if self.module.check_mode:
+                self.changed = True
+                return msg
+
+            cmd = 'chsnapshotpolicy'
+            self.restapi.svc_run_command(cmd, {'name': self.name}, [self.old_name])
+            self.changed = True
+            msg = "Snapshot policy [{0}] has been successfully renamed to [{1}]".format(self.old_name, self.name)
+        return msg
+
     def create_snapshot_policy(self):
+        if is_uuid(self.name):
+            self.module.fail_json(
+                msg='Snapshot policy cannot be created with UUID. '
+                    'Please specify user-defined snapshot policy name to create snapshot policy.'
+            )
         if self.module.check_mode:
             self.changed = True
             return
@@ -326,22 +389,31 @@ class IBMSVCSnapshotPolicy:
             self.update_snapshot_scheduler()
             self.msg = 'Snapshot scheduler {0}ed'.format(self.state.rstrip('e'))
         else:
-            if self.policy_exists():
-                if self.state == 'present':
-                    modifications = self.snapshot_policy_probe()
-                    if any(modifications):
-                        self.msg = 'Policy modification is not supported in ansible. Please delete and recreate new policy.'
-                    else:
-                        self.msg = 'Snapshot policy ({0}) already exists. No modifications done.'.format(self.name)
+            policy_data = self.policy_exists()
+            if self.state == "present" and self.old_name:
+                if self.name == self.old_name:
+                    self.msg = "Snapshot policy's name is same as old name."
                 else:
-                    self.delete_snapshot_policy()
-                    self.msg = 'Snapshot policy ({0}) deleted.'.format(self.name)
+                    self.msg = self.snapshotpolicy_rename(policy_data)
+            elif self.state == "absent" and self.old_name:
+                self.module.fail_json(msg="Rename functionality is not supported when 'state' is absent.")
             else:
-                if self.state == 'absent':
-                    self.msg = 'Snapshot policy ({0}) does not exist. No modifications done.'.format(self.name)
+                if policy_data:
+                    if self.state == 'present':
+                        modifications = self.snapshot_policy_probe()
+                        if any(modifications):
+                            self.msg = 'Policy modification is not supported in ansible. Please delete and recreate new policy.'
+                        else:
+                            self.msg = 'Snapshot policy ({0}) already exists. No modifications done.'.format(self.name)
+                    else:
+                        self.delete_snapshot_policy()
+                        self.msg = 'Snapshot policy ({0}) deleted.'.format(self.name)
                 else:
-                    self.create_snapshot_policy()
-                    self.msg = 'Snapshot policy ({0}) created.'.format(self.name)
+                    if self.state == 'absent':
+                        self.msg = 'Snapshot policy ({0}) does not exist. No modifications done.'.format(self.name)
+                    else:
+                        self.create_snapshot_policy()
+                        self.msg = 'Snapshot policy ({0}) created.'.format(self.name)
 
         if self.module.check_mode:
             self.msg = 'skipping changes due to check mode.'

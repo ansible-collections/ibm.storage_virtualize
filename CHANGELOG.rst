@@ -4,6 +4,30 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.4.0
+======
+
+Release Summary
+---------------
+
+Added support for addressing all objects within a partition using UUIDs. This includes storage objects such as partition, volume, volumegroup, host, hostcluster, clone, snapshot, snapshotpolicy, replication policy, replication direction, mdisk, pool, and volume to host mappings, and enabled support for autozoning.
+
+Minor Changes
+-------------
+
+- ibm_sv_manage_fcportsetmember - Added support for adding autozone-incapable port into autozone-capable portset.
+- ibm_sv_manage_snapshotpolicy - Added support for renaming snapshot policy.
+- ibm_svc_host - Added support for create host using SAS protocol and automated storage rescans at known intervals.
+- ibm_svc_initial_setup - Added support for system-wide autozone prefix option.
+- ibm_svc_manage_portset - Added support for enabling autozoning functionality.
+
+Bugfixes
+--------
+
+- ibm_sv_manage_snapshot - Improved pool probe for idempotency
+- ibm_sv_manage_system_certificate - Added a fix for invalid certificate export on specific builds.
+- ibm_svc_manage_drive - Improved SVC error messaging.
+
 v3.3.0
 ======
 

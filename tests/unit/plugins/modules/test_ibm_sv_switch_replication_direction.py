@@ -155,6 +155,35 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
                 obj.apply()
             self.assertEqual(True, exc.value.args[0]["failed"])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_switch_replication_direction.IBMSVSwitchReplication.get_volumegroup_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_switch_replication_using_UUID(self, svc_authorize_mock,
+                                           svc_run_command_mock, get_volumegroup_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED7000000000000023',
+            'mode': 'independent',
+        }):
+            get_volumegroup_info_mock.return_value = {
+                "id": "1",
+                "name": "60050768108180ED7000000000000023"
+            }
+            svc_run_command_mock.return_value = ''
+            obj = IBMSVSwitchReplication()
+            with pytest.raises(AnsibleExitJson) as exc:
+                obj.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped - svc_run_command uses positional args
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(kwargs['cmdargs'][0], '60050768108180ED7000000000000023')
+
 
 if __name__ == '__main__':
     unittest.main()

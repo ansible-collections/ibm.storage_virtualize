@@ -12,7 +12,7 @@ __metaclass__ = type
 
 import json
 import logging
-import uuid
+from uuid import UUID, getnode
 import inspect
 from time import sleep
 
@@ -20,7 +20,7 @@ from ansible.module_utils.urls import open_url
 from ansible.module_utils.six.moves.urllib.parse import quote
 from ansible.module_utils.six.moves.urllib.error import HTTPError
 
-COLLECTION_VERSION = "3.3.0"
+COLLECTION_VERSION = "3.4.0"
 TIMEOUT = 600
 
 
@@ -109,10 +109,24 @@ def is_feature_supported(feature, version):
     # Example: First mapping shows that chvolume was introduced in SVC version 9.1.0.0
     feature_version_mapping = {
         'chvolume': '9.1.0.0',
-        'certstore_cmds': '9.1.0.0'
+        'certstore_cmds': '9.1.0.0',
+        'autozone_fields': '9.1.2.0'
     }
 
     return is_supported_version(version, feature_version_mapping[feature])
+
+
+def is_uuid(obj):
+    """
+    This function checks if the object is in uuid format or not as per RFC4122
+    Example: 123e4567-e89b-12d3-a456-426614174000 (RFC 4122 compliant)
+             6005076812CA818CB000000000000000 (For volume UID)
+    """
+    try:
+        UUID(str(obj))
+        return True
+    except ValueError:
+        return False
 
 
 class IBMSVCRestApi(object):
@@ -145,6 +159,7 @@ class IBMSVCRestApi(object):
         self.password = password
         self.validate_certs = validate_certs
         self.token = token
+        self.code_build_version = None
 
         # logging setup
         log = get_logger(self.__class__.__name__, log_path)
@@ -161,6 +176,14 @@ class IBMSVCRestApi(object):
 
         if not self.token:
             self.module.exit_json(msg='Failed to obtain access token', unreachable=True)
+
+    def get_system_code_level(self):
+        """Fetch and return the system's base code level via 'lssystem'."""
+        if not self.code_build_version:
+            system_info = self.svc_obj_info(cmd='lssystem', cmdopts=None, cmdargs=None)
+            if system_info and 'code_level' in system_info:
+                self.code_build_version = system_info['code_level'].split(" ")[0]
+        return self.code_build_version
 
     @property
     def port(self):
@@ -422,7 +445,7 @@ class IBMSVCRestApi(object):
     def register_plugin_cmdopts(self):
         cmdopts = {}
         name = "Ansible"
-        unique_key = self.username + "_" + str(uuid.getnode())
+        unique_key = self.username + "_" + str(getnode())
         metadata = ""
 
         try:

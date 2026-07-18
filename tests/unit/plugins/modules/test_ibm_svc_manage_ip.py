@@ -264,6 +264,42 @@ class TestIBMSVCUser(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_change_ip_with_valid_param_idempotency(self, mock_svc_authorize, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'old_ip_address': '10.1.1.11',
+            'ip_address': '10.1.1.12',
+            'subnet_prefix': 24,
+            'gateway': '10.1.1.1',
+            'vlan': 1,
+            'state': 'present',
+        }):
+            svc_obj_info_mock.return_value = [{
+                'id': '1',
+                'node_id': '1',
+                'node_name': 'node1',
+                'port_id': '2',
+                'portset_id': '0',
+                'portset_name': 'portset0',
+                'IP_address': '10.1.1.12',
+                'prefix': '24',
+                'vlan': '1',
+                'gateway': '10.1.1.1',
+                'owner_id': '',
+                'owner_name': ''
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCIp()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')

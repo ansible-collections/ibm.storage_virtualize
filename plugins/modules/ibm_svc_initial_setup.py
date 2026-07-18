@@ -185,6 +185,14 @@ options:
               case of RTD.
         type: int
         version_added: 3.3.0
+    autozoneprefix:
+        description:
+            - Specifies the prefix for automatically generated Fibre Channel zone names.
+            - Must start with a letter and contain only letters, numbers, dollars ($), carats (^), dashes (-), and underscores (_).
+            - Maximum 32 characters.
+            - Requires firmware version 9.1.2.0 or later.
+        type: str
+        version_added: "3.4.0"
 author:
     - Shilpi Jain (@Shilpi-J)
     - Lavanya C R (@lavanyacr)
@@ -280,13 +288,26 @@ EXAMPLES = '''
     anomalysnapshot: 'on'
     anomalysnapshotretentiondays: 5
     latestsnapshotextensiondays: 8
+- name: Set autozone prefix for FC zone names.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    autozoneprefix: "PROD_SAN"
+- name: Change autozone prefix.
+  ibm.storage_virtualize.ibm_svc_initial_setup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    autozoneprefix: "DR_SAN"
 '''
 
 RETURN = '''#'''
 
 from traceback import format_exc
+import re
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger, is_feature_supported
 from ansible.module_utils._text import to_native
 
 
@@ -319,7 +340,8 @@ class IBMSVCInitialSetup(object):
                 cloud=dict(type='int'),
                 anomalysnapshot=dict(type='str', choices=['on', 'off']),
                 anomalysnapshotretentiondays=dict(type='int'),
-                latestsnapshotextensiondays=dict(type='int')
+                latestsnapshotextensiondays=dict(type='int'),
+                autozoneprefix=dict(type='str', required=False)
             )
         )
 
@@ -365,6 +387,9 @@ class IBMSVCInitialSetup(object):
         self.anomalysnapshot = self.module.params.get('anomalysnapshot', '')
         self.anomalysnapshotretentiondays = self.module.params.get('anomalysnapshotretentiondays', '')
         self.latestsnapshotextensiondays = self.module.params.get('latestsnapshotextensiondays', '')
+
+        # autozone related parameters
+        self.autozoneprefix = self.module.params.get('autozoneprefix', None)
 
         self.restapi = IBMSVCRestApi(
             module=self.module,
@@ -473,6 +498,60 @@ class IBMSVCInitialSetup(object):
         self.log("system_probe props='%s'", props)
         return props
 
+    def _validate_autozoneprefix(self, system_info):
+        """Validate the autozoneprefix parameter."""
+        if self.autozoneprefix is None:
+            return
+
+        code_level = system_info.get('code_level', '').split(" ")[0]
+        if not is_feature_supported('autozone_fields', code_level):
+            self.module.fail_json(
+                msg=f"Parameter 'autozoneprefix' requires firmware version 9.1.2.0 or later. "
+                    f"Current version: {code_level}"
+            )
+
+        if len(self.autozoneprefix) > 32:
+            self.module.fail_json(
+                msg=f"Parameter 'autozoneprefix' must be 32 characters or less. "
+                    f"Provided: {len(self.autozoneprefix)} characters"
+            )
+
+        if self.autozoneprefix and not re.match(r'^[A-Za-z0-9_]+$', self.autozoneprefix):
+            self.module.fail_json(
+                msg=f"Parameter 'autozoneprefix' must contain only alphanumeric characters "
+                    f"and underscores. Provided: '{self.autozoneprefix}'"
+            )
+
+    def _check_autozoneprefix_change(self, system_info):
+        """Check if autozoneprefix needs to be updated."""
+        if self.autozoneprefix is None:
+            return False
+
+        current_prefix = system_info.get('auto_zone_prefix', '')
+
+        if current_prefix == self.autozoneprefix:
+            self.log("Autozoneprefix already set to '%s', no change needed", self.autozoneprefix)
+            return False
+
+        self.log("Autozoneprefix change detected: '%s' -> '%s'", current_prefix, self.autozoneprefix)
+        return True
+
+    def _update_autozoneprefix(self):
+        """Update autozoneprefix on the system."""
+        if self.module.check_mode:
+            self.changed = True
+            self.message += " Autozoneprefix would be updated (check mode)."
+            return
+
+        cmd = 'chsystem'
+        cmdopts = {}
+        cmdopts['autozoneprefix'] = self.autozoneprefix
+
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        self.changed = True
+        self.message += f" Autozoneprefix updated to '{self.autozoneprefix}'."
+        self.log("Autozoneprefix updated to '%s'", self.autozoneprefix)
+
     def systemtime_update(self):
         cmd = 'setsystemtime'
         cmdopts = {}
@@ -547,51 +626,69 @@ class IBMSVCInitialSetup(object):
                 self.message += "System %s updated" % data['name']
 
     def dns_configure(self, data):
-        existing_dns = {}
-        existing_dns_server = []
-        existing_dns_ip = []
 
         if self.module.check_mode:
             self.changed = True
             return
 
-        if self.dnsip and self.dnsname:
-            for server in data:
-                existing_dns_server.append(server['name'])
-                existing_dns_ip.append(server['IP_address'])
-                existing_dns[server['name']] = server['IP_address']
+        # Build lookup maps from existing system DNS configuration
+        svc_dns_ip_to_name = {item['IP_address']: item['name'] for item in data}
+        svc_dns_name_to_ip = {item['name']: item['IP_address'] for item in data}
 
-            for name, ip in zip(self.dnsname, self.dnsip):  # To modify existing name or ip
-                if name in existing_dns and existing_dns[name] != ip:
-                    self.log("update, diff IP.")
-                    self.restapi.svc_run_command(
-                        'chdnsserver', {'ip': ip}, [name]
-                    )
-                    self.changed = True
-                    self.message += "DNS %s modified." % name
+        if len(self.dnsip) != len(set(self.dnsip)) or len(self.dnsname) != len(set(self.dnsname)):
+            self.module.fail_json(msg="Duplicate entries found in DNS IP or DNS name.")
 
-            if (set(existing_dns_server)).symmetric_difference(set(self.dnsname)):
+        desired = dict(zip(self.dnsip, self.dnsname))
 
-                dnsserver_to_remove = list(set(existing_dns_server) - set(self.dnsname))
-                if dnsserver_to_remove:
-                    for item in dnsserver_to_remove:
-                        self.restapi.svc_run_command(
-                            'rmdnsserver', None,
-                            [item]
-                        )
-                    self.message += " DNS server %s removed." % dnsserver_to_remove
+        dns_to_remove = [
+            name for ip, name in svc_dns_ip_to_name.items()
+            if ip not in set(self.dnsip) and name not in set(self.dnsname)
+        ]
+        for dns_name in dns_to_remove:
+            self._remove_dns_server(dns_name)
 
-                dnsservername_to_add = list(set(self.dnsname) - set(existing_dns_server))
-                dnsserverid_to_add = list(set(self.dnsip) - set(existing_dns_ip))
-                if dnsservername_to_add:
-                    for dns_name, dns_ip in zip(dnsservername_to_add, dnsserverid_to_add):
-                        self.log('%s %s', dns_name, dns_ip)
-                        self.restapi.svc_run_command(
-                            'mkdnsserver',
-                            {'name': dns_name, 'ip': dns_ip}, cmdargs=None
-                        )
-                    self.message += " DNS server %s added." % dnsservername_to_add
-                self.changed = True
+        for ip, name in desired.items():
+            existing_name_for_ip = svc_dns_ip_to_name.get(ip)
+            existing_ip_for_name = svc_dns_name_to_ip.get(name)
+
+            if existing_name_for_ip is not None:
+                if existing_name_for_ip != name:
+                    self._update_dns_server(name, existing_name_for_ip, new_name=name)
+            elif existing_ip_for_name is not None:
+                if existing_ip_for_name != ip:
+                    self._update_dns_server(name, name, new_ip=ip)
+            else:
+                self._create_dns_server(ip, name)
+
+    def _create_dns_server(self, ip, name):
+        """Create a new DNS server with the given IP address and name."""
+        self.log("create dns with ip: %s, name: %s", ip, name)
+        cmd = 'mkdnsserver'
+        cmdopts = {'ip': ip, 'name': name}
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        self.changed = True
+        self.message += f" DNS {name} created."
+
+    def _update_dns_server(self, name, existing_name, new_ip=None, new_name=None):
+        """Update an existing DNS server's IP or name using chdnsserver."""
+        cmd = 'chdnsserver'
+        cmdopts = {}
+        if new_ip:
+            cmdopts['ip'] = new_ip
+        if new_name:
+            cmdopts['name'] = new_name
+        self.log("update dns server %s: %s", existing_name, cmdopts)
+        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=[existing_name])
+        self.changed = True
+        self.message += f" DNS {name} modified."
+
+    def _remove_dns_server(self, name):
+        """Remove a DNS server by name using rmdnsserver command."""
+        self.log("remove dns server: %s", name)
+        cmd = 'rmdnsserver'
+        self.restapi.svc_run_command(cmd, cmdopts=None, cmdargs=[name])
+        self.changed = True
+        self.message += f" DNS {name} removed."
 
     def license_probe(self, data, sys_data):
         props = []
@@ -707,6 +804,12 @@ class IBMSVCInitialSetup(object):
 
         # System Configuration
         system_data = self.get_system_info()
+
+        # Validate and handle autozoneprefix if provided
+        self._validate_autozoneprefix(system_data)
+        if self._check_autozoneprefix_change(system_data):
+            self._update_autozoneprefix()
+
         modify = self.system_probe(system_data)
         if modify:
             self.system_update(modify, system_data)

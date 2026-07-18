@@ -1341,13 +1341,13 @@ class TestIBMSVCvdisk(unittest.TestCase):
             self.assertFalse(exc.value.args[0]['changed'])
             self.assertEqual(exc.value.args[0]['msg'], 'Parameter [fromsourcevolumes] is invalid for modifying volumegroup.')
 
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_update_thinclone_vg_pool(self,
                                               svc_authorize_mock,
-                                              svc_get_existing_vg_mock):
+                                              svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
@@ -1359,7 +1359,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'type': 'thinclone',
             'pool': 'pool1'
         }):
-            svc_get_existing_vg_mock.return_value = {
+            vg_info = {
                 'id': '0',
                 'name': 'v1d1thclone',
                 'volume_count': '2',
@@ -1392,16 +1392,33 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 'owner_type': 'none',
                 'draft_partition_id': '',
                 'draft_partition_name': '',
-                'last_restore_time': '',
-                'source_volumes_set': {'v1', 'd1'},
-                'source_volumes_pool_set': {'pool0'}
+                'last_restore_time': ''
             }
+
+            lsvolumepopulation_info = [
+                {
+                    "id": "0", "name": "V1", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "pool0", "parent_mdisk_grp_name": "pool0",
+                    "type": "thinclone", "source_volume_name": "v1"
+                },
+                {
+                    "id": "2", "name": "D1", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "1", "mdisk_grp_name": "pool1", "parent_mdisk_grp_name": "pool1",
+                    "type": "thinclone", "source_volume_name": "d1"
+                }
+            ]
+
+            vol_inside_pool_info = [
+                {"id": "2", "name": "d1"}
+            ]
+
+            svc_obj_info_mock.side_effect = [vg_info, lsvolumepopulation_info, vol_inside_pool_info]
 
             with pytest.raises(AnsibleFailJson) as exc:
                 vg = IBMSVCVG()
                 vg.apply()
-            self.assertFalse(exc.value.args[0]['changed'])
-            self.assertEqual(exc.value.args[0]['msg'], 'Parameter [pool] is invalid for modifying volumegroup.')
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], 'Provided pool [pool1] does not match the pool of one or more source volumes.')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -1584,27 +1601,27 @@ class TestIBMSVCvdisk(unittest.TestCase):
             self.assertFalse(exc.value.args[0]['changed'])
             self.assertEqual(exc.value.args[0]['msg'], 'Parameter [fromsourcevolumes] is invalid for modifying volumegroup.')
 
-    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
-           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
     def test_failure_update_cloned_vg_pool(self,
                                            svc_authorize_mock,
-                                           svc_get_existing_vg_mock):
+                                           svc_obj_info_mock):
         with set_module_args({
             'clustername': 'clustername',
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': 'v1d1thclone',
+            'name': 'v1d1clone',
             'state': 'present',
             'fromsourcevolumes': 'v1:d1',
             'type': 'clone',
             'pool': 'pool1'
         }):
-            svc_get_existing_vg_mock.return_value = {
+            vg_info = {
                 'id': '0',
-                'name': 'v1d1thclone',
+                'name': 'v1d1clone',
                 'volume_count': '2',
                 'backup_status': 'off',
                 'last_backup_time': '',
@@ -1635,16 +1652,46 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 'owner_type': 'none',
                 'draft_partition_id': '',
                 'draft_partition_name': '',
-                'last_restore_time': '',
-                'source_volumes_set': {'v1', 'd1'},
-                'source_volumes_pool_set': {'pool0'}
+                'last_restore_time': ''
             }
+
+            vol_inside_vg_info = [
+                {"id": "0", "name": "V1"},
+                {"id": "2", "name": "D1"}
+            ]
+
+            v1_info = [
+                {
+                    "id": "0", "name": "V1", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "pool0", "parent_mdisk_grp_name": "pool0",
+                    "type": "clone", "source_volume_name": "v1"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "2", "mdisk_grp_name": "pool0"
+                }
+            ]
+            d1_info = [
+                {
+                    "id": "2", "name": "D1", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "1", "mdisk_grp_name": "pool1", "parent_mdisk_grp_name": "pool1",
+                    "type": "clone", "source_volume_name": "d1"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "1", "mdisk_grp_name": "pool1"
+                }
+            ]
+
+            vol_inside_pool_info = [
+                {"id": "2", "name": "d1"}
+            ]
+
+            svc_obj_info_mock.side_effect = [vg_info, vol_inside_vg_info, v1_info, d1_info, vol_inside_pool_info]
 
             with pytest.raises(AnsibleFailJson) as exc:
                 vg = IBMSVCVG()
                 vg.apply()
-            self.assertFalse(exc.value.args[0]['changed'])
-            self.assertEqual(exc.value.args[0]['msg'], 'Parameter [pool] is invalid for modifying volumegroup.')
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], 'Provided pool [pool1] does not match the pool of one or more source volumes.')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -2117,6 +2164,514 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 v.apply()
             self.assertEqual(exc.value.args[0]['msg'], 'Following parameter(s) are invalid'
                              ' while converting thinclone volumegroup to clone: replicationpolicy')
+
+    # UUID-based tests for volumegroup
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_creation_of_new_volumegroup_using_UUID(self, mock_svc_authorize,
+                                                    get_existing_vg_mock):
+        '''Test creating a new volumegroup using UUID as name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'present',
+        }):
+            get_existing_vg_mock.return_value = {}
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Volume group with UUID [420EC615-4404-55BA-D8A7-5F91C23E7B40] does not exist and cannot be created.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_idempotency_creation_when_volumegroup_already_existing_using_UUID(
+            self, mock_svc_authorize, get_existing_vg_mock):
+        '''Test idempotency when creating an existing volumegroup using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'present',
+        }):
+            get_existing_vg_mock.return_value = {
+                "id": "10",
+                "name": "test_volumegroup",
+                "volume_count": "0",
+                "backup_status": "empty",
+                "last_backup_time": "",
+                "owner_id": "",
+                "owner_name": "",
+                "safeguarded_policy_id": "",
+                "safeguarded_policy_name": "",
+                "safeguarded_policy_start_time": "",
+                "snapshot_policy_name": "",
+                "snapshot_policy_suspended": "no",
+                "ignore_user_flash_copy_maps": "no",
+                "snapshot_policy_safeguarded": "no",
+                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_for_deleting_an_existing_volumegroup_using_UUID(self, mock_svc_authorize,
+                                                                    get_existing_vg_mock,
+                                                                    svc_run_command_mock):
+        '''Test deleting an existing volumegroup using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'absent',
+        }):
+            get_existing_vg_mock.return_value = {
+                "id": "10",
+                "name": "test_volumegroup",
+                "volume_count": "0",
+                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+            }
+            svc_run_command_mock.return_value = None
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_idempotency_deleting_nonexisting_volumegroup_using_UUID(self, mock_svc_authorize,
+                                                                     get_existing_vg_mock):
+        '''Test idempotency when deleting a non-existing volumegroup using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'absent',
+        }):
+            get_existing_vg_mock.return_value = {}
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volumegroup.IBMSVCVG.get_existing_vg')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_while_updating_ownershipgroup_using_UUID(self, mock_svc_authorize,
+                                                             get_existing_vg_mock,
+                                                             svc_run_command_mock):
+        '''Test updating ownershipgroup using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'present',
+            'ownershipgroup': 'test_ownershipgroup_new'
+        }):
+            get_existing_vg_mock.return_value = {
+                "id": "10",
+                "name": "test_volumegroup",
+                "volume_count": "0",
+                "backup_status": "empty",
+                "last_backup_time": "",
+                "owner_id": "",
+                "owner_name": "test_ownershipgroup_old",
+                "safeguarded_policy_id": "",
+                "safeguarded_policy_name": "",
+                "safeguarded_policy_start_time": "",
+                "snapshot_policy_name": "",
+                "snapshot_policy_suspended": "no",
+                "ignore_user_flash_copy_maps": "no",
+                "snapshot_policy_safeguarded": "no",
+                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+            }
+            svc_run_command_mock.return_value = None
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_volumegroup_using_UUID_old_name(self, mock_svc_authorize,
+                                                    svc_obj_info_mock,
+                                                    svc_run_command_mock):
+        '''Test renaming volumegroup using UUID as old_name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'new_vg_name',
+            'old_name': '420EC615-4404-55BA-D8A7-5F91C23E7B40',
+            'state': 'present',
+        }):
+            svc_obj_info_mock.side_effect = [
+                [],  # new name doesn't exist
+                {    # old UUID exists
+                    "id": "10",
+                    "name": "old_vg_name",
+                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "volume_count": "0",
+                    "owner_name": "",
+                    "snapshot_policy_name": "",
+                    "replication_policy_name": "",
+                    "partition_name": "",
+                    "draft_partition_name": ""
+                }
+            ]
+            svc_run_command_mock.return_value = None
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volumegroup_with_UUID_snapshotpolicy(self, mock_svc_authorize,
+                                                         svc_obj_info_mock,
+                                                         svc_run_command_mock):
+        '''Test creating volumegroup with UUID snapshotpolicy'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'snapshotpolicy': '058C1215-9786-5C3E-B2C6-8F41A7D35E90'
+        }):
+            svc_obj_info_mock.return_value = []
+            svc_run_command_mock.return_value = {
+                'id': '10',
+                'message': 'Volume Group, id [10], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volumegroup_snapshotpolicy_UUID_match(self, mock_svc_authorize,
+                                                          svc_obj_info_mock,
+                                                          svc_run_command_mock):
+        '''Test updating volumegroup when UUID snapshotpolicy matches existing'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'snapshotpolicy': '058C1215-9786-5C3E-B2C6-8F41A7D35E90'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {    # existing volumegroup
+                    "id": "10",
+                    "name": "test_vg",
+                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "volume_count": "0",
+                    "owner_name": "",
+                    "snapshot_policy_name": "test_snapshot_policy",
+                    "snapshot_policy_safeguarded": "no",
+                    "replication_policy_name": "",
+                    "partition_name": "",
+                    "draft_partition_name": ""
+                },
+                [{   # snapshotpolicy info
+                    'id': '1',
+                    'name': 'test_snapshot_policy',
+                    'uuid': '058C1215-9786-5C3E-B2C6-8F41A7D35E90'
+                }]
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volumegroup_with_UUID_pool(self, mock_svc_authorize,
+                                               svc_obj_info_mock,
+                                               svc_run_command_mock):
+        '''Test creating volumegroup with UUID pool'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'type': 'clone',
+            'fromsourcegroup': 'source_vg',
+            'pool': '80050768108180ED700000000000006A'
+        }):
+            svc_obj_info_mock.return_value = []
+            svc_run_command_mock.return_value = {
+                'id': '10',
+                'message': 'Volume Group, id [10], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volumegroup_with_UUID_replicationpolicy(self, mock_svc_authorize,
+                                                            svc_obj_info_mock,
+                                                            svc_run_command_mock):
+        '''Test creating volumegroup with UUID replicationpolicy'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'replicationpolicy': '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50'
+        }):
+            svc_obj_info_mock.return_value = []
+            svc_run_command_mock.return_value = {
+                'id': '10',
+                'message': 'Volume Group, id [10], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volumegroup_replicationpolicy_UUID_match(self, mock_svc_authorize,
+                                                             svc_obj_info_mock,
+                                                             svc_run_command_mock):
+        '''Test updating volumegroup when UUID replicationpolicy matches existing'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'replicationpolicy': '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {    # existing volumegroup
+                    "id": "10",
+                    "name": "test_vg",
+                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "volume_count": "0",
+                    "owner_name": "",
+                    "snapshot_policy_name": "",
+                    "replication_policy_name": "test_replication_policy",
+                    "partition_name": "",
+                    "draft_partition_name": ""
+                },
+                {    # replicationpolicy info
+                    'id': '1',
+                    'name': 'test_replication_policy',
+                    'uuid': '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50'
+                }
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volumegroup_with_UUID_partition(self, mock_svc_authorize,
+                                                    svc_obj_info_mock,
+                                                    svc_run_command_mock):
+        '''Test creating volumegroup with UUID partition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'partition': 'A0050768108180ED700000000000008A'
+        }):
+            svc_obj_info_mock.return_value = []
+            svc_run_command_mock.return_value = {
+                'id': '10',
+                'message': 'Volume Group, id [10], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volumegroup_partition_UUID_match(self, mock_svc_authorize,
+                                                     svc_obj_info_mock,
+                                                     svc_run_command_mock):
+        '''Test updating volumegroup when UUID partition matches existing'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'partition': 'A0050768108180ED700000000000008A'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {    # existing volumegroup
+                    "id": "10",
+                    "name": "test_vg",
+                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "volume_count": "0",
+                    "owner_name": "",
+                    "snapshot_policy_name": "",
+                    "replication_policy_name": "",
+                    "partition_name": "test_partition",
+                    "draft_partition_name": ""
+                },
+                {    # partition info
+                    'id': '1',
+                    'name': 'test_partition',
+                    'uuid': 'A0050768108180ED700000000000008A'
+                }
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volumegroup_with_UUID_draftpartition(self, mock_svc_authorize,
+                                                         svc_obj_info_mock,
+                                                         svc_run_command_mock):
+        '''Test creating volumegroup with UUID draftpartition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'draftpartition': 'B0050768108180ED700000000000009A'
+        }):
+            svc_obj_info_mock.return_value = []
+            svc_run_command_mock.return_value = {
+                'id': '10',
+                'message': 'Volume Group, id [10], successfully created'
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volumegroup_draftpartition_UUID_match(self, mock_svc_authorize,
+                                                          svc_obj_info_mock,
+                                                          svc_run_command_mock):
+        '''Test updating volumegroup when UUID draftpartition matches existing'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vg',
+            'state': 'present',
+            'draftpartition': 'B0050768108180ED700000000000009A'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {    # existing volumegroup
+                    "id": "10",
+                    "name": "test_vg",
+                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "volume_count": "0",
+                    "owner_name": "",
+                    "snapshot_policy_name": "",
+                    "replication_policy_name": "",
+                    "partition_name": "",
+                    "draft_partition_name": "test_draft_partition"
+                },
+                {    # draftpartition info
+                    'id': '1',
+                    'name': 'test_draft_partition',
+                    'uuid': 'B0050768108180ED700000000000009A'
+                }
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCVG()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

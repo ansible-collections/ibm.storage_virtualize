@@ -62,6 +62,14 @@ options:
             - The value can be a decimal number 1 to the maximum number of FC I/O ports.
         type: str
         required: true
+    ignoreautozoneincapable:
+        description:
+            - Specifies whether to ignore if the FC IO port is not auto zoning capable.
+            - When adding an autozone-incapable FC IO port to an autozone-enabled portset, the system rejects the command with a CMMVC1517E error.
+            - Set this parameter to C(true) to force the module to add the port to the portset despite it not being auto zoning capable.
+            - This is an optional user parameter that can be explicitly set when needed to handle autozone compatibility issues.
+        type: bool
+        version_added: "3.4.0"
     validate_certs:
         description:
             - Validates certification.
@@ -74,17 +82,38 @@ notes:
 '''
 
 EXAMPLES = '''
-- name: Add port ID to the portset
+- name: Add FC port to portset
   ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
-   clustername: "{{ cluster }}"
+   clustername: "{{ clustername }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: portset0
+   fcportid: 1
+   state: present
+- name: Add FC port to autozone-enabled portset (ignore autozone incapable ports)
+  ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
+   clustername: "{{ clustername }}"
+   username: "{{ username }}"
+   password: "{{ password }}"
+   name: portset0
+   fcportid: 1
+   state: present
+   ignoreautozoneincapable: true
+- name: Add multiple FC ports to portset
+  ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
+   clustername: "{{ clustername }}"
    username: "{{ username }}"
    password: "{{ password }}"
    name: portset1
-   fcportid: 3
+   fcportid: "{{ item }}"
    state: present
+  loop:
+   - 1
+   - 2
+   - 3
 - name: Remove port ID from portset
   ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
-   clustername: "{{ cluster }}"
+   clustername: "{{ clustername }}"
    username: "{{ username }}"
    password: "{{ password }}"
    name: portset1
@@ -98,7 +127,8 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
     IBMSVCRestApi, svc_argument_spec,
-    get_logger
+    get_logger,
+    is_feature_supported
 )
 from ansible.module_utils._text import to_native
 
@@ -121,6 +151,9 @@ class IBMSVFCPortsetmember:
                 fcportid=dict(
                     type='str',
                     required=True,
+                ),
+                ignoreautozoneincapable=dict(
+                    type='bool',
                 )
             )
         )
@@ -132,10 +165,11 @@ class IBMSVFCPortsetmember:
         self.name = self.module.params['name']
         self.state = self.module.params['state']
         self.fcportid = self.module.params['fcportid']
+        self.ignoreautozoneincapable = self.module.params.get('ignoreautozoneincapable')
 
         self.basic_checks()
 
-        # Varialbe to cache data
+        # Variable to cache data
         self.fcportsetmember_details = None
 
         # logging setup
@@ -161,15 +195,14 @@ class IBMSVFCPortsetmember:
             self.module.fail_json(msg='Missing mandatory parameter: name')
 
         if not self.fcportid:
-            self.module.fail_json(msg='Missing mandatory parameter: fcportid ')
+            self.module.fail_json(msg='Missing mandatory parameter: fcportid')
 
     def is_fcportsetmember_exists(self):
         merged_result = {}
-        cmd = 'lsfcportsetmember'
         cmdopts = {
             "filtervalue": "portset_name={0}:fc_io_port_id={1}".format(self.name, self.fcportid)
         }
-        data = self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        data = self.restapi.svc_obj_info(cmd='lsfcportsetmember', cmdopts=cmdopts, cmdargs=None)
 
         if isinstance(data, list):
             for d in data:
@@ -192,8 +225,24 @@ class IBMSVFCPortsetmember:
             'fcioportid': self.fcportid
         }
 
+        if self.ignoreautozoneincapable:
+            code_level = self.restapi.get_system_code_level()
+            if not code_level or not is_feature_supported('autozone_fields', code_level):
+                self.module.fail_json(
+                    msg="Parameter ignoreautozoneincapable is not supported in the current "
+                        f"code level ({code_level or 'unknown'}). Upgrade to 9.1.2.0 or later."
+                )
+            cmdopts['ignoreautozoneincapable'] = True
+
+        try:
+            self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
+        except Exception as e:
+            error_message = str(e)
+            if 'CMMVC1517E' in error_message:
+                self.log("FC IO port is not auto zoning capable. Set ignoreautozoneincapable to true to proceed.")
+            self.module.fail_json(msg=error_message)
+
         self.changed = True
-        self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('FCPortsetmember (%s) mapping is created with fcportid (%s) successfully.', self.name, self.fcportid)
 
     def remove_fcportsetmember(self):

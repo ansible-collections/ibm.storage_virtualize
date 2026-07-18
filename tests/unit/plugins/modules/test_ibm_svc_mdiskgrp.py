@@ -990,6 +990,218 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'], 'state=absent but following parameters have been passed: easytier, ext')
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_mdiskgrp_using_UUID_name(self,
+                                                     svc_authorize_mock,
+                                                     get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000001A',
+            'datareduction': 'no',
+            'easytier': 'auto',
+            'encrypt': 'no',
+            'ext': '1024',
+        }):
+            get_existing_pool_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleFailJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Mdisk group with UUID [60050768108180ED700000000000001A] does not exist and cannot be created.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_child_mdiskgrp_using_UUID_parentmdiskgrp(self,
+                                                             svc_authorize_mock,
+                                                             svc_run_command_mock,
+                                                             get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'child_pool',
+            'parentmdiskgrp': '60050768108180ED700000000000001B',
+            'size': 1024,
+            'unit': 'gb',
+            'ext': '1024',
+        }):
+            get_existing_pool_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[1]['parentmdiskgrp'], '60050768108180ED700000000000001B')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_child_mdiskgrp_using_UUID_parentmdiskgrp_idempotency(self,
+                                                                         svc_authorize_mock,
+                                                                         get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'child_pool',
+            'parentmdiskgrp': '60050768108180ED700000000000001B',
+            'size': 1024,
+            'unit': 'gb',
+            'ext': '1024',
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "1",
+                "name": "child_pool",
+                "parent_mdisk_grp_name": "60050768108180ED700000000000001B",
+                "status": "online"
+            }
+            pool_created = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_mdiskgrp_rename_using_UUID_old_name(self, mock_auth, mock_old, mock_cmd):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'old_name': '60050768108180ED700000000000001C',
+            'name': 'new_pool_name',
+            'state': 'present',
+        }):
+            mock_old.return_value = [
+                {
+                    "id": "1",
+                    "name": "60050768108180ED700000000000001C",
+                    "uuid": "60050768108180ED700000000000001C"
+                }
+            ]
+            mock_cmd.return_value = None
+            v = IBMSVCmdiskgrp()
+            data = v.mdiskgrp_rename([])
+            self.assertTrue(data)
+            # Verify UUID was stripped in the command
+            args, kwargs = mock_cmd.call_args
+            self.assertEqual(args[2][0], '60050768108180ED700000000000001C')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_mdiskgrp_rename_using_UUID_old_name_idempotency(self, mock_auth, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'old_name': '60050768108180ED700000000000001C',
+            'name': 'new_pool_name',
+            'state': 'present',
+        }):
+            svc_obj_info_mock.side_effect = [{
+                'id': '2',
+                'name': 'child_pool',
+                'easy_tier': 'auto',
+                'compressed_copy': 'no',
+                'uuid': "60050768108180ED700000000000001C"
+            }, {
+                'id': '2',
+                'name': 'child_pool',
+                'easy_tier': 'auto',
+                'compressed_copy': 'no',
+                'uuid': "60050768108180ED700000000000001C"
+            }]
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdiskgrp = IBMSVCmdiskgrp()
+                mdiskgrp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_mdiskgrp_using_UUID_name(self,
+                                             svc_authorize_mock,
+                                             svc_run_command_mock,
+                                             get_existing_pool_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'absent',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000001D',
+        }):
+            get_existing_pool_mock.return_value = {
+                "id": "0",
+                "name": "60050768108180ED700000000000001D",
+                "status": "online"
+            }
+            svc_run_command_mock.return_value = {}
+            pool_deleted = IBMSVCmdiskgrp()
+            with pytest.raises(AnsibleExitJson) as exc:
+                pool_deleted.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[2][0], '60050768108180ED700000000000001D')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_mdiskgrp_using_UUID_parentmdiskgrp_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when child mdiskgrp already exists with UUID parentmdiskgrp'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'child_pool',
+            'state': 'present',
+            'datareduction': 'no',
+            'easytier': 'auto',
+            'parentmdiskgrp': '60050768108180ED700000000000002B'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '2',
+                'name': 'child_pool',
+                'easy_tier': 'auto',
+                'compressed_copy': 'no',
+                'uuid': "60050768108180ED700000000000001C"
+            }
+            with pytest.raises(AnsibleExitJson) as exc:
+                mdiskgrp = IBMSVCmdiskgrp()
+                mdiskgrp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()

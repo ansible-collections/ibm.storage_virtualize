@@ -11,11 +11,11 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import inspect
-import uuid
+from uuid import getnode
 from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
-COLLECTION_VERSION = "3.3.0"
+COLLECTION_VERSION = "3.4.0"
 
 
 class IBMSVCssh(object):
@@ -118,7 +118,7 @@ class IBMSVCssh(object):
             cmd = 'svctask registerplugin'
             cmdopts = {}
             name = "Ansible"
-            unique_key = self.username + "_" + str(uuid.getnode())
+            unique_key = self.username + "_" + str(getnode())
             caller_class = inspect.stack()[2].frame.f_locals.get('self', None)
             caller_class_name = caller_class.__class__.__name__
             module_name = str(inspect.stack()[3].filename).rsplit('/', maxsplit=1)[-1]

@@ -4,6 +4,7 @@
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Sanjaikumaar M <sanjaikumaar.m@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta16@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -58,28 +59,30 @@ options:
         type: str
     name:
         description:
-            - Specifies the name of a snapshot.
+            - Specifies the name or UUID of a snapshot.
         type: str
     old_name:
         description:
-            - Specifies the old name of a snapshot.
+            - Specifies the old name or UUID of a snapshot.
             - Valid when I(state=present), to rename the existing snapshot.
         type: str
     src_volumegroup_name:
         description:
-            - Specifies the name of the source volume group for which the snapshot is being created.
+            - Specifies the name or UUID of the source volume group for which the snapshot is being created.
             - I(src_volumegroup_name) and I(src_volume_names) are mutually exclusive for creating snapshot.
             - Required one of I(src_volumegroup_name) or I(src_volume_names) for creation of snapshot.
         type: str
     src_volume_names:
         description:
-            - Specifies the name/UID of the volumes for which the snapshots are to be created.
+            - Specifies the name or UID of the volumes for which the snapshots are to be created.
             - List of volume names can be specified with the delimiter colon.
             - Valid when I(state=present), to create a snapshot.
         type: str
     snapshot_pool:
         description:
-            - Specifies the name of child pool within which the snapshot is being created.
+            - Specifies the name or UUID of child pool within which the snapshot is being created.
+            - This parameter is checked for idempotency ONLY when the snapshot is managed using C(src_volume_names). When C(src_volumegroup_name) is used,
+              validation is skipped for existing snapshots due to performance considerations.
         type: str
     ignorelegacy:
         description:
@@ -120,6 +123,7 @@ options:
 author:
     - Sanjaikumaar M (@sanjaikumaar)
     - Sumit Kumar Gupta (@sumitguptaibm)
+    - Sandip Gulab Rajbanshi (@sandip-rajbanshi)
 notes:
     - This module supports C(check_mode).
     - This module automates the new Snapshot function, implemented by Storage Virtualize, which is using a
@@ -214,6 +218,41 @@ EXAMPLES = '''
    password: '{{ password }}'
    name: ansible_new
    state: absent
+- name: Create volumegroup snapshot using UUID for source volumegroup
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: test_snapshot_uuid
+   src_volumegroup_name: 66197B52-9707-548D-8C42-E91A7D35F6B8
+   snapshot_pool: 252FB6EB-46EB-5B18-8C42-E91A7D35F6B8
+   state: present
+- name: Create volumegroup snapshot using UIDs from list of volumes
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: test_snapshot_uuid
+   src_volume_names: 6005076400810261F80000000000027E:6005076400810261F80000000000027D
+   snapshot_pool: 252FB6EB-46EB-5B18-8C42-E91A7D35F6B8
+   state: present
+- name: Rename snapshot using old_name UUID
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: test_snapshot_renamed
+   old_name: C2A27DD7-C5DA-5078-A7E3-5CB912F84D60
+   src_volumegroup_name: 66197B52-9707-548D-8C42-E91A7D35F6B8
+   state: present
+- name: Delete snapshot using UUID
+  ibm.storage_virtualize.ibm_sv_manage_snapshot:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: C2A27DD7-C5DA-5078-A7E3-5CB912F84D60
+   src_volumegroup_name: 66197B52-9707-548D-8C42-E91A7D35F6B8
+   state: absent
 '''
 
 RETURN = '''#'''
@@ -224,7 +263,8 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     IBMSVCRestApi,
     svc_argument_spec,
     strtobool,
-    get_logger
+    get_logger,
+    is_uuid
 )
 from ansible.module_utils._text import to_native
 
@@ -374,6 +414,12 @@ class IBMSVSnapshot:
         if self.old_name:
             self.rename_validation([])
 
+        if is_uuid(self.name):
+            self.module.fail_json(
+                msg='Snapshot cannot be created with UUID. Please specify '
+                    'user-defined snapshot name to create snapshot.'
+            )
+
         if not self.volumegroup and not self.volumes:
             self.module.fail_json(
                 msg='Either src_volumegroup_name or src_volume_names should be passed during snapshot creation.'
@@ -418,13 +464,18 @@ class IBMSVSnapshot:
         else:
             if self.lsv_data.get('snapshot_name') == old_name and not force:
                 return self.lsv_data
-            cmdopts = {
-                "filtervalue": "snapshot_name={0}".format(old_name)
-            }
+            if is_uuid(old_name):
+                cmdopts = {
+                    "filtervalue": "snapshot_id={0}".format(old_name)
+                }
+            else:
+                cmdopts = {
+                    "filtervalue": "snapshot_name={0}".format(old_name)
+                }
             result = self.restapi.svc_obj_info(
                 cmd='lsvolumesnapshot',
                 cmdopts=cmdopts,
-                cmdargs=None
+                cmdargs=['-gui']
             )
             try:
                 data = next(
@@ -449,16 +500,28 @@ class IBMSVSnapshot:
         cmdopts = {
             'snapshot': old_name
         }
-        if parentuid:
+        cmdargs = None
+        if is_uuid(old_name):
+            cmdopts.pop('snapshot')
+            cmdargs = [old_name]
+        elif parentuid:
             cmdopts['parentuid'] = self.parentuid
         else:
+            if is_uuid(self.volumegroup):
+                vg_info = self.restapi.svc_obj_info(
+                    'lsvolumegroup',
+                    None,
+                    [self.volumegroup])
+                vg_name = vg_info.get("name", None)
+                if vg_name:
+                    self.volumegroup = vg_name
             cmdopts['volumegroup'] = self.volumegroup
 
         data = {}
         result = self.restapi.svc_obj_info(
             cmd='lsvolumegroupsnapshot',
             cmdopts=cmdopts,
-            cmdargs=None
+            cmdargs=cmdargs
         )
 
         if isinstance(result, list):
@@ -511,7 +574,10 @@ class IBMSVSnapshot:
         cmdopts = {
             'snapshot': self.name
         }
-        if self.volumegroup:
+        if is_uuid(self.name):
+            cmdopts.pop('snapshot')
+            cmdopts['snapshotid'] = self.name
+        elif self.volumegroup:
             cmdopts['volumegroup'] = self.volumegroup
         if self.volumes:
             if snapshot_data.get("ha_state") == "highly_available":
@@ -542,6 +608,38 @@ class IBMSVSnapshot:
                 msg='Following parameter not applicable for update operation: safeguarded'
             )
 
+        if self.snapshot_pool and not self.volumegroup and self.lsv_data:
+            self.log('Performing snapshot_pool validation for volume snapshot %s.', self.name)
+            expected_pool = self.snapshot_pool
+            if is_uuid(self.snapshot_pool):
+                try:
+                    self.log('snapshot_pool provided as UUID. Fetching pool details for %s.', self.snapshot_pool)
+                    pool_info = self.restapi.svc_obj_info('lsmdiskgrp', None, [self.snapshot_pool])
+                    if isinstance(pool_info, dict) and 'name' in pool_info:
+                        expected_pool = pool_info['name']
+                        self.log('Resolved snapshot_pool UUID to pool name: %s', expected_pool)
+                    elif isinstance(pool_info, list) and pool_info and 'name' in pool_info[0]:
+                        expected_pool = pool_info[0]['name']
+                        self.log('Resolved snapshot_pool UUID to pool name: %s', expected_pool)
+                    else:
+                        self.log('Could not resolve UUID %s to a pool name. Using UUID for validation.', self.snapshot_pool)
+                except Exception as e:
+                    self.log('Failed to fetch pool details for UUID %s: %s. Using UUID for validation.', self.snapshot_pool, to_native(e))
+
+            pool_id = self.lsv_data.get('pool_1_id')
+            pool_name = self.lsv_data.get('pool_1_name')
+            self.log('Snapshot is currently in pool_id: %s, pool_name: %s. Expected pool: %s', pool_id, pool_name, expected_pool)
+
+            if pool_name and expected_pool not in (pool_id, pool_name):
+                self.log('Snapshot pool validation failed: existing pool %s does not match expected %s', pool_name, expected_pool)
+                self.module.fail_json(
+                    msg='Snapshot ({0}) already exists in a different pool ({1}). Cannot change pool of an existing snapshot.'.format(
+                        self.name, pool_name
+                    )
+                )
+            else:
+                self.log('Snapshot pool validation passed.')
+
         self.log('Snapshot probe result: %s', updates)
         return updates
 
@@ -553,12 +651,17 @@ class IBMSVSnapshot:
         old_name = self.old_name if self.old_name else self.name
         cmd = 'chsnapshot'
         cmdopts = dict((k, getattr(self, k)) for k in updates)
-        cmdopts['snapshot'] = old_name
 
-        if self.volumegroup:
-            cmdopts['volumegroup'] = self.volumegroup
+        # Handle UUID for old_name/snapshot parameter
+        if is_uuid(old_name):
+            cmdopts['snapshotid'] = old_name
         else:
-            cmdopts['parentuid'] = self.parentuid
+            cmdopts['snapshot'] = old_name
+
+            if self.volumegroup:
+                cmdopts['volumegroup'] = self.volumegroup
+            else:
+                cmdopts['parentuid'] = self.parentuid
         self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=None)
         self.changed = True
 
@@ -571,18 +674,21 @@ class IBMSVSnapshot:
         cmdopts = {
             'snapshot': self.name
         }
-
-        if self.volumegroup:
+        cmdargs = None
+        if is_uuid(self.name):
+            cmdopts.pop('snapshot')
+            cmdopts['snapshotid'] = self.name
+        elif self.volumegroup:
             cmdopts['volumegroup'] = self.volumegroup
         else:
             cmdopts['parentuid'] = self.parentuid
 
-        self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=None)
+        self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=cmdargs)
         self.changed = True
 
         still_exists = self.is_snapshot_exists(force=True)
         if still_exists:
-            self.msg = 'Snapshot ({0}) will be in the dependent_delete '\
+            self.msg = 'Snapshot ({0}) will be in the dependent_deleting '\
                        'state until those dependencies are removed'.format(self.name)
         else:
             self.msg = 'Snapshot ({0}) deleted.'.format(self.name)

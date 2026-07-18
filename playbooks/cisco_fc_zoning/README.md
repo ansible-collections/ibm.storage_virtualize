@@ -73,21 +73,28 @@ The automation consists of two playbooks:
 ## Sample Playbook Usage
 - On the FlashSystem cluster, create an FC portset with auto-zoning enabled:
   ```yaml
-  - name: Create a portset
-    ibm.storage_virtualize.ibm_svctask_command:
-      command: "svctask mkportset -name {{ portset_name }} -porttype fc -autozoneenabled yes"
+  - name: Create an FC portset
+    ibm.storage_virtualize.ibm_svc_manage_portset:
       clustername: "{{ clustername }}"
       username: "{{ username }}"
       password: "{{ password }}"
+      name: ab_portset
+      porttype: fc
+      autozoneenabled: 'yes'
+      state: present
   ```
-- Associate FlashSystem Fibre Channel I/O port ID that will be used for host connectivity to this portset.
+- Add the FlashSystem FC ports connected to the Cisco switch to the portset for which zoning needs to be managed.
+    > **Note:** Ensure the `ignoreautozoneincapable` flag is used when adding ports.
   ```yaml
   - name: Add port ID to the portset
-    ibm.storage_virtualize.ibm_svctask_command:
-      command: "svctask addfcportsetmember -portset {{ portset_name }} -fcioportid {{ fcioportid }} -ignoreautozoneincapable"
+    ibm.storage_virtualize.ibm_sv_manage_fcportsetmember:
       clustername: "{{ clustername }}"
       username: "{{ username }}"
       password: "{{ password }}"
+      name: ab_portset
+      fcportid: 1
+      ignoreautozoneincapable: true
+      state: present
   ```
 > [!NOTE]
 > Ensure the `ignoreautozoneincapable` flag is used when adding ports.
@@ -95,7 +102,7 @@ The automation consists of two playbooks:
   ```yaml
   - name: Create a host and map to portset
     ibm.storage_virtualize.ibm_svctask_command:
-      command: "svctask mkhost -fcwwpn {{ fcwwpn }} -portset {{ portset_name }}"
+      command: "svctask mkhost -name ab_host -fcwwpn 2100000E1EE89F7E:2100000E1EE89F7F -portset ab_portset"
       clustername: "{{ clustername }}"
       username: "{{ username }}"
       password: "{{ password }}"

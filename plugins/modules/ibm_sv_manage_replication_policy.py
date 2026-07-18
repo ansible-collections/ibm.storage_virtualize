@@ -57,7 +57,7 @@ options:
         type: str
     name:
         description:
-            - Specifies the name of the replication policy.
+            - Specifies the name or UUID of the replication policy.
         type: str
         required: true
     topology:
@@ -94,7 +94,7 @@ options:
         type: bool
     partition:
         description:
-            - Specifies the name of the storage partition to be assigned to async-dr replication policy.
+            - Specifies the name or UUID of the storage partition to be assigned to async-dr replication policy.
             - Applies when I(state=present).
             - Supported from Storage Virtualize family systems 8.7.1.0 or later.
         type: str
@@ -162,6 +162,23 @@ EXAMPLES = '''
     location2iogrp: 0
     state: present
     ha_snapshots: "yes"
+- name: Create DR replication policy with partition UUID
+  ibm.storage_virtualize.ibm_sv_manage_replication_policy:
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: test_dr_repl_policy
+    topology: async-dr
+    partition: 66197B52-9707-548D-8C42-E91A7D35F6B8
+    rpoalert: 60
+    state: present
+- name: Delete replication policy using UUID
+  ibm.storage_virtualize.ibm_sv_manage_replication_policy:
+    clustername: "{{ cluster }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: 66197B52-9707-548D-8C42-E91A7D35F6C8
+    state: absent
 '''
 
 RETURN = '''#'''
@@ -170,7 +187,8 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
     IBMSVCRestApi, svc_argument_spec,
-    get_logger
+    get_logger,
+    is_uuid
 )
 from ansible.module_utils._text import to_native
 
@@ -247,7 +265,6 @@ class IBMSVReplicationPolicy:
         self.changed = False
         self.msg = ''
         self.rp_data = {}
-
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -352,6 +369,11 @@ class IBMSVReplicationPolicy:
             props['location1system'] = self.location1system
         if self.location2system and self.location2system != data.get('location2_system_name') and self.location2system != data.get('location2_system_id'):
             props['location1system'] = self.location1system
+        if 'partition' in props:
+            if is_uuid(self.partition) and data.get('partition_uuid'):
+                partition_info = self.restapi.svc_obj_info(cmd='lspartition', cmdopts=None, cmdargs=[data.get('partition_name')])
+                if partition_info and self.partition == partition_info.get('partition_uuid'):
+                    props.pop('partition')
         self.log("Replication policy modification data: %s", props)
         return props
 
@@ -370,6 +392,8 @@ class IBMSVReplicationPolicy:
             if self.state == 'absent':
                 self.msg = 'Replication policy ({0}) does not exists.'.format(self.name)
             else:
+                if is_uuid(self.name):
+                    self.module.fail_json(msg='Replication policy with specified UUID ({0}) does not exist and cannot be created.'.format(self.name))
                 self.create_replication_policy()
                 self.msg = 'Replication policy ({0}) created.'.format(self.name)
 

@@ -22,7 +22,7 @@ description:
 options:
     name:
         description:
-            - Specifies the name for the volume group.
+            - Specifies the name or UUID for the volume group.
         required: true
         type: str
     state:
@@ -91,7 +91,7 @@ options:
         type: bool
     snapshotpolicy:
         description:
-            - The name of the snapshot policy to be assigned to the volume group.
+            - The name or UUID of the snapshot policy to be assigned to the volume group.
             - I(snapshotpolicy) is mutually exclusive with parameters I(nosnapshotpolicy) and I(ownershipgroup).
             - Applies when I(state=present).
         type: str
@@ -128,20 +128,20 @@ options:
         version_added: 1.9.0
     snapshot:
         description:
-            - Specifies the name of the snapshot used to prepopulate the new volumes in the new volume group.
+            - Specifies the name or UUID of the snapshot used to prepopulate the new volumes in the new volume group.
             - Required when creating a host accessible volume group from an existing snapshot.
         type: str
         version_added: 1.9.0
     fromsourcegroup:
         description:
-            - Specifies the parent volume group of the snapshot. This is used to prepopulate the new volume in the
-              new volume group.
+            - Specifies the name or UUID of the parent volume group of the snapshot.
+            - This is used to create clone/thinclone from the source volume group.
             - Valid during creation of host accessible volume group from an existing snapshot.
         type: str
         version_added: 1.9.0
     pool:
         description:
-            - Specifies the pool name where the target volumes are to be created.
+            - Specifies the name or UUID of the pool where the target volumes are to be created.
             - Valid during creation of host accessible volume group from an existing snapshot.
         type: str
         version_added: 1.9.0
@@ -172,7 +172,7 @@ options:
         version_added: 1.10.0
     replicationpolicy:
         description:
-            - Specifies the name of the replication policy to be assigned to the volume group.
+            - Specifies the name or UUID of the replication policy to be assigned to the volume group.
             - Applies when I(state=present).
             - Supported from Storage Virtualize family systems 8.5.2.1 or later.
         type: str
@@ -187,13 +187,13 @@ options:
         version_added: 1.10.0
     old_name:
         description:
-            - Specifies the old name of the volume group during renaming.
+            - Specifies the old name or UUID of the volume group during renaming.
             - Valid when I(state=present), to rename an existing volume group.
         type: str
         version_added: '2.0.0'
     partition:
         description:
-            - Specifies the name of the storage partition to be assigned to the volume group.
+            - Specifies the name or UUID of the storage partition to be assigned to the volume group.
             - Applies when I(state=present).
             - Supported from Storage Virtualize family systems 8.6.1.0 or later.
         type: str
@@ -207,7 +207,7 @@ options:
         version_added: 2.2.0
     fromsourcevolumes:
         description:
-            - Specifies colon-separated list of the parent volumes name/UID.
+            - Specifies colon-separated list of the parent volumes name or UID.
             - When combined with the type parameter and a snapshot, this allows the user to create a volumegroup with a
               subset of those volumes whose image is present in a snapshot.
             - Applies when I(state=present) to create volumegroup clone or thinclone, from subset of volumes of snapshot.
@@ -216,7 +216,7 @@ options:
         version_added: 2.3.0
     draftpartition:
         description:
-            - Specifies the name of the draft partition to be assigned to the volume group.
+            - Specifies the name or UUID of the draft partition to be assigned to the volume group.
             - Applies when I(state=present).
             - Supported from Storage Virtualize family systems 8.6.3.0 or later.
         type: str
@@ -330,6 +330,73 @@ EXAMPLES = '''
     fromsourcevolumes: vol1:vol2
     pool: Pool0
     state: present
+- name: Create volume group with snapshot policy UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_snap_policy
+    state: present
+    snapshotpolicy: C2A27DD7-C5DA-5078-9D2C-A761F84B305E
+- name: Create volume group with pool UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_pool_uuid
+    state: present
+    pool: E7D01628-9B02-5FE9-9A73-E1F4C6208D5B
+- name: Rename volume group specifying volume group's UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_renamed
+    old_name: E7D01628-9B02-5FE9-9A73-E1F4C6208D5B
+    state: present
+- name: Create volume group from snapshot UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_from_snapshot
+    state: present
+    snapshot: C2A27DD7-C5DA-5078-BC15-8E72D4A930F6
+    pool: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+- name: Create volume group from source group UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_cloned
+    state: present
+    fromsourcegroup: E7D01628-9B02-5FE9-9A73-E1F4C6208D5B
+    snapshot: C2A27DD7-C5DA-5078-BC15-8E72D4A930F6
+    pool: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+- name: Create volume group from source volumes UID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: test_vg_from_vols
+    state: present
+    fromsourcevolumes: 6005076400810261F80000000000027I:6005076400810261F80000000000027Z
+    snapshot: C2A27DD7-C5DA-5078-BC15-8E72D4A930F6
+    pool: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+- name: Delete volume group using UUID
+  ibm.storage_virtualize.ibm_svc_manage_volumegroup:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+    state: absent
 - name: Create a volumegroup clone from a list of volumes
   ibm.storage_virtualize.ibm_svc_manage_volumegroup:
     clustername: "{{ clustername }}"
@@ -389,9 +456,11 @@ RETURN = '''#'''
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import \
-    IBMSVCRestApi, svc_argument_spec, get_logger, strtobool
+    IBMSVCRestApi, svc_argument_spec, get_logger, strtobool, is_uuid
 from ansible.module_utils._text import to_native
 import random
+
+UUID = 'uuid'
 
 
 class IBMSVCVG(object):
@@ -540,6 +609,8 @@ class IBMSVCVG(object):
             self.module.fail_json(msg="Parameters {0} not supported while renaming a volume group.".format(', '.join(parameters_exists)))
 
     def create_validation(self):
+        if is_uuid(self.name):
+            self.module.fail_json(msg='Volume group with UUID [{0}] does not exist and cannot be created.'.format(self.name))
         mutually_exclusive = (
             ('ownershipgroup', 'safeguardpolicyname'),
             ('ownershipgroup', 'snapshotpolicy'),
@@ -564,6 +635,10 @@ class IBMSVCVG(object):
         if unsupported_exists:
             self.module.fail_json(
                 msg='Following parameters not supported during creation scenario: {0}'.format(unsupported_exists)
+            )
+        if self.snapshot and not self.type:
+            self.module.fail_json(
+                msg='Parameter `type` is required when creating a volumegroup from an existing snapshot.'
             )
 
     def update_validation(self, data):
@@ -613,9 +688,11 @@ class IBMSVCVG(object):
             ('fromsourcegroup', data.get('source_volume_group_name', '')),
             ('partition', data.get('partition_name', ''))
         )
-        unsupported = (
+        unsupported = [
             fields[0] for fields in unsupported_maps if getattr(self, fields[0]) and getattr(self, fields[0]) != fields[1]
-        )
+        ]
+        if is_uuid(self.partition) and 'partition' in unsupported:
+            unsupported.remove('partition')
         unsupported_exists = ', '.join(unsupported)
 
         if unsupported_exists:
@@ -626,6 +703,7 @@ class IBMSVCVG(object):
     def get_existing_vg(self, vg_name):
         merged_result = {}
 
+        # Strip UUID prefix if present
         data = self.restapi.svc_obj_info(cmd='lsvolumegroup', cmdopts=None,
                                          cmdargs=['-gui', vg_name])
 
@@ -682,13 +760,15 @@ class IBMSVCVG(object):
             # Make a set from source volumes of all volumes
             if volumes_data:
                 source_volumes_set = set()
-                source_volumes_pool_set = set()
                 for volume_data in volumes_data:
                     # Add the value of 'source_volume_name' to the merged_result
                     source_volumes_set.add(volume_data['source_volume_name'])
                 merged_result['source_volumes_set'] = source_volumes_set
                 # If pool is provided, verify that pool matches with the one provided in command
                 if self.pool:
+                    if is_uuid(self.pool):
+                        pool_data = self.restapi.svc_obj_info(cmd='lsmdiskgrp', cmdopts=None, cmdargs=[self.pool])
+                        self.pool = pool_data.get('name')
                     cmd = 'lsvdisk'
                     cmdopts = {"filtervalue": "parent_mdisk_grp_name={0}".format(self.pool)}
 
@@ -696,12 +776,11 @@ class IBMSVCVG(object):
                     remaining_vdisks = len(source_volumes_set)
                     for vdisk_data in vdisks_data:
                         if vdisk_data['name'] in source_volumes_set:
-                            source_volumes_pool_set.add(vdisk_data['parent_mdisk_grp_name'])
                             remaining_vdisks = remaining_vdisks - 1
                             if remaining_vdisks == 0:
                                 break
-
-                merged_result['source_volumes_pool_set'] = source_volumes_pool_set
+                    if remaining_vdisks != 0:
+                        self.module.fail_json(msg="Provided pool [{0}] does not match the pool of one or more source volumes.".format(self.pool))
 
         return merged_result
 
@@ -775,6 +854,11 @@ class IBMSVCVG(object):
                 self.log("Partition [%s] which contains Volumegroup [%s] is already published.", self.draftpartition, self.name)
             elif self.draftpartition == data.get("draft_partition_name"):
                 self.log("Partition [%s] which contains Volumegroup [%s] is already in draft state.", self.draftpartition, self.name)
+            elif is_uuid(self.draftpartition) and data.get("draft_partition_name"):
+                dp_uuid = self.restapi.svc_obj_info('lspartition', cmdopts=None, cmdargs=[data.get('draft_partition_name', '')]).get(UUID, '')
+                if dp_uuid == self.draftpartition:
+                    props.pop("draftpartition")
+                    self.log("Partition [%s] which contains Volumegroup [%s] is already in draft state.", self.draftpartition, self.name)
 
         # Adding snapshotpolicysuspended to props
         if self.snapshotpolicysuspended and self.snapshotpolicysuspended != data.get('snapshot_policy_suspended', ''):
@@ -784,6 +868,27 @@ class IBMSVCVG(object):
             # Handle cases other than '' to clone
             if not (data.get('volume_group_type') == '' and self.type == 'clone'):
                 props['type'] = self.type
+
+        if is_uuid(self.partition) and data.get('partition_name', ''):
+            ptn_uuid = self.restapi.svc_obj_info('lspartition', cmdopts=None, cmdargs=[data.get('partition_name', '')]).get(UUID, '')
+            if ptn_uuid == self.partition:
+                props.pop('partition')
+
+        if is_uuid(self.snapshotpolicy) and data.get('snapshot_policy_name', ''):
+            sp_uuid = self.restapi.svc_obj_info('lssnapshotpolicy', cmdopts=None, cmdargs=[data.get('snapshot_policy_name', '')])[0].get(UUID, '')
+            if sp_uuid == self.snapshotpolicy:
+                if 'snapshotpolicy' in props:
+                    props.pop('snapshotpolicy')
+                # Also remove safeguarded if it was added due to snapshotpolicy mismatch and value matches existing
+                if 'safeguarded' in props:
+                    # Check if safeguarded value actually needs to change
+                    if self.safeguarded in ('', None) or self.safeguarded == strtobool(data.get('snapshot_policy_safeguarded', 0)):
+                        props.pop('safeguarded')
+
+        if is_uuid(self.replicationpolicy) and data.get('replication_policy_name', ''):
+            rp_uuid = self.restapi.svc_obj_info('lsreplicationpolicy', cmdopts=None, cmdargs=[data.get('replication_policy_name', '')]).get(UUID, '')
+            if rp_uuid == self.replicationpolicy:
+                props.pop('replicationpolicy')
 
         self.log("volumegroup props = %s", props)
 
@@ -798,7 +903,8 @@ class IBMSVCVG(object):
         snapshot_opts['name'] = snapshot_name
 
         # Optional parameters
-        snapshot_opts['pool'] = self.module.params.get('pool', '')
+        pool = self.module.params.get('pool', '')
+        snapshot_opts['pool'] = pool
         snapshot_opts['volumes'] = self.module.params.get('fromsourcevolumes', '')
         snapshot_opts['retentionminutes'] = 5
 
@@ -829,7 +935,8 @@ class IBMSVCVG(object):
             )
             if self.iogrp:
                 cmdopts['iogroup'] = self.iogrp
-
+            if "pool" in cmdopts and is_uuid(self.pool):
+                cmdopts['pool'] = self.pool
             if self.fromsourcevolumes:
                 cmdopts['fromsourcevolumes'] = self.fromsourcevolumes
                 if not self.snapshot:
@@ -920,7 +1027,6 @@ class IBMSVCVG(object):
                 elif field in modify:
                     cmdopts[field] = modify.pop(field)
                     self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
-
             if modify:
                 cmdopts = modify
                 self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
@@ -953,7 +1059,10 @@ class IBMSVCVG(object):
         if not old_vg_data and not vg_data:
             self.module.fail_json(msg="Volume group with old name {0} doesn't exist.".format(self.old_name))
         elif old_vg_data and vg_data:
-            self.module.fail_json(msg="Volume group [{0}] already exists.".format(self.name))
+            if old_vg_data.get("uuid") == vg_data.get("uuid"):
+                msg = "Volume group with name [{0}] already exists.".format(self.name)
+            else:
+                self.module.fail_json(msg="Volume group [{0}] already exists.".format(self.name))
         elif not old_vg_data and vg_data:
             msg = "Volume group with name [{0}] already exists.".format(self.name)
         elif old_vg_data and not vg_data:
@@ -961,6 +1070,7 @@ class IBMSVCVG(object):
             if self.module.check_mode:
                 self.changed = True
                 return
+
             self.restapi.svc_run_command('chvolumegroup', {'name': self.name}, [self.old_name])
             self.changed = True
             msg = "Volume group [{0}] has been successfully rename to [{1}].".format(self.old_name, self.name)
@@ -1007,11 +1117,6 @@ class IBMSVCVG(object):
                                 if volumes_with_existing_vg != provided_volumes_set:
                                     self.module.fail_json(
                                         msg="Parameter [fromsourcevolumes] is invalid for modifying volumegroup.",
-                                        changed=self.changed
-                                    )
-                                elif self.pool and vg_data['source_volumes_pool_set'] and (list(vg_data['source_volumes_pool_set'])[0] != self.pool):
-                                    self.module.fail_json(
-                                        msg="Parameter [pool] is invalid for modifying volumegroup.",
                                         changed=self.changed
                                     )
                                 else:

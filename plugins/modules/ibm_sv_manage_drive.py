@@ -207,9 +207,9 @@ class IBMSVDriveMgmt(object):
             if result == "":
                 self.changed = True
                 self.msg = "Drive usability state changed successfully for drive ID %s." % self.drive_id
-        else:
-            # Show SVC error message to user
-            self.module.fail_json(msg=result, changed=False)
+            else:
+                # Show SVC error message to user
+                self.module.fail_json(msg=result, changed=False)
         return
 
     def apply(self):

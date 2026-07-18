@@ -370,8 +370,8 @@ class IBMSVManageSystemCert:
                 certificate_name, target_certificate_name = export_exchange_cert('default')
 
         else:
-            source_build_version = float(target_system_code_level.split(" ")[0][:3])
-            source_patch = target_system_code_level.split(" ")[0][4:5]
+            source_build_version = float(source_system_code_level.split(" ")[0][:3])
+            source_patch = source_system_code_level.split(" ")[0][4:5]
             if float(source_build_version) == 8.7 and source_patch == "3":
                 certificate_name, target_certificate_name = export_exchange_cert('root_ca')
             else:

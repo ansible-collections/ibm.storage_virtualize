@@ -242,6 +242,35 @@ class TestIBMSVDriveMgmt(unittest.TestCase):
             print(exc.value.args[0])
             self.assertTrue(exc.value.args[0]['failed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    def test_failure_change_drive_state_when_svc_returns_error(self,
+                                                               svc_run_command_mock,
+                                                               svc_authorize_mock):
+        '''
+        Test that changing drive_state fails when SVC returns an error string.
+        '''
+
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'drive_state': 'candidate',
+            'drive_id': 10
+        }):
+            svc_run_command_mock.return_value = 'CMMVC0000E failed to update drive state'
+            rp = IBMSVDriveMgmt()
+
+            with pytest.raises(AnsibleFailJson) as exc:
+                rp.apply()
+
+            self.assertEqual('CMMVC0000E failed to update drive state', exc.value.args[0]['msg'])
+            self.assertFalse(exc.value.args[0].get('changed', True))
+            self.assertTrue(exc.value.args[0]['failed'])
+
 
 if __name__ == '__main__':
     unittest.main()

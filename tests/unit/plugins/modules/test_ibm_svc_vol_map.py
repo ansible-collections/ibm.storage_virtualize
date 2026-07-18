@@ -370,6 +370,210 @@ class TestIBMSVCvdiskhostmap(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             get_existing_vdiskhostmap_mock.assert_called_with()
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_vol_map.IBMSVCvdiskhostmap.get_existing_vdiskhostmap')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_vdiskhostmap_create_using_UUID_volname(self, svc_authorize_mock,
+                                                    svc_run_command_mock,
+                                                    get_existing_vdiskhostmap_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'volname': '60050768108180ED7000000000000027',
+            'host': 'host4test',
+        }):
+            get_existing_vdiskhostmap_mock.return_value = []
+            svc_run_command_mock.return_value = {"message": "success"}
+            host_mapping_created = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                host_mapping_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[2][0], '60050768108180ED7000000000000027')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_vol_map.IBMSVCvdiskhostmap.get_existing_vdiskhostmap')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_vdiskhostmap_create_using_UUID_host(self, svc_authorize_mock,
+                                                 svc_run_command_mock,
+                                                 get_existing_vdiskhostmap_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'volname': 'volume0',
+            'host': 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6',
+        }):
+            get_existing_vdiskhostmap_mock.return_value = []
+            svc_run_command_mock.return_value = {"message": "success"}
+            host_mapping_created = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                host_mapping_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[1]['host'], 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_vdiskhostmap_create_using_UUID_volname_and_host_idempotency(self,
+                                                                         svc_authorize_mock,
+                                                                         svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'volname': '60050768108180ED7000000000000027',
+            'host': 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6',
+        }):
+            mapping_ret = [{
+                "id": "0",
+                "name": "60050768108180ED7000000000000027",
+                "SCSI_id": "0",
+                "host_id": "14",
+                "host_name": "host_test",
+                "vdisk_UID": "60050768108180ED7000000000000027",
+                "IO_group_id": "0",
+                "IO_group_name": "io_grp0",
+                "mapping_type": "private",
+                "host_cluster_id": "",
+                "host_cluster_name": "",
+                "protocol": "scsi"
+            }]
+            svc_obj_info_mock.side_effect = [
+                mapping_ret,  # get_existing_vdiskhostmap
+                {"uuid": "C2A27DD7-C5DA-5078-BC15-8E72D4A930F6"}  # lshost for UUID check
+            ]
+            host_mapping_created = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                host_mapping_created.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_vol_map.IBMSVCvdiskhostmap.get_existing_vdiskhostmap')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_vdiskhostmap_delete_using_UUID_volname_and_host(self, svc_authorize_mock,
+                                                             svc_run_command_mock,
+                                                             get_existing_vdiskhostmap_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'absent',
+            'username': 'username',
+            'password': 'password',
+            'volname': '60050768108180ED7000000000000029',
+            'host': 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6',
+        }):
+            mapping_ret = [{
+                "id": "0",
+                "name": "60050768108180ED7000000000000029",
+                "host_name": "host_test"
+            }]
+            get_existing_vdiskhostmap_mock.return_value = mapping_ret
+            svc_run_command_mock.return_value = {}
+            host_mapping_deleted = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                host_mapping_deleted.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[2][0], '60050768108180ED7000000000000029')
+            self.assertEqual(args[1]['host'], 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_map_volume_using_UUID_volname_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when volume mapping already exists with UUID volname'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'volname': '60050768108180ED700000000000001A',
+            'host': 'host1',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': '60050768108180ED700000000000001A',
+                'host_name': 'host1'
+            }
+            vol_map = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                vol_map.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_map_volume_using_UUID_host_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when volume mapping already exists with UUID host'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'volname': 'vol1',
+            'host': 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': 'vol1',
+                'host_name': 'C2A27DD7-C5DA-5078-BC15-8E72D4A930F6'
+            }
+            vol_map = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                vol_map.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_map_volume_using_UUID_hostcluster_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when volume mapping already exists with UUID hostcluster'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'volname': 'vol1',
+            'hostcluster': 'E7D01628-9B02-5FE9-8F21-C7A4D9635E10',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': 'vol1',
+                'host_cluster_name': 'E7D01628-9B02-5FE9-8F21-C7A4D9635E10'
+            }
+            vol_map = IBMSVCvdiskhostmap()
+            with pytest.raises(AnsibleExitJson) as exc:
+                vol_map.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()

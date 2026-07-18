@@ -20,7 +20,7 @@ description:
 options:
     name:
         description:
-            - Specifies a name or label for the new host cluster object.
+            - Specifies a name or label or UUID for the new host cluster object.
         required: true
         type: str
     state:
@@ -82,7 +82,7 @@ options:
         version_added: '2.7.0'
     partition:
         description:
-            - Specifies the partition or draft partition name in which user wants to create the hostcluster.
+            - Specifies the partition or draft partition name or UUID in which user wants to create the hostcluster.
             - Valid when I(state=present), to create and modify an existing hostcluster.
         type: str
         version_added: '3.0.0'
@@ -166,14 +166,38 @@ EXAMPLES = '''
     name: hostcluster0
     state: absent
     removeallhosts: 'True'
+- name: Create a host cluster with partition UUID
+  ibm.storage_virtualize.ibm_svc_hostcluster:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: hostcluster_with_partition_uuid
+    state: present
+    partition: E7D01628-9B02-5FE9-A3C7-4D9182F6B05E
+- name: Delete a host cluster using UUID
+  ibm.storage_virtualize.ibm_svc_hostcluster:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: E7D01628-9B02-5FE9-A3C7-4D9182F6B05E
+    state: absent
 '''
 
 RETURN = '''#'''
 
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
+    IBMSVCRestApi,
+    is_uuid,
+    svc_argument_spec,
+    get_logger
+)
 from ansible.module_utils._text import to_native
+
+UUID = 'uuid'
 
 
 class IBMSVChostcluster(object):
@@ -214,6 +238,7 @@ class IBMSVChostcluster(object):
         self.site = self.module.params.get('site', '')
         self.partition = self.module.params.get('partition', '')
         self.removemappings = self.module.params.get('removemappings', '')
+
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -257,18 +282,37 @@ class IBMSVChostcluster(object):
             props.append('noownershipgroup')
 
         if self.partition:
-            partition_result = self.get_existing_partition(self.partition)
-            if not partition_result:
-                self.module.fail_json(msg="Partition [{0}] does not exist".format(self.partition))
-
-            if partition_result.get('draft') == 'yes':
-                if self.partition != data['draft_partition_name']:
-                    if data['partition_name']:
-                        self.module.fail_json(msg="Hostcluster is already associated with a partition.")
-                    props.append('partition')
+            partition_uuid = self.partition
+            if is_uuid(self.partition):
+                partition_result = self.get_existing_partition(partition_uuid)
+                if not partition_result:
+                    self.module.fail_json(msg="Partition [{0}] does not exist".format(self.partition))
+                if partition_result.get('draft') == 'yes':
+                    draft_ptn_uuid = self.get_existing_partition(data['draft_partition_name']).get(UUID, '')
+                    if draft_ptn_uuid != partition_uuid:
+                        if data['draft_partition_name']:
+                            self.module.fail_json(msg="Hostcluster is already associated with a draft partition.")
+                        props.append('partition')
+                else:
+                    ptn_uuid = self.get_existing_partition(data['partition_name']).get(UUID, '')
+                    if ptn_uuid != partition_uuid:
+                        self.module.fail_json(msg="Published partition cannot be used while updating host cluster")
+                # UUID is used for both partition and draft partition, and for validation
+                # we need to send two rest-api call, so its better to send one rest-api with
+                # specified partition UUID and let svc decide.
             else:
-                if self.partition != data['partition_name']:
-                    self.module.fail_json(msg="Published partition is not supported while updating host cluster")
+                partition_result = self.get_existing_partition(self.partition)
+                if not partition_result:
+                    self.module.fail_json(msg="Partition [{0}] does not exist".format(self.partition))
+
+                if partition_result.get('draft') == 'yes':
+                    if self.partition != data['draft_partition_name']:
+                        if data['partition_name']:
+                            self.module.fail_json(msg="Hostcluster is already associated with a partition.")
+                        props.append('partition')
+                else:
+                    if self.partition != data['partition_name']:
+                        self.module.fail_json(msg="Published partition cannot be used while updating host cluster")
 
         if self.site:
             if data['host_count'] == '0':
@@ -297,6 +341,8 @@ class IBMSVChostcluster(object):
         return props
 
     def hostcluster_create(self):
+        if is_uuid(self.name):
+            self.module.fail_json(msg="Host cluster with UUID [%s] does not exist and cannot be created." % self.name)
         if self.module.check_mode:
             self.changed = True
             return

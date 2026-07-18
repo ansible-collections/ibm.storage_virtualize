@@ -617,6 +617,180 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
                 rp.apply()
             self.assertTrue(exc.value.args[0]['failed'])
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_create_replication_policy_using_UUID_name(self,
+                                                               svc_authorize_mock,
+                                                               rp_exists_mock):
+        '''Test creating a replication policy using UUID for name parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED70000000000000B1',
+            'topology': '2-site-async-dr',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'rpoalert': 60,
+            'state': 'present'
+        }):
+            rp_exists_mock.return_value = {}
+            rp = IBMSVReplicationPolicy()
+
+            with pytest.raises(AnsibleFailJson) as exc:
+                rp.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Replication policy with specified UUID "
+                             "(60050768108180ED70000000000000B1) does not exist and cannot be created.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_replication_policy_using_UUID_name_idempotency(self,
+                                                                   svc_authorize_mock,
+                                                                   svc_obj_info_mock):
+        '''Test idempotency when creating a replication policy using UUID for name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED70000000000000B1',
+            'topology': '2-site-async-dr',
+            'location1system': 'cluster_A',
+            'location1iogrp': 0,
+            'location2system': 'cluster_B',
+            'location2iogrp': 0,
+            'rpoalert': 60,
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': 0,
+                'name': 'rp0',
+                'topology': '2-site-async-dr',
+                'location1_system_name': 'cluster_A',
+                'location1_iogrp_id': '0',
+                'location2_system_name': 'cluster_B',
+                'location2_iogrp_id': '0',
+                'rpo_alert': '60',
+                'uuid': '60050768108180ED70000000000000B1'
+            }
+            rp = IBMSVReplicationPolicy()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_async_dr_replication_policy_using_UUID_partition(self,
+                                                                     svc_authorize_mock,
+                                                                     svc_run_command_mock,
+                                                                     rp_exists_mock):
+        '''Test creating an async-dr replication policy using UUID for partition parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25',
+            'rpoalert': 60,
+            'state': 'present'
+        }):
+            rp_exists_mock.return_value = {}
+            rp = IBMSVReplicationPolicy()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkreplicationpolicy')
+            self.assertEqual(args[1]['partition'], '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_async_dr_replication_policy_using_UUID_partition_idempotency(self,
+                                                                                 svc_authorize_mock,
+                                                                                 rp_exists_mock,
+                                                                                 svc_obj_info_mock):
+        '''Test idempotency when creating async-dr replication policy using UUID for partition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'rp0',
+            'topology': 'async-dr',
+            'partition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25',
+            'rpoalert': 60,
+            'state': 'present'
+        }):
+            rp_exists_mock.return_value = {
+                'id': 0,
+                'name': 'rp0',
+                'topology': 'async-dr',
+                'partition_name': 'ptn0',
+                'partition_uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25',
+                'rpo_alert': 60
+            }
+            # Mock svc_obj_info to return partition UUID when probe checks partition
+            svc_obj_info_mock.return_value = {
+                'id': '2',
+                'name': 'ptn0',
+                'partition_uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+            }
+            rp = IBMSVReplicationPolicy()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_replication_policy.IBMSVReplicationPolicy.is_replication_policy_present')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_replication_policy_using_UUID(self,
+                                                  svc_authorize_mock,
+                                                  svc_run_command_mock,
+                                                  rp_exists_mock):
+        '''Test deleting a replication policy using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED70000000000000D3',
+            'state': 'absent'
+        }):
+            rp_exists_mock.return_value = {
+                'id': 0,
+                'name': 'rp0',
+                'uuid': '60050768108180ED70000000000000D3'
+            }
+            rp = IBMSVReplicationPolicy()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                rp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
 
 if __name__ == '__main__':
     unittest.main()

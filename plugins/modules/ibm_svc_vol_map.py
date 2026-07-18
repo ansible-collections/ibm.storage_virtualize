@@ -5,6 +5,7 @@
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
 #            Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Shilpi Jain <shilpi.jain1@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -21,17 +22,17 @@ version_added: "1.0.0"
 options:
   volname:
     description:
-      - Specifies the volume name for host or hostcluster mapping.
+      - Specifies the volume name or UID for host or hostcluster mapping.
     required: true
     type: str
   host:
     description:
-      - Specifies the host name for host mapping.
+      - Specifies the host name or UUID for host mapping.
       - This parameter is required to create or delete a volume-to-host mapping.
     type: str
   hostcluster:
     description:
-      - Specifies the name of the host cluster for host mapping.
+      - Specifies the name or UUID of the host cluster for host mapping.
       - This parameter is required to create or delete a volume-to-hostcluster mapping.
     type: str
   scsi:
@@ -82,6 +83,7 @@ options:
     type: bool
 author:
     - Peng Wang(@wangpww)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
     - This module supports logging in via partition IP.
@@ -109,14 +111,49 @@ EXAMPLES = '''
     volname: volume0
     host: host4test
     state: absent
+- name: Map a volume to a host using UIDs
+  ibm.storage_virtualize.ibm_svc_vol_map:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    volname: 6005076400810261F80000000000027E
+    host: 0D6A7840-1AD2-57D1-C158-4D7A9E2F63B8
+    scsi: 1
+    state: present
+- name: Map a volume to a hostcluster using UIDs
+  ibm.storage_virtualize.ibm_svc_vol_map:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    volname: 6005076400810261F80000000000027E
+    hostcluster: 0D6A7840-1AD2-57D1-B73F-8C15D9A24E61
+    state: present
+- name: Unmap a volume from a host using UIDs
+  ibm.storage_virtualize.ibm_svc_vol_map:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    volname: 6005076400810261F80000000000027E
+    host: 0D6A7840-1AD2-57D1-C158-4D7A9E2F63B8
+    state: absent
 '''
 
 RETURN = '''#'''
 
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
+    IBMSVCRestApi,
+    svc_argument_spec,
+    get_logger,
+    is_uuid
+)
 from ansible.module_utils._text import to_native
+
+UUID = 'uuid'
 
 
 class IBMSVCvdiskhostmap(object):
@@ -186,13 +223,44 @@ class IBMSVCvdiskhostmap(object):
         self.log("vdiskhostmap_probe props='%s'", mdata)
         mapping_exist = False
         for data in mdata:
+            vol_uuid = None
+            if is_uuid(self.volname):
+                vol_uuid = data.get('vdisk_UID', None)
+
+            volume_matched = (self.volname == data['name'] or self.volname == vol_uuid)
+
             if self.host:
-                if (self.host == data['host_name']) and (self.volname == data['name']):
+                host_uuid = None
+                if is_uuid(self.host):
+                    host_data = self.restapi.svc_obj_info(
+                        'lshost',
+                        None,
+                        [data['host_name']])
+                    host_uuid = host_data.get(UUID, None)
+                    self.host = self.host
+
+                if ((self.host == data['host_name'] or self.host == host_uuid) and
+                        volume_matched):
                     if self.scsi and (self.scsi != int(data['SCSI_id'])):
                         self.module.fail_json(msg="Update not supported for parameter: scsi")
                     mapping_exist = True
             elif self.hostcluster:
-                if (self.hostcluster == data['host_cluster_name']) and (self.volname == data['name']):
+                hostcluster_data = None
+                if is_uuid(self.hostcluster):
+                    hostcluster_data = self.restapi.svc_obj_info(
+                        'lshostcluster',
+                        None,
+                        [data['host_cluster_name']])
+                    hostcluster_data = hostcluster_data.get(UUID, None)
+                    self.hostcluster = self.hostcluster
+
+                vol_uuid = None
+                if is_uuid(self.volname):
+                    vol_uuid = data.get('vdisk_UID', None)
+                    self.volname = self.volname
+
+                if ((self.hostcluster == data['host_cluster_name'] or self.hostcluster == hostcluster_data) and
+                        volume_matched):
                     if self.scsi and (self.scsi != int(data['SCSI_id'])):
                         self.module.fail_json(msg="Update not supported for parameter: scsi")
                     mapping_exist = True
