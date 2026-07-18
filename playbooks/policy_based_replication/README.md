@@ -27,13 +27,10 @@
 
 ### 1. main.yml:
   - This is the main file to be executed using: `ansible-playbook main.yml`
-  - It leverages other files for PBR configuration. It executes `create_mTLS.yml` and `drp_pool_setup.yml` and then creates volume group and associated volumes with volume_prefix name, specified in `pbr_inventory.ini`. It also maps all the volumes to specified host.
+  - It leverages other files for PBR configuration. It executes `drp_pool_setup.yml` and then creates volume group and associated volumes with volume_prefix name, specified in `pbr_inventory.ini`. It also maps all the volumes to specified host.
   - Any additional volumes that need to be added to volumegroup, and/or need to be mapped to existing host object (but were not part of volumegroup at the time of execution of the playbook), can be added to inventory file. They'll be added to volumegroup and mapped to host in subsequent execution of the playbook.
 
-###  2. create_mTLS.yml:
-  - This playbook sets Mutual Transport Layer Security (mTLS) which includes exporting certificates and creating truststore on both clusters.
-
-###  3. drp_pool_setup.yml:
+###  2. drp_pool_setup.yml:
   - This playbook checks the drive status and drive count. Based on this drive info, it creates mdiskgrp, and data reduction pool with specified level. It links pools of both the sites. Then, it creates provisioning policy and replication policy. Already exiting mdiskgrps (pools) can also be used, only mention name of desired pool in `pbr_inventory.ini`.
   - If user wants to decide drives to be used in pool before running the playbook, he can create a pool and add drives to it (example below):
     - Create a pool:
