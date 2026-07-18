@@ -257,7 +257,7 @@ releases:
       release_summary: Added support for addressing volume via UID in volume, volumegroup, host,
         clone, mirror volume, migration, cloud_backup, flashcopy, snapshot, and vol_map modules,
         added playbook for Fibre Channel zoning for Cisco SAN switches.
-    release_date: '2026-03-14'
+    release_date: '2026-04-03'
   3.4.0:
     changes:
       bugfixes:
