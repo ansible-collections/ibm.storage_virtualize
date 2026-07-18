@@ -237,6 +237,68 @@ class TestIBMSVSnapshot(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.lsvolumegroupsnapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_snapshot_pool_validation_fail(self, svc_authorize_mock,
+                                                  lsvolumegroupsnapshot_mock,
+                                                  snapshot_exists_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot0',
+            'src_volume_names': 'vol0',
+            'snapshot_pool': 'site1pool1',
+            'state': 'present'
+        }):
+            snapshot_exists_mock.return_value = True
+            lsvolumegroupsnapshot_mock.return_value = {}
+
+            with pytest.raises(AnsibleFailJson) as exc:
+                ss = IBMSVSnapshot()
+                # Mock lsv_data which is normally set by is_snapshot_exists
+                ss.lsv_data = {'pool_1_id': '0', 'pool_1_name': 'different_pool'}
+                ss.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn("already exists in a different pool", exc.value.args[0]["msg"])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.lsvolumegroupsnapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_snapshot_pool_validation_success(self, svc_authorize_mock,
+                                                     svc_run_command_mock,
+                                                     lsvolumegroupsnapshot_mock,
+                                                     snapshot_exists_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot0',
+            'src_volume_names': 'vol0',
+            'snapshot_pool': 'site1pool1',
+            'state': 'present'
+        }):
+            snapshot_exists_mock.return_value = True
+            lsvolumegroupsnapshot_mock.return_value = {}
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                ss = IBMSVSnapshot()
+                # Mock lsv_data matching the snapshot_pool
+                ss.lsv_data = {'pool_1_id': '0', 'pool_1_name': 'site1pool1'}
+                ss.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
@@ -888,6 +950,255 @@ class TestIBMSVSnapshot(unittest.TestCase):
             with pytest.raises(AnsibleExitJson) as exc:
                 fc.apply()
             self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_using_UUID_volumegroup(self,
+                                                    svc_authorize_mock,
+                                                    svc_run_command_mock,
+                                                    snapshot_exists_mock):
+        '''Test creating a snapshot using UUID for src_volumegroup_name parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot0',
+            'src_volumegroup_name': '420EC615-4404-55BA-8D5F-7A21C9E4B36D',
+            'state': 'present',
+        }):
+            snapshot_exists_mock.return_value = {}
+            fc = IBMSVSnapshot()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                fc.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'addsnapshot')
+            # volumegroup UUID is NOT stripped in create_snapshot, passed as-is
+            self.assertEqual(args[1]['volumegroup'], '420EC615-4404-55BA-8D5F-7A21C9E4B36D')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_using_UUID_snapshot_pool(self,
+                                                      svc_authorize_mock,
+                                                      svc_run_command_mock,
+                                                      snapshot_exists_mock):
+        '''Test creating a snapshot using UUID for snapshot_pool parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot0',
+            'src_volumegroup_name': 'volgrp0',
+            'snapshot_pool': '60050768108180ED700000000000010A',
+            'state': 'present',
+        }):
+            snapshot_exists_mock.return_value = {}
+            fc = IBMSVSnapshot()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                fc.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'addsnapshot')
+            self.assertEqual(args[1]['pool'], '60050768108180ED700000000000010A')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.lsvolumegroupsnapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.snapshot_probe')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_snapshot_using_UUID_old_name(self,
+                                                 svc_authorize_mock,
+                                                 svc_run_command_mock,
+                                                 snapshot_probe_mock,
+                                                 lsvg_mock,
+                                                 snapshot_exists_mock):
+        '''Test renaming a snapshot using UUID for old_name parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snap_new',
+            'src_volumegroup_name': 'volgrp0',
+            'old_name': '0D6A7840-1AD2-57D1-C158-4D7A9E2F63B8',
+            'state': 'present',
+        }):
+            snapshot_probe_mock.return_value = ['name']
+            snapshot_exists_mock.return_value = {
+                "id": '0',
+                "name": 'snapshot0',
+                "owner_name": '',
+                "uuid": '0D6A7840-1AD2-57D1-C158-4D7A9E2F63B8'
+            }
+            lsvg_mock.return_value = {
+                "id": '0',
+                "name": 'snapshot0',
+                "owner_name": '',
+                "uuid": '0D6A7840-1AD2-57D1-C158-4D7A9E2F63B8'
+            }
+            fc = IBMSVSnapshot()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                fc.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'chsnapshot')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_snapshot_using_UUID(self,
+                                        svc_authorize_mock,
+                                        svc_run_command_mock,
+                                        snapshot_exists_mock):
+        '''Test deleting a snapshot using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000012C',
+            'state': 'absent',
+        }):
+            snapshot_exists_mock.side_effect = iter([
+                {
+                    "id": '0',
+                    "name": 'snapshot0',
+                    "owner_name": '',
+                    "uuid": '60050768108180ED700000000000012C'
+                },
+                {}
+            ])
+            fc = IBMSVSnapshot()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                fc.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_using_UUID_name_idempotency(self, svc_authorize_mock, svc_obj_info_mock, snapshot_exists_mock):
+        '''Test idempotency when snapshot already exists with UUID name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000001A',
+            'state': 'present',
+            'src_volume_names': 'vol1',
+            'snapshot_pool': 'pool1'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': '60050768108180ED700000000000001A',
+                'volume_name': 'vol1',
+                'mdisk_grp_name': 'pool1'
+            }
+            snapshot_exists_mock.return_value = {
+                'id': '1',
+                'name': '60050768108180ED700000000000001A',
+                'volume_name': 'vol1',
+                'mdisk_grp_name': 'pool1'
+            }
+            snapshot = IBMSVSnapshot()
+            with pytest.raises(AnsibleExitJson) as exc:
+                snapshot.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_using_UUID_volumegroup_idempotency(self, svc_authorize_mock, svc_obj_info_mock, snapshot_exists_mock):
+        '''Test idempotency when snapshot already exists with UUID volumegroup'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot1',
+            'state': 'present',
+            'src_volumegroup_name': '60050768108180ED700000000000002B',
+            'snapshot_pool': 'pool1'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': 'snapshot1',
+                'volume_group_name': '60050768108180ED700000000000002B',
+                'mdisk_grp_name': 'pool1'
+            }
+            snapshot_exists_mock.return_value = {
+                'id': '1',
+                'name': 'snapshot1',
+                'volume_group_name': '60050768108180ED700000000000002B',
+                'mdisk_grp_name': 'pool1'
+            }
+            snapshot = IBMSVSnapshot()
+            with pytest.raises(AnsibleExitJson) as exc:
+                snapshot.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_using_UUID_snapshot_pool_idempotency(self, svc_authorize_mock, svc_obj_info_mock, snapshot_exists_mock):
+        '''Test idempotency when snapshot already exists with UUID snapshot_pool'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshot1',
+            'state': 'present',
+            'src_volume_names': 'vol1',
+            'snapshot_pool': '60050768108180ED700000000000003C'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': 'snapshot1',
+                'volume_name': 'vol1',
+                'mdisk_grp_name': '60050768108180ED700000000000003C'
+            }
+            snapshot_exists_mock.return_value = {
+                'id': '1',
+                'name': 'snapshot1',
+                'volume_name': 'vol1',
+                'mdisk_grp_name': '60050768108180ED700000000000003C'
+            }
+            snapshot = IBMSVSnapshot()
+            with pytest.raises(AnsibleExitJson) as exc:
+                snapshot.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

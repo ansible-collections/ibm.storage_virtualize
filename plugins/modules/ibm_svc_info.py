@@ -72,6 +72,7 @@ options:
     - If I(objectname:"all") specified, display detailed output of all instances of all objects that are specified
       in gather_subset and command_list.
     - For entities that require objectname as a mandatory parameter, I(objectname:"all") will throw error.
+    - UUID is also accepted.
     type: str
   filtervalue:
     description:
@@ -209,6 +210,15 @@ EXAMPLES = '''
     password: "{{ password }}"
     log_path: /tmp/ansible.log
     objectname: volumename
+    gather_subset: vol
+- name: Get volume info using UID
+  ibm.storage_virtualize.ibm_svc_info:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/ansible.log
+    objectname: 6005076400810261F80000000000027F
     gather_subset: vol
 - name: Get pool info
   ibm.storage_virtualize.ibm_svc_info:
@@ -974,7 +984,6 @@ class IBMSVCGatherInfo(object):
         self.command_list = self.module.params['command_list']
 
         self.basic_checks()
-
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],

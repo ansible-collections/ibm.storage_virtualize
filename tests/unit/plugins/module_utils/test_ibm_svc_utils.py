@@ -168,6 +168,49 @@ class TestIBMSVModuleUtils(unittest.TestCase):
         self.assertEqual(ret, "CMMVC5707E An invalid or duplicated parameter, unaccompanied argument, or "
                          "incorrect argument sequence has been detected. Ensure that the input is as per the help.")
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    def test_get_system_code_level_first_call(self, mock_svc_obj_info):
+        mock_svc_obj_info.return_value = {
+            'id': '00000204AEA0632C',
+            'name': 'system0',
+            'code_level': '9.1.3.0 (build 193.21.2604021101000)'
+        }
+        code_level = self.restapi.get_system_code_level()
+        self.assertEqual(code_level, '9.1.3.0')
+        mock_svc_obj_info.assert_called_once_with(cmd='lssystem', cmdopts=None, cmdargs=None)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    def test_get_system_code_level_cached(self, mock_svc_obj_info):
+        mock_svc_obj_info.return_value = {
+            'id': '00000204AEA0632C',
+            'name': 'system0',
+            'code_level': '9.1.2.0 (build 193.16.2602231501000)'
+        }
+        code_level1 = self.restapi.get_system_code_level()
+        code_level2 = self.restapi.get_system_code_level()
+        self.assertEqual(code_level1, '9.1.2.0')
+        self.assertEqual(code_level2, '9.1.2.0')
+        mock_svc_obj_info.assert_called_once()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    def test_get_system_code_level_no_code_level(self, mock_svc_obj_info):
+        mock_svc_obj_info.return_value = {
+            'id': '00000204AEA0632C',
+            'name': 'system0'
+        }
+        code_level = self.restapi.get_system_code_level()
+        self.assertIsNone(code_level)
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    def test_get_system_code_level_none_response(self, mock_svc_obj_info):
+        mock_svc_obj_info.return_value = None
+        code_level = self.restapi.get_system_code_level()
+        self.assertIsNone(code_level)
+
 
 def test_is_supported_version():
     """Test is_supported_version function."""

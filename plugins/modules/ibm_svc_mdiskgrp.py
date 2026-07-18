@@ -18,7 +18,7 @@ version_added: "1.0.0"
 options:
   name:
     description:
-      - Specifies the name to assign to the new pool.
+      - Specifies the name to assign to the new pool or UUID to manage pool.
     required: true
     type: str
   state:
@@ -90,7 +90,7 @@ options:
     type: bool
   parentmdiskgrp:
     description:
-      - Parentmdiskgrp for subpool.
+      - Specifies the name or UUID of the parent pool for child pool.
       - Applies when I(state=present), to create a pool.
     type: str
   safeguarded:
@@ -187,7 +187,7 @@ options:
     version_added: '1.12.0'
   old_name:
     description:
-      - Specifies the old name of an existing pool.
+      - Specifies the old name or UUID of an existing pool.
       - Applies when I(state=present), to rename the existing pool.
     type: str
     version_added: '1.12.0'
@@ -242,6 +242,18 @@ EXAMPLES = '''
     ext: 1024
     noquota: 'True'
     state: present
+- name: Create childpool with parent pool UUID
+  ibm.storage_virtualize.ibm_svc_mdiskgrp:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: childpool_with_parent_uuid
+    parentmdiskgrp: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+    state: present
+    datareduction: 'no'
+    easytier: auto
+    encrypt: 'no'
+    ext: 1024
 - name: Delete mdisk group
   ibm.storage_virtualize.ibm_svc_mdiskgrp:
     clustername: "{{ clustername }}"
@@ -265,7 +277,11 @@ RETURN = '''#'''
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils._text import to_native
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
+    IBMSVCRestApi,
+    is_uuid,
+    svc_argument_spec,
+    get_logger)
 
 
 class IBMSVCmdiskgrp(object):
@@ -394,7 +410,10 @@ class IBMSVCmdiskgrp(object):
         if not old_mdiskgrp_data and not mdiskgrp_data:
             self.module.fail_json(msg="mdiskgrp [{0}] does not exists.".format(self.old_name))
         elif old_mdiskgrp_data and mdiskgrp_data:
-            self.module.fail_json(msg="mdiskgrp with name [{0}] already exists.".format(self.name))
+            if old_mdiskgrp_data['uuid'] == mdiskgrp_data['uuid']:
+                msg = "Volume [{0}] already renamed.".format(self.name)
+            else:
+                self.module.fail_json(msg="mdiskgrp with name [{0}] already exists.".format(self.name))
         elif not old_mdiskgrp_data and mdiskgrp_data:
             msg = "mdiskgrp [{0}] already renamed.".format(self.name)
         elif old_mdiskgrp_data and not mdiskgrp_data:
@@ -623,6 +642,8 @@ class IBMSVCmdiskgrp(object):
             if changed:
                 if self.state == 'present':
                     if not mdiskgrp_data:
+                        if is_uuid(self.name):
+                            self.module.fail_json(msg="Mdisk group with UUID [%s] does not exist and cannot be created." % self.name)
                         self.mdiskgrp_create()
                         self.changed = True
                         msg = "Mdisk group [%s] has been created." % self.name

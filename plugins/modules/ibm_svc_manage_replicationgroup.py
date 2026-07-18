@@ -239,9 +239,6 @@ class IBMSVCRCCG(object):
             self.changed = True
             return
 
-        rccg_data = self.get_existing_rccg()
-        if rccg_data:
-            self.rccg_update(rccg_data)
         self.log("creating rc consistgrp '%s'", self.name)
 
         # Make command
@@ -267,7 +264,7 @@ class IBMSVCRCCG(object):
         else:
             self.module.fail_json(msg=result)
 
-    def rccg_update(self, modify, modifycv):
+    def rccg_update(self, modify=None, modifycv=None):
 
         if modify:
             self.log("updating chrcconsistgrp with properties %s", modify)

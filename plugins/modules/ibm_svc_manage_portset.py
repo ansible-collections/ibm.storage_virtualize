@@ -107,6 +107,20 @@ options:
             - Reset the replication_portset_link_uid parameter to a newly generated portset link UID.
         type: bool
         version_added: '2.6.0'
+    autozoneenabled:
+        description:
+            - Enables automatic zone creation when the portset is used during host creation or modification.
+        type: str
+        version_added: '3.4.0'
+        choices: [ 'yes', 'no']
+    autozonepolicy:
+        description:
+            - Specifies the auto zone policy to be applied when C(autozoneenabled) is set to yes.
+            - C(one_to_one) zones each host WWPN to exactly one IO port from its portset on the same fabric.
+            - C(one_to_one_all_fabrics) zones each host WWPN to one IO port per fabric and does not require the host WWPN and IO port to be on the same fabric.
+        type: str
+        version_added: '3.4.0'
+        choices: [ one_to_one, one_to_one_all_fabrics ]
 author:
     - Sanjaikumaar M (@sanjaikumaar)
     - Sudheesh Reddy Satti (@sudheeshreddy)
@@ -143,6 +157,8 @@ EXAMPLES = '''
    porttype: fc
    portset_type: host
    ownershipgroup: owner1
+   autozoneenabled: 'yes'
+   autozonepolicy: one_to_one
    state: present
 - name: Create an highspeedreplication portset
   ibm.storage_virtualize.ibm_svc_manage_portset:
@@ -212,7 +228,8 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
     IBMSVCRestApi, svc_argument_spec,
-    get_logger
+    get_logger,
+    is_feature_supported
 )
 from ansible.module_utils._text import to_native
 
@@ -254,6 +271,14 @@ class IBMSVCPortset:
                 ),
                 resetreplicationportsetlinkuid=dict(
                     type='bool',
+                ),
+                autozoneenabled=dict(
+                    type='str',
+                    choices=['yes', 'no']
+                ),
+                autozonepolicy=dict(
+                    type='str',
+                    choices=['one_to_one', 'one_to_one_all_fabrics']
                 )
             )
         )
@@ -272,11 +297,14 @@ class IBMSVCPortset:
         self.old_name = self.module.params.get('old_name', '')
         self.replicationportsetlinkuid = self.module.params.get('replicationportsetlinkuid')
         self.resetreplicationportsetlinkuid = self.module.params.get('resetreplicationportsetlinkuid')
+        self.autozoneenabled = self.module.params.get('autozoneenabled')
+        self.autozonepolicy = self.module.params.get('autozonepolicy')
 
         self.basic_checks()
 
         # Varialbe to cache data
         self.portset_details = None
+        self.code_build_version = None
 
         # logging setup
         self.log_path = self.module.params['log_path']
@@ -312,10 +340,10 @@ class IBMSVCPortset:
                 self.module.fail_json(msg='Missing mandatory parameter: name')
 
             fields = [f for f in ['ownershipgroup', 'noownershipgroup', 'porttype', 'portset_type', 'old_name', 'replicationportsetlinkuid',
-                                  'resetreplicationportsetlinkuid'] if getattr(self, f)]
+                                  'resetreplicationportsetlinkuid', 'autozoneenabled', 'autozonepolicy'] if getattr(self, f)]
 
             if any(fields):
-                self.module.fail_json(msg='Parameters {0} not supported while deleting a porset'.format(', '.join(fields)))
+                self.module.fail_json(msg='Parameters {0} not supported while deleting a portset.'.format(', '.join(fields)))
 
     # for validating parameter while renaming a portset
     def parameter_handling_while_renaming(self):
@@ -325,11 +353,19 @@ class IBMSVCPortset:
             "porttype": self.porttype,
             "portset_type": self.portset_type,
             "replicationportsetlinkuid": self.replicationportsetlinkuid,
-            "resetreplicationportsetlinkuid": self.resetreplicationportsetlinkuid
+            "resetreplicationportsetlinkuid": self.resetreplicationportsetlinkuid,
+            "autozoneenabled": self.autozoneenabled,
+            "autozonepolicy": self.autozonepolicy
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
             self.module.fail_json(msg="Parameters {0} not supported while renaming a portset.".format(', '.join(parameters_exists)))
+
+    def feature_supported(self, feature):
+        if not self.code_build_version:
+            system_info = self.restapi.svc_obj_info(cmd='lssystem', cmdopts=None, cmdargs=None)
+            self.code_build_version = system_info['code_level'].split(" ")[0]
+        return is_feature_supported(feature, self.code_build_version)
 
     def is_portset_exists(self, portset_name):
         merged_result = {}
@@ -361,15 +397,31 @@ class IBMSVCPortset:
 
         cmd = 'mkportset'
         cmdopts = {
-            'name': self.name,
-            'type': self.portset_type if self.portset_type else 'host',
-            'porttype': self.porttype if self.porttype else 'ethernet'
+            'name': self.name
         }
 
+        if self.portset_type:
+            cmdopts['type'] = self.portset_type
+        if self.porttype:
+            cmdopts['porttype'] = self.porttype
         if self.ownershipgroup:
             cmdopts['ownershipgroup'] = self.ownershipgroup
         if self.replicationportsetlinkuid:
             cmdopts['replicationportsetlinkuid'] = self.replicationportsetlinkuid
+        if self.autozoneenabled:
+            autozoneenabled_supported = self.feature_supported('autozone_fields')
+            if not autozoneenabled_supported:
+                self.module.fail_json(msg="Parameter autozoneenabled is not supported in the current code level.")
+            if self.porttype != 'fc':
+                self.module.fail_json(msg="Parameter autozoneenabled is only applicable for FC portsets.")
+            cmdopts['autozoneenabled'] = self.autozoneenabled
+        if self.autozonepolicy:
+            autozonepolicy_supported = self.feature_supported('autozone_fields')
+            if not autozonepolicy_supported:
+                self.module.fail_json(msg="Parameter autozonepolicy is not supported in the current code level.")
+            if not self.autozoneenabled or self.autozoneenabled != 'yes':
+                self.module.fail_json(msg='Parameter autozonepolicy is only applicable when autozoneenabled is set to yes.')
+            cmdopts['autozonepolicy'] = self.autozonepolicy
 
         self.restapi.svc_run_command(cmd, cmdopts, cmdargs=None)
         self.log('Portset (%s) created', self.name)
@@ -377,11 +429,40 @@ class IBMSVCPortset:
 
     def portset_probe(self):
         updates = []
+        not_supported_on_update = []
+        not_supported_in_code_level = []
 
         if self.portset_type and self.portset_type != self.portset_details['type']:
-            self.module.fail_json(msg="portset_type can't be updated for portset")
+            not_supported_on_update.append('portset_type')
         if self.porttype and self.porttype != self.portset_details['port_type']:
-            self.module.fail_json(msg="porttype can't be updated for portset")
+            not_supported_on_update.append('porttype')
+        if self.autozoneenabled:
+            self.autozoneenabled_supported = self.feature_supported('autozone_fields')
+            if not self.autozoneenabled_supported:
+                not_supported_in_code_level.append('autozoneenabled')
+            elif self.autozoneenabled != self.portset_details['auto_zone_enabled']:
+                not_supported_on_update.append('autozoneenabled')
+        if self.autozonepolicy:
+            self.autozonepolicy_supported = self.feature_supported('autozone_fields')
+            if not self.autozonepolicy_supported:
+                not_supported_in_code_level.append('autozonepolicy')
+            elif self.autozonepolicy != self.portset_details['auto_zone_policy']:
+                not_supported_on_update.append('autozonepolicy')
+        if not_supported_in_code_level:
+            self.module.fail_json(msg='Parameters {0} not supported in the current code level.'.format(', '.join(not_supported_in_code_level)))
+        if not_supported_on_update:
+            # Provide specific error message for autozone immutability
+            if 'autozoneenabled' in not_supported_on_update or 'autozonepolicy' in not_supported_on_update:
+                self.module.fail_json(
+                    msg='Cannot modify autozoneenabled or autozonepolicy. '
+                        'Autozone settings are immutable after portset creation. '
+                        'Delete and recreate portset to change these settings.'
+                )
+            else:
+                self.module.fail_json(
+                    msg=f"Parameters {', '.join(not_supported_on_update)} not supported while updating portset."
+                )
+
         if self.ownershipgroup and self.ownershipgroup != self.portset_details['owner_name']:
             updates.append('ownershipgroup')
         if self.noownershipgroup:

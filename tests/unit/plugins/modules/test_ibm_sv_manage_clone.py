@@ -632,3 +632,374 @@ class TestIBMSVClone(unittest.TestCase):
             self.assertEqual(exc.value.args[0]['msg'],
                              "Modifications of clone is not supported via this module, Please use ibm_svc_manage_volume or "
                              "ibm_svc_manage_volumegroup for modifying volume or volumegroup clone/thinclone respectively.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_pool(self, svc_authorize_mock,
+                                                 get_existing_clone_mock,
+                                                 get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                 svc_run_command_mock):
+        '''Test creating a clone volume using UUID for pool parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': '60050768108180ED700000000000005A',
+            'fromsourcevolumes': "test_vol_3"
+        }):
+            get_existing_clone_mock.return_value = {}
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            svc_run_command_mock.return_value = ""
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkvolume')
+            self.assertEqual(args[1]['pool'], '60050768108180ED700000000000005A')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_volumegroup(self, svc_authorize_mock,
+                                                        get_existing_clone_mock,
+                                                        get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                        svc_run_command_mock):
+        '''Test creating a clone volume using UUID for volumegroup parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_3",
+            'volumegroup': '420EC615-4404-55BA-B127-3C7A91D4F8E2'
+        }):
+            get_existing_clone_mock.return_value = {}
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            svc_run_command_mock.return_value = ""
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkvolume')
+            self.assertEqual(args[1]['volumegroup'], '420EC615-4404-55BA-B127-3C7A91D4F8E2')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_fromsourcevolumes(self, svc_authorize_mock,
+                                                              get_existing_clone_mock,
+                                                              get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                              svc_run_command_mock):
+        '''Test creating a clone volume using UUID for fromsourcevolumes parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "60050768108180ED700000000000007C"
+        }):
+            get_existing_clone_mock.return_value = {}
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            svc_run_command_mock.return_value = ""
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkvolume')
+            self.assertEqual(args[1]['fromsourcevolume'], '60050768108180ED700000000000007C')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_partition(self, svc_authorize_mock,
+                                                      get_existing_clone_mock,
+                                                      get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                      svc_run_command_mock):
+        '''Test creating a clone volumegroup using UUID for partition parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_1:test_vol_2",
+            'partition': '1DCB3024-BACF-456F-BD41-960B57DE2A85'
+        }):
+            get_existing_clone_mock.return_value = {}
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = ('vg1', None)
+            svc_run_command_mock.return_value = ""
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkvolumegroup')
+            self.assertEqual(args[1]['partition'], '1DCB3024-BACF-456F-BD41-960B57DE2A85')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volumegroup_using_UUID_draftpartition(self, svc_authorize_mock,
+                                                                get_existing_clone_mock,
+                                                                get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                                svc_run_command_mock):
+        '''Test creating a clone volumegroup using UUID for draftpartition parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_1:test_vol_2",
+            'draftpartition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+        }):
+            get_existing_clone_mock.return_value = {}
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = ('vg1', None)
+            svc_run_command_mock.return_value = ""
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkvolumegroup')
+            self.assertEqual(args[1]['draftpartition'], '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_volumegroup_idempotency(self, svc_authorize_mock,
+                                                                    get_existing_clone_mock,
+                                                                    get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                                    svc_obj_info_mock):
+        '''Test idempotency when clone volume already exists with UUID volumegroup'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_3",
+            'volumegroup': '420EC615-4404-55BA-8D5F-7A21C9E4B36D'
+        }):
+            get_existing_clone_mock.return_value = {
+                'name': 'clone_name_01',
+                'volume_group_name': 'vg1',
+                'source_volume_name': 'test_vol_3',
+                'mdisk_grp_name': 'pool1'
+            }
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            svc_obj_info_mock.return_value = {'uuid': '420EC615-4404-55BA-8D5F-7A21C9E4B36D'}
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_fromsourcevolumes_idempotency(self, svc_authorize_mock,
+                                                                          get_existing_clone_mock,
+                                                                          get_parent_uid_or_source_grp_from_snapshot_mock):
+        '''Test idempotency when clone volume already exists with UUID fromsourcevolumes'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "60050768108180ED700000000000007C"
+        }):
+            get_existing_clone_mock.return_value = {
+                'name': 'clone_name_01',
+                'mdisk_grp_name': 'pool1'
+            }
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.check_volumes_in_pool')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volumegroup_using_UUID_partition_idempotency(self, svc_authorize_mock,
+                                                                       get_existing_clone_mock,
+                                                                       get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                                       svc_obj_info_mock,
+                                                                       check_volumes_in_pool_mock):
+        '''Test idempotency when clone volumegroup already exists with UUID partition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_1:test_vol_2",
+            'partition': '1DCB3024-BACF-456F-BD41-960B57DE2A85'
+        }):
+            get_existing_clone_mock.return_value = {
+                'name': 'clone_name_01',
+                'partition_name': 'partition1'
+            }
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = ('vg1', None)
+            svc_obj_info_mock.return_value = {'uuid': '1DCB3024-BACF-456F-BD41-960B57DE2A85'}
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.check_volumes_in_pool')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volumegroup_using_UUID_draftpartition_idempotency(self, svc_authorize_mock,
+                                                                            get_existing_clone_mock,
+                                                                            get_parent_uid_or_source_grp_from_snapshot_mock,
+                                                                            svc_obj_info_mock,
+                                                                            check_volumes_in_pool_mock):
+        '''Test idempotency when clone volumegroup already exists with UUID draftpartition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': 'snapshot_id_1234',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_1:test_vol_2",
+            'draftpartition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+        }):
+            get_existing_clone_mock.return_value = {
+                'name': 'clone_name_01',
+                'draft_partition_name': 'draftpartition1'
+            }
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = ('vg1', None)
+            svc_obj_info_mock.return_value = {'uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'}
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_parent_uid_or_source_grp_from_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_clone.IBMSVClone.get_existing_clone')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_clone_volume_using_UUID_snapshot_idempotency(self, svc_authorize_mock,
+                                                                 get_existing_clone_mock,
+                                                                 get_parent_uid_or_source_grp_from_snapshot_mock):
+        '''Test idempotency when clone volume already exists with UUID snapshot'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'clone_name_01',
+            'state': 'present',
+            'type': 'clone',
+            'snapshot': '60050768108180ED70000000000000AF',
+            'pool': 'pool1',
+            'fromsourcevolumes': "test_vol_3"
+        }):
+            get_existing_clone_mock.return_value = {
+                'name': 'clone_name_01',
+                'mdisk_grp_name': 'pool1',
+                'source_volume_name': 'test_vol_3'
+            }
+            get_parent_uid_or_source_grp_from_snapshot_mock.return_value = (None, "111")
+            clone = IBMSVClone()
+            with pytest.raises(AnsibleExitJson) as exc:
+                clone.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+
+if __name__ == '__main__':
+    unittest.main()

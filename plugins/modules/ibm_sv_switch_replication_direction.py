@@ -3,7 +3,7 @@
 
 # Copyright (C) 2022 IBM CORPORATION
 # Author(s): Shilpi Jain <shilpi.jain1@ibm.com>
-#
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 # GNU General Public License v3.0+
 # (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -50,7 +50,7 @@ options:
         type: str
     name:
         description:
-            - Specifies the name of the volume group.
+            - Specifies the name or UUID of the volume group.
         type: str
         required: true
     mode:
@@ -66,6 +66,7 @@ options:
         type: bool
 author:
     - Shilpi Jain(@Shilpi-J)
+    - Sandip Gulab Rajbanshi (@sandip-rajbanshi)
 notes:
     - This module supports C(check_mode).
     - This module supports loggin via partitio IP.
@@ -79,6 +80,13 @@ EXAMPLES = '''
     password: "{{ password }}"
     mode: independent
     name: vg0
+- name: Switch to independent mode using UUID
+  ibm.storage_virtualize.ibm_sv_switch_replication_direction:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    mode: independent
+    name: C2A27DD7-C5DA-5078-8A41-3F72D5C9E6B0
 '''
 
 RETURN = '''#'''
@@ -86,8 +94,7 @@ RETURN = '''#'''
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
-    IBMSVCRestApi, svc_argument_spec,
-    get_logger
+    IBMSVCRestApi, svc_argument_spec, get_logger
 )
 from ansible.module_utils._text import to_native
 

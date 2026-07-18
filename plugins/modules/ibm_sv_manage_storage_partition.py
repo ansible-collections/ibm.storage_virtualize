@@ -19,8 +19,8 @@ module: ibm_sv_manage_storage_partition
 short_description: This module manages storage partition on IBM Storage Virtualize family systems
 version_added: '2.1.0'
 description:
-  - This Ansible module provides the interface to manage syslog servers through 'mksyslogserver',
-    'chsyslogserver' and 'rmsyslogserver' Storage Virtualize commands.
+  - This Ansible module provides the interface to manage storage partition through 'mkpartition',
+    'chpartition' and 'rmpartition' Storage Virtualize commands.
   - The Policy based High Availability (HA) solution uses Storage Partitions. These partitions contain volumes,
     volume groups, host and host-to-volume mappings.
 options:
@@ -61,12 +61,12 @@ options:
         type: str
     name:
         description:
-            - Specifies the name of a storage partition.
+            - Specifies the name or UUID of a storage partition.
         type: str
         required: true
     replicationpolicy:
         description:
-            - Specifies the replication policy for the storage partition.
+            - Specifies the name or UUID of the replication policy for the storage partition.
         type: str
     noreplicationpolicy:
         description:
@@ -152,7 +152,7 @@ options:
         version_added: 2.6.0
     old_name:
         description:
-            - Specifies the name of the storage partition to be renamed.
+            - Specifies the name or UUID of the storage partition to be renamed.
             - Valid when I(state=present), to rename an existing storage partition.
         type: str
         version_added: '3.0.0'
@@ -288,6 +288,21 @@ EXAMPLES = '''
    old_name: partition0
    name: partition1
    state: present
+- name: Create Storage Partition using replication policy UUID
+  ibm.storage_virtualize.ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: test_ptn_rpl
+   state: present
+   replicationpolicy: C2A27DD7-C5DA-5078-A7E3-5CB912F84D60
+- name: Delete partition using UUID
+  ibm.storage_virtualize.ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: C2A27DD7-C5DA-5078-8A41-3F72D5C9E6B0
+   state: absent
 '''
 
 RETURN = '''#'''
@@ -297,9 +312,12 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
     IBMSVCRestApi,
     svc_argument_spec,
-    get_logger
+    get_logger,
+    is_uuid
 )
 from ansible.module_utils._text import to_native
+
+UUID = 'uuid'
 
 
 class IBMSVStoragePartition:
@@ -526,6 +544,16 @@ class IBMSVStoragePartition:
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
+        if is_uuid(self.replicationpolicy):
+            if data.get('replication_policy_name'):
+                rp_uuid = self.restapi.svc_obj_info(cmd='lsreplicationpolicy',
+                                                    cmdopts=None,
+                                                    cmdargs=[data.get('replication_policy_name')]).get(UUID)
+                if self.replicationpolicy == rp_uuid:
+                    props.pop('replicationpolicy')
+            else:
+                props['replicationpolicy'] = self.replicationpolicy
+
         if data.get('management_portset_name') and self.managementportset and data.get('management_portset_name') != self.managementportset:
             self.module.fail_json(msg='This paritition is already mapped to a managementportset: {0}'.format(
                                   data.get('management_portset_name')))
@@ -681,6 +709,8 @@ class IBMSVStoragePartition:
             elif self.old_name:
                 self.module.fail_json(msg='CMMVC5753E The specified object does not exist or is not a suitable candidate.')
             else:
+                if is_uuid(self.name):
+                    self.module.fail_json(msg='Storage Partition with specified UUID ({0}) does not exist and cannot be created.'.format(self.name))
                 self.create_storage_partition()
                 self.msg = 'Storage Partition ({0}) created.'.format(self.name)
 

@@ -5,6 +5,8 @@
 # Author(s): Sreshtant Bohidar <sreshtant.bohidar@ibm.com>
 #            Rahul Pawar <rahul.p@ibm.com>
 #            Sumit Kumar Gupta <sumit.gupta@ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.gulab@ibm.com>
+#
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -56,7 +58,7 @@ options:
     type: str
   pool:
     description:
-      - Specifies the name of the storage pool to use while creating the volume.
+      - Specifies the name or UUID of the storage pool to use while creating the volume.
       - This parameter is required when I(state=present), to create a volume.
     type: str
   size:
@@ -102,9 +104,10 @@ options:
     type: str
   fromsourcevolume:
     description:
-      - Specifies the volume name/UID in the snapshot used to pre-populate clone or thinclone volume.
+      - Specifies the volume name or UID in the snapshot used to pre-populate clone or thinclone volume.
       - Valid when I(state=present), to create a thinclone or clone volume.
       - Supported from Storage Virtualize family systems from 8.6.2.0 or later.
+      - Addressing volume via UUID is supported from 9.1.0.0 or later.
     type: str
   compressed:
     description:
@@ -127,7 +130,7 @@ options:
     type: bool
   volumegroup:
     description:
-      - Specifies the name of the volumegroup to which the volume is to be added.
+      - Specifies the name or UUID of the volumegroup to which the volume is to be added.
       - Parameters 'volumegroup' and 'novolumegroup' are mutually exclusive.
       - Valid when I(state=present), to create or modify a volume.
     type: str
@@ -209,6 +212,7 @@ author:
     - Sreshtant Bohidar(@Sreshtant-Bohidar)
     - Rahul Pawar(@rahul-p)
     - Sumit Kumar Gupta(@sumitguptaibm)
+    - Sandip G. Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
     - For unmap parameter, the option remotecopy_relationships has been deprecated from 8.7.1.0 onwards.
@@ -400,6 +404,55 @@ EXAMPLES = r'''
     unit: "gb"
     thin: true
     grainsize: 32
+- name: Create a volume with pool UUID
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "volume_with_pool_uuid"
+    state: "present"
+    pool: E7D01628-9B02-5FE9-A3C7-4D9182F6B05E
+    size: "1"
+    unit: "gb"
+- name: Create a volume with volumegroup UUID
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "volume_with_vg_uuid"
+    state: "present"
+    pool: "pool_name"
+    size: "1"
+    unit: "gb"
+    volumegroup: C2A27DD7-C5DA-5078-9D2C-A761F84B305E
+- name: Create thinclone volume from source volume UID
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "vol_thinclone_from_uuid"
+    fromsourcevolume: 6005076400810261F80000000000027E
+    state: "present"
+    pool: "pool0"
+    type: "thinclone"
+- name: Rename a volume using old_name UID
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    old_name: 6005076400810261F80000000000027E
+    name: "new_volume_name"
+    state: "present"
+- name: Delete a volume using UID
+  ibm.storage_virtualize.ibm_svc_manage_volume:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: 6005076400810261F80000000000027E
+    state: "absent"
 '''
 
 RETURN = '''#'''
@@ -411,11 +464,14 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     svc_argument_spec,
     get_logger,
     strtobool,
-    is_feature_supported
+    is_feature_supported,
+    is_uuid
 )
 from ansible.module_utils._text import to_native
 import random
 import re
+
+UUID = 'uuid'
 
 
 class IBMSVCvolume(object):
@@ -709,8 +765,12 @@ class IBMSVCvolume(object):
         snapshot_opts['name'] = snapshot_name
 
         # Optional parameters
-        snapshot_opts['pool'] = self.module.params.get('pool', '')
-        snapshot_opts['volumes'] = self.module.params.get('fromsourcevolume', '')
+        pool_param = self.module.params.get('pool', '')
+        snapshot_opts['pool'] = pool_param
+
+        fromsourcevolume_param = self.module.params.get('fromsourcevolume', '')
+        snapshot_opts['volumes'] = fromsourcevolume_param
+
         snapshot_opts['retentionminutes'] = 5
 
         addsnapshot_output = self.restapi.svc_run_command(snapshot_cmd, snapshot_opts, cmdargs=None, timeout=10)
@@ -720,6 +780,8 @@ class IBMSVCvolume(object):
 
     # function to create a new volume
     def create_volume(self):
+        if is_uuid(self.name):
+            self.module.fail_json(msg="Volume with UUID [%s] does not exist and cannot be created." % self.name)
         self.volume_creation_parameter_validation()
         if self.module.check_mode:
             self.changed = True
@@ -839,10 +901,21 @@ class IBMSVCvolume(object):
         # check for changes in volumegroup
         if self.volumegroup:
             if self.volumegroup != data[0]['volume_group_name']:
-                props['volumegroup'] = {
-                    'name': self.volumegroup,
-                }
-
+                if is_uuid(self.volumegroup):
+                    vg_name = self.volumegroup
+                    # Only check UUID match if volume group name exists
+                    if data[0]['volume_group_name']:
+                        vg_data = self.restapi.svc_obj_info(
+                            'lsvolumegroup', None, [data[0]['volume_group_name']])
+                        # Only set props if UUIDs don't match
+                        if vg_name != vg_data.get(UUID, None):
+                            props['volumegroup'] = {'name': vg_name}
+                    else:
+                        # No existing volume group, set props
+                        props['volumegroup'] = {'name': vg_name}
+                else:
+                    # Not a UUID, use the name directly
+                    props['volumegroup'] = {'name': self.volumegroup}
         # check for presence of novolumegroup
         if self.novolumegroup:
             if data[0]['volume_group_name']:
@@ -863,9 +936,25 @@ class IBMSVCvolume(object):
         # check for change in pool
         if self.pool:
             if self.pool != data[0]['mdisk_grp_name']:
-                props['pool'] = {
-                    'status': True
-                }
+                if is_uuid(self.pool):
+                    # Only check UUID match if pool name exists
+                    if data[0]['mdisk_grp_name']:
+                        pool_data = self.restapi.svc_obj_info(
+                            'lsmdiskgrp', None, [data[0]['mdisk_grp_name']])
+                        if self.pool != pool_data.get(UUID, None):
+                            props['pool'] = {
+                                'status': True
+                            }
+                    else:
+                        # No existing pool, set props
+                        props['pool'] = {
+                            'status': True
+                        }
+                else:
+                    props['pool'] = {
+                        'status': True
+                    }
+
         # Check for change in cloud backup
         if self.enable_cloud_snapshot is True:
             if not strtobool(data[0].get('cloud_backup_enabled')):
@@ -881,7 +970,21 @@ class IBMSVCvolume(object):
         # Check for change in fromsourcevolume
         if self.fromsourcevolume:
             if self.fromsourcevolume != data[0].get('source_volume_name'):
-                props['fromsourcevolume'] = {'status': True}
+                if is_uuid(self.fromsourcevolume):
+                    fromsource_uuid = self.fromsourcevolume
+                    # Only check UUID match if source volume name exists
+                    if data[0].get('source_volume_name'):
+                        source_vol_data = self.restapi.svc_obj_info(
+                            'lsvdisk', None, [data[0].get('source_volume_name')])
+                        # Only set props if UUIDs don't match
+                        if fromsource_uuid != source_vol_data[0].get('vdisk_UID', None):
+                            props['fromsourcevolume'] = {'status': True}
+                    else:
+                        # No existing source volume, set props
+                        props['fromsourcevolume'] = {'status': True}
+                else:
+                    # Not a UUID, use the name directly
+                    props['fromsourcevolume'] = {'status': True}
 
         # Check for change in type
         if self.type:

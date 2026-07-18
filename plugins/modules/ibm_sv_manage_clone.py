@@ -6,6 +6,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 DOCUMENTATION = r'''
@@ -58,7 +59,7 @@ options:
         type: str
     pool:
         description:
-            - Specifies the name of the storage pool to use while creating the clone.
+            - Specifies the name or UUID of the storage pool to use while creating the clone.
             - The parameters I(pool) is mandatory for clone volumes and optional for clone volume groups while
               creating clone.
         type: str
@@ -68,7 +69,7 @@ options:
         type: str
     volumegroup:
         description:
-            - Specifies the name of the volumegroup to which the clone is to be added.
+            - Specifies the name or UUID of the volumegroup to which the clone is to be added.
             - When logging in via partition IP, the I(volumegroup) parameter is required to create a volume clone.
         type: str
     type:
@@ -78,13 +79,13 @@ options:
         type: str
     fromsourcevolumes:
         description:
-            - Specifies colon-separated list of the parent volumes name/UID.
+            - Specifies colon-separated list of the parent volumes name or UID.
             - The parameters I(fromsourcevolumes) is mandatory for clone volumes and optional for clone volume groups
               while creating clone.
         type: str
     snapshot:
         description:
-            - Specifies the name of the snapshot that is used to create the clone.
+            - Specifies the name or UUID of the snapshot that is used to create the clone.
             - The parameters I(fromsourcevolumes) is mandatory for creating clone.
         type: str
     preferrednode:
@@ -93,7 +94,11 @@ options:
         type: str
     partition:
         description:
-            - Specifies the name of the storage partition to be assigned to the volume group.
+            - Specifies the name or UUID of the storage partition to associate with the volume group.
+        type: str
+    draftpartition:
+        description:
+            - Specifies the name or UUID of the draft partition to be assigned to the volume group.
         type: str
     ownershipgroup:
         description:
@@ -153,6 +158,37 @@ EXAMPLES = r'''
     iogrp: "io_grp0"
     partition: "ptn1"
     ownershipgroup: "grp1"
+- name: Create a clone of a volumegroup from snapshot inside partition
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vg1_clone_uuid_1"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+    iogrp: "io_grp0"
+    partition: "123e4567-e89b-12d3-a456-426614174000"
+    ownershipgroup: "grp1"
+- name: Create a volume clone using volumegroup
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vol1_clone_uuid_1"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+    fromsourcevolumes: "vol1"
+    iogrp: "io_grp0"
+    preferrednode: "node1"
+    volumegroup: "550e8400-e29b-41d4-a716-446655440000"
 - name: Create a clone of volume vector from snapshot
   ibm.storage_virtualize.ibm_sv_manage_clone:
     clustername: "{{ clustername }}"
@@ -169,6 +205,79 @@ EXAMPLES = r'''
     iogrp: "io_grp0"
     partition: "ptn1"
     ownershipgroup: "grp1"
+- name: Create a clone of a volume with pool UUID
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vol1_clone_pool_uuid"
+    state: "present"
+    pool: "66197B52-9707-548D-8C42-E91A7D35F6B8"
+    type: "clone"
+    snapshot: "snapshot1"
+    fromsourcevolumes: "vol1"
+- name: Create a clone of a volume with snapshot UUID
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vol1_clone_snap_uuid"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: 66197B52-9707-548D-8C42-E91A7D35F6B8
+    fromsourcevolumes: "vol1"
+- name: Create a clone from source volumes using UIDs
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vg1_clone_from_uuid_vols"
+    state: "present"
+    fromsourcevolumes: 6005076400810261F80000000000027E:6005076400810261F80000000000027D
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+- name: Create a clone with volumegroup UUID
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vol1_clone_vg_uuid"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+    fromsourcevolumes: "vol1"
+    volumegroup: 66197B52-9707-548D-8C42-E91A7D35F6B8
+- name: Create a clone with partition UUID
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vg1_clone_partition_uuid"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+    partition: 66197B52-9707-548D-8C42-E91A7D35F6B8
+- name: Create a clone with draft partition UUID
+  ibm.storage_virtualize.ibm_sv_manage_clone:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: "{{ log_path }}"
+    name: "vg1_clone_draft_partition_uuid"
+    state: "present"
+    pool: "pool1"
+    type: "clone"
+    snapshot: "snapshot1"
+    draftpartition: 66197B52-9707-548D-8C42-E91A7D35F6B8
 '''
 
 RETURN = '''#'''
@@ -178,9 +287,12 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
     IBMSVCRestApi,
     svc_argument_spec,
-    get_logger
+    get_logger,
+    is_uuid
 )
 from ansible.module_utils._text import to_native
+
+UUID = 'uuid'
 
 
 class IBMSVClone(object):
@@ -201,7 +313,8 @@ class IBMSVClone(object):
                 preferrednode=dict(type='str', required=False),
                 partition=dict(type='str', required=False),
                 ownershipgroup=dict(type='str', required=False),
-                ignoreuserfcmaps=dict(type='str', required=False, choices=['yes', 'no'])
+                ignoreuserfcmaps=dict(type='str', required=False, choices=['yes', 'no']),
+                draftpartition=dict(type='str', required=False)
             )
         )
 
@@ -228,6 +341,7 @@ class IBMSVClone(object):
         self.partition = self.module.params.get('partition', "")
         self.ownershipgroup = self.module.params.get('ownershipgroup', "")
         self.ignoreuserfcmaps = self.module.params.get('ignoreuserfcmaps', "")
+        self.draftpartition = self.module.params.get('draftpartition', "")
 
         # internal variable
         self.changed = False
@@ -254,7 +368,7 @@ class IBMSVClone(object):
             self.OBJECT_TYPE = 'volumegroup'
         if self.state == 'present':
             if self.OBJECT_TYPE == 'volume':
-                invalids = ('partition', 'ownershipgroup', 'ignoreuserfcmaps')
+                invalids = ('partition', 'ownershipgroup', 'ignoreuserfcmaps', 'draftpartition')
                 invalid_exists = ', '.join((var for var in invalids if not getattr(self, var) in {'', None}))
                 if invalid_exists:
                     self.module.fail_json(
@@ -285,14 +399,22 @@ class IBMSVClone(object):
         return merged_result
 
     # Funciton to check whether all volumes inside the volumegroup belonging to the same pool
-    def check_volumes_in_pool(self, vg_name, pool_name):
+    def check_volumes_in_pool(self, vg_name, pool):
         vol_list = self.restapi.svc_obj_info("lsvdisk", {"filtervalue" : "volume_group_name=%s" % vg_name}, [])
         for vol in vol_list:
             if self.fromsourcevolumes_list and vol.get("name") not in self.fromsourcevolumes_list:
                 continue
-            if pool_name != vol.get("mdisk_grp_name"):
-                self.log("One or more volumes belonging to volumegroup (%s) are in different pool", vg_name)
-                return False
+            if pool != vol.get("mdisk_grp_name"):
+                if is_uuid(pool):
+                    vol_pool_uuid = self.restapi.svc_obj_info('lsmdiskgrp', cmdopts=None, cmdargs=[vol.get("mdisk_grp_name")]).get(UUID, '')
+                    if pool != vol_pool_uuid:
+                        self.log("One or more volumes belonging to volumegroup (%s) are in different pool", vg_name)
+                        return False
+                else:
+                    vol_pool_name = vol.get("mdisk_grp_name")
+                    if pool != vol_pool_name:
+                        self.log("One or more volumes belonging to volumegroup (%s) are in different pool", vg_name)
+                        return False
         return True
 
     def get_parent_uid_or_source_grp_from_snapshot(self):
@@ -344,13 +466,16 @@ class IBMSVClone(object):
         cmdopts = {
             'name': self.name,
             'type': self.type,
-            'snapshot': self.snapshot,
         }
-        source_grp_name, parent_uid = self.get_parent_uid_or_source_grp_from_snapshot()
-        if source_grp_name:
-            cmdopts['fromsourcegroup'] = source_grp_name
-        elif parent_uid:
-            cmdopts['fromsourceuid'] = parent_uid
+        if is_uuid(self.snapshot):
+            cmdopts['fromsnapshotid'] = self.snapshot
+        else:
+            source_grp_name, parent_uid = self.get_parent_uid_or_source_grp_from_snapshot()
+            cmdopts['snapshot'] = self.snapshot
+            if source_grp_name:
+                cmdopts['fromsourcegroup'] = source_grp_name
+            elif parent_uid:
+                cmdopts['fromsourceuid'] = parent_uid
 
         if self.OBJECT_TYPE == 'volume':
             cmd = 'mkvolume'
@@ -372,6 +497,7 @@ class IBMSVClone(object):
             'partition': self.partition,
             'ownershipgroup': self.ownershipgroup,
             'ignoreuserfcmaps': self.ignoreuserfcmaps,
+            'draftpartition': self.draftpartition
         }
 
         for key, value in optional_fields.items():
@@ -387,26 +513,56 @@ class IBMSVClone(object):
         params_mapping = (
             ('ownershipgroup', clone_data.get('owner_name', '')),
             ('ignoreuserfcmaps', clone_data.get('ignore_user_fc_maps', '')),
-            ('volumegroup', clone_data.get('volumegroup_name', '')),
+            ('volumegroup', clone_data.get('volume_group_name', '')),
             ('iogrp', clone_data.get('IO_group_name', '')),
             ('partition', clone_data.get('partition_name', '')),
             ('preferrednode', clone_data.get('preferred_node_name', '')),
             ('pool', clone_data.get('mdisk_grp_name', '')),
             ('snapshot', clone_data.get('source_snapshot', '')),
+            ('draftpartition', clone_data.get('draft_partition_name', ''))
         )
 
         props = dict((k, getattr(self, k)) for k, v in params_mapping if getattr(self, k) and getattr(self, k) != v)
         # Check for type changes if volume is present but type is different
         if self.OBJECT_TYPE == 'volume':
-            if clone_data.get('source_volume_name') != self.fromsourcevolumes:
+            # Handle fromsourcevolumes UUID comparison
+            if is_uuid(self.fromsourcevolumes):
+                source_vol_name = clone_data.get('source_volume_name', '')
+                if source_vol_name:
+                    source_vol_uuid = self.restapi.svc_obj_info('lsvdisk', cmdopts=None, cmdargs=[source_vol_name]).get('volume_UID', '')
+                    if source_vol_uuid != self.fromsourcevolumes:
+                        self.module.fail_json(
+                            msg="Specified fromsourcevolumes does not match with existing clone's source volume."
+                        )
+            elif clone_data.get('source_volume_name') != self.fromsourcevolumes:
                 self.module.fail_json(
                     msg="Specified fromsourcevolumes does not match with existing clone's source volume."
                 )
+            if is_uuid(self.pool) and 'pool' in props:
+                pool_uuid = self.restapi.svc_obj_info('lsmdiskgrp', cmdopts=None, cmdargs=[clone_data.get('mdisk_grp_name', '')]).get(UUID, '')
+                if pool_uuid == self.pool:
+                    del props['pool']
+
+            if is_uuid(self.volumegroup) and 'volumegroup' in props:
+                vg_uuid = self.restapi.svc_obj_info('lsvolumegroup', cmdopts=None, cmdargs=[clone_data.get('volume_group_name', '')]).get(UUID, '')
+                if vg_uuid == self.volumegroup:
+                    del props['volumegroup']
+
         else:
             if 'pool' in props:
                 # volumegroup's pool cannot be changed after creation
                 if self.check_volumes_in_pool(self.name, self.pool):
                     del props['pool']
+
+            if is_uuid(self.partition) and 'partition' in props:
+                ptn_uuid = self.restapi.svc_obj_info('lspartition', cmdopts=None, cmdargs=[clone_data.get('partition_name', '')]).get(UUID, '')
+                if ptn_uuid == self.partition:
+                    del props['partition']
+
+            if is_uuid(self.draftpartition) and 'draftpartition' in props and clone_data.get('draft_partition_name'):
+                ptn_uuid = self.restapi.svc_obj_info('lspartition', cmdopts=None, cmdargs=[clone_data.get('draft_partition_name', '')]).get(UUID, '')
+                if ptn_uuid == self.draftpartition:
+                    del props['draftpartition']
 
         vol_type = clone_data.get('volume_type')
         vg_type = clone_data.get('volume_group_type')
@@ -422,8 +578,19 @@ class IBMSVClone(object):
             props["type"] = self.type
         # If source type is clone, source_snapshot is not identifiable
         if source_type == "clone":
-            if "source_snapshot" in props:
-                del props["source_snapshot"]
+            if "snapshot" in props:
+                del props["snapshot"]
+        else:
+            if is_uuid(self.snapshot) and 'snapshot' in props:
+                source_snap = clone_data.get('source_snapshot', '')
+                if source_snap:
+                    if self.OBJECT_TYPE == 'volume':
+                        snap_uuid = self.restapi.svc_obj_info('lsvolumesnapshot', cmdopts=None, cmdargs=[source_snap]).get(UUID, '')
+                    else:
+                        snap_uuid = self.restapi.svc_obj_info('lsvolumegroupsnapshot', cmdopts=None, cmdargs=[source_snap]).get(UUID, '')
+                    if snap_uuid == self.snapshot:
+                        del props['snapshot']
+
         return props
 
     def apply(self):

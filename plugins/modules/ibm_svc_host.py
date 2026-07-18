@@ -9,6 +9,7 @@
 #            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #            Lavanya C R <Lavanya.c.r1@ibm.com>
 #            Rahul Pawar <rahul.p@ibm.com>
+#            Dhirender Singh <dhirender.singh1@ibm.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
@@ -24,7 +25,7 @@ description:
 options:
     name:
         description:
-            - Specifies a name or label for the new host object.
+            - Specifies a name or label or UUID for the new host object.
         required: true
         type: str
     state:
@@ -65,6 +66,13 @@ options:
             - The parameters I(fcwwpn) and I(iscsiname) are mutually exclusive.
             - Required when I(state=present), to create or modify a Fibre Channel (FC) host.
         type: str
+    saswwpn:
+        description:
+            - List of SAS (Serial Attached SCSI) Initiator WWPNs to be added to the host. The complete list of WWPNs must be provided.
+            - The parameters I(saswwpn), I(fcwwpn), I(iscsiname), I(nqn), and I(fdminame) are mutually exclusive.
+            - Required when I(state=present), to create or modify a SAS host.
+        type: str
+        version_added: '3.4.0'
     iscsiname:
         description:
             - List of Initiator IQNs to be added to the host. IQNs are separated by comma. The complete list of IQNs must be provided.
@@ -86,9 +94,10 @@ options:
         version_added: '1.12.0'
     protocol:
         description:
-            - Specifies the protocol used by the host to communicate with the storage system. Only 'scsi' protocol is supported.
+            - Specifies the protocol used by the host to communicate with the storage system.
             - Valid when I(state=present), to create a host.
-        choices: [scsi, rdmanvme, tcpnvme, fcnvme, iscsi, fcscsi]
+            - Use I(sas) when creating a host with I(saswwpn).
+        choices: [scsi, sas, rdmanvme, tcpnvme, fcnvme, iscsi, fcscsi]
         type: str
     type:
         description:
@@ -103,7 +112,7 @@ options:
         type: str
     hostcluster:
         description:
-            - Specifies the name of the host cluster to which the host object is to be added.
+            - Specifies the name or UUID of the host cluster to which the host object is to be added.
               A host cluster must exist before a host object can be added to it.
             - Parameters I(hostcluster) and I(nohostcluster) are mutually exclusive.
             - Valid when I(state=present), to create or modify a host.
@@ -118,7 +127,7 @@ options:
         version_added: '1.5.0'
     old_name:
         description:
-            - Specifies the old name of the host while renaming.
+            - Specifies the old name or UUID of the host while renaming.
             - Valid when I(state=present), to rename an existing host.
         type: str
         version_added: '1.9.0'
@@ -130,7 +139,7 @@ options:
        version_added: '1.12.0'
     partition:
        description:
-           - Specifies the storage partition to be associated with the host.
+           - Specifies the storage partition name or UUID to be associated with the host.
            - Valid when I(state=present), to create or modify a host.
            - Supported from Storage Virtualize family systems 8.6.1.0 or later.
        type : str
@@ -145,7 +154,7 @@ options:
        version_added: '2.1.0'
     draftpartition:
         description:
-           - Specifies the name of the draft partition to be assigned to the host.
+           - Specifies the name or UUID of the draft partition to be assigned to the host.
            - Valid when I(state=present), to modify a host.
            - Supported from Storage Virtualize family systems 8.6.3.0 or later.
         type : str
@@ -193,11 +202,19 @@ options:
              a storage partition configured for high availability.
         type : str
         version_added: '2.7.0'
+    autostoragediscovery:
+        description:
+            - Specifies whether to enable auto storage discovery for the host.
+            - Valid when I(state=present), to create or modify a host.
+        choices: ['yes', 'no']
+        type: str
+        version_added: '3.4.0'
 author:
     - Sreshtant Bohidar (@Sreshtant-Bohidar)
     - Rohit Kumar (@rohitk-github)
     - Sandip G. Rajbanshi (@Sandip-Rajbanshi)
     - Lavanya C R(@Lavanya-C-R1)
+    - Dhirender Singh (@Dhirender-Singh1)
 notes:
     - This module supports C(check_mode).
     - scsi option is deprecated from 8.5.0.0. Instead of scsi, use iscsi and fcscsi as the case may be.
@@ -352,6 +369,14 @@ EXAMPLES = '''
     state: present
     name: host0
     site: ""
+- name: Update Auto Storage Discovery setting on an existing host
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ cluster_ip }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: "svc-host-01"
+    state: present
+    autostoragediscovery: 'yes'
 - name: Create a fcnvme host inside a partition
   ibm.storage_virtualize.ibm_svc_host:
     clustername: "{{ clustername }}"
@@ -375,15 +400,54 @@ EXAMPLES = '''
     protocol: tcpnvme
     nqn: nqn.2014-08.org.nvmexpress:b2071fa4-4356-410f-a4ae-7ebfab5b0e90
     portset: postset0
+    partition: partition0
     state: present
+- name: Add a host to an existing host cluster
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: host0
+    state: present
+    hostcluster: C2A27DD7-C5DA-5078-8A41-3F72D5C9E6B0
+- name: Create a host with partition UUID
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: host_with_partition_uuid
+    state: present
+    fcwwpn: 100000109B570216:1000001AA0570266
+    partition: E7D01628-9B02-5FE9-A3C7-4D9182F6B05E
+- name: Add host to draft partition using UUID
+  ibm.storage_virtualize.ibm_svc_host:
+    clustername: "{{ clustername }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    log_path: /tmp/playbook.debug
+    name: host0
+    state: present
+    draftpartition: E7D01628-9B02-5FE9-A3C7-4D9182F6B05E
 '''
 
 RETURN = '''#'''
 
 from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi, svc_argument_spec, get_logger
+from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (
+    IBMSVCRestApi,
+    svc_argument_spec,
+    get_logger,
+    is_uuid,
+    is_feature_supported
+)
+
 from ansible.module_utils._text import to_native
+
+UUID = 'uuid'
 
 CMMVC5737E_MESSAGE = 'CMMVC5737E The parameter {0} has been entered multiple times. Enter the parameter only one time.'
 
@@ -398,9 +462,11 @@ class IBMSVChost(object):
                 state=dict(type='str', required=True, choices=['absent',
                                                                'present']),
                 fcwwpn=dict(type='str', required=False),
+                saswwpn=dict(type='str', required=False),
                 iscsiname=dict(type='str', required=False),
                 iogrp=dict(type='str', required=False),
                 protocol=dict(type='str', required=False, choices=['scsi',
+                                                                   'sas',
                                                                    'rdmanvme',
                                                                    'tcpnvme',
                                                                    'fcnvme',
@@ -419,7 +485,8 @@ class IBMSVChost(object):
                 nodraftpartition=dict(type='bool', required=False),
                 fdminame=dict(type='str', required=False),
                 suppressofflinealert=dict(type='str', required=False, choices=['yes', 'no']),
-                location=dict(type='str')
+                location=dict(type='str'),
+                autostoragediscovery=dict(type='str', required=False, choices=['yes', 'no']),
             )
         )
 
@@ -437,6 +504,7 @@ class IBMSVChost(object):
 
         # Optional
         self.fcwwpn = self.module.params.get('fcwwpn', '')
+        self.saswwpn = self.module.params.get('saswwpn', '')
         self.iscsiname = self.module.params.get('iscsiname', '')
         self.iogrp = self.module.params.get('iogrp', '')
         self.protocol = self.module.params.get('protocol', '')
@@ -454,37 +522,27 @@ class IBMSVChost(object):
         self.fdminame = self.module.params.get('fdminame', '')
         self.suppressofflinealert = self.module.params.get('suppressofflinealert', '')
         self.location = self.module.params.get('location', '')
+        self.autostoragediscovery = self.module.params.get('autostoragediscovery', '')
 
         # internal variable
         self.changed = False
 
-        # Handling duplicate fcwwpn
-        if self.fcwwpn:
-            dup_fcwwpn = self.duplicate_checker(self.fcwwpn.split(':'))
-            if dup_fcwwpn:
-                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_fcwwpn))
-
-        # Handling duplicate iscsiname
-        if self.iscsiname:
-            dup_iscsiname = self.duplicate_checker(self.iscsiname.split(','))
-            if dup_iscsiname:
-                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_iscsiname))
-
-        # Handling duplicate nqn
-        if self.nqn:
-            dup_nqn = self.duplicate_checker(self.nqn.split(','))
-            if dup_nqn:
-                self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(dup_nqn))
+        # Handling duplicate identifiers
+        duplicate_checks = [
+            (self.saswwpn, ':'),
+            (self.fcwwpn, ':'),
+            (self.iscsiname, ','),
+            (self.nqn, ',')
+        ]
+        for value, delimiter in duplicate_checks:
+            if value:
+                duplicate = self.duplicate_checker(value.split(delimiter))
+                if duplicate:
+                    self.module.fail_json(msg=CMMVC5737E_MESSAGE.format(duplicate))
 
         # Handling for missing mandatory parameter name
         if not self.name:
             self.module.fail_json(msg='Missing mandatory parameter: name')
-        # Handling for parameter protocol
-        if self.protocol:
-            if self.protocol not in ('scsi', 'rdmanvme', 'tcpnvme', 'fcnvme', 'iscsi', 'fcscsi'):
-                self.module.fail_json(msg="[{0}] is not supported for iscsiname. only 'scsi', 'rdmanvme', 'tcpnvme', and 'fcnvme' "
-                                          "protocols are supported.".format(self.protocol))
-
         self.restapi = IBMSVCRestApi(
             module=self.module,
             clustername=self.module.params['clustername'],
@@ -511,9 +569,12 @@ class IBMSVChost(object):
             if self.nqn and not self.protocol:
                 self.module.fail_json(msg='Parameter [nqn] can only be entered when [protocol] has been entered.')
 
+            if self.saswwpn and self.protocol != 'sas':
+                self.module.fail_json(msg='[protocol] set to [sas] is required to use saswwpn.')
+
         if self.state == 'absent':
             fields = [f for f in ['protocol', 'portset', 'nqn', 'type', 'partition', 'nopartition', 'draftpartition', 'nodraftpartition',
-                                  'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'iogrp', 'site'] if getattr(self, f)]
+                                  'suppressofflinealert', 'location', 'fdminame', 'iscsiname', 'fcwwpn', 'saswwpn', 'iogrp', 'site'] if getattr(self, f)]
 
             if any(fields):
                 self.module.fail_json(msg='Parameters {0} not supported while deleting a host'.format(', '.join(fields)))
@@ -522,6 +583,7 @@ class IBMSVChost(object):
         # for validating parameter while renaming a host
         parameters = {
             "fcwwpn": self.fcwwpn,
+            "saswwpn": self.saswwpn,
             "iscsiname": self.iscsiname,
             "iogrp": self.iogrp,
             "protocol": self.protocol,
@@ -532,7 +594,8 @@ class IBMSVChost(object):
             "partition": self.partition,
             "nopartition": self.nopartition,
             "fdminame": self.fdminame,
-            "suppressofflinealert": self.suppressofflinealert
+            "suppressofflinealert": self.suppressofflinealert,
+            "autostoragediscovery": self.autostoragediscovery
         }
         parameters_exists = [parameter for parameter, value in parameters.items() if value]
         if parameters_exists:
@@ -589,7 +652,15 @@ class IBMSVChost(object):
 
         if self.hostcluster and (self.hostcluster != data['host_cluster_name']):
             if data['host_cluster_name'] != '':
-                self.module.fail_json(msg="Host already belongs to hostcluster [%s]" % data['host_cluster_name'])
+                if is_uuid(self.hostcluster):
+                    host_cluster_info = self.restapi.svc_obj_info(
+                        'lshostcluster',
+                        None,
+                        [data['host_cluster_name']])
+                    if host_cluster_info and host_cluster_info['uuid'] != self.hostcluster:
+                        self.module.fail_json(msg="Host already belongs to hostcluster [%s]" % data['host_cluster_name'])
+                else:
+                    self.module.fail_json(msg="Host already belongs to hostcluster [%s]" % data['host_cluster_name'])
             else:
                 props += ['hostcluster']
 
@@ -603,6 +674,12 @@ class IBMSVChost(object):
             self.input_fcwwpn = self.fcwwpn.upper().split(":")
             if set(self.existing_fcwwpn).symmetric_difference(set(self.input_fcwwpn)):
                 props += ['fcwwpn']
+
+        if self.saswwpn:
+            self.existing_saswwpn = [node["SAS_WWPN"].upper() for node in data['nodes'] if "SAS_WWPN" in node]
+            self.input_saswwpn = self.saswwpn.upper().split(":")
+            if set(self.existing_saswwpn).symmetric_difference(set(self.input_saswwpn)):
+                props += ['saswwpn']
 
         if self.iscsiname:
             self.existing_iscsiname = [node["iscsi_name"] for node in data['nodes'] if "iscsi_name" in node]
@@ -653,7 +730,15 @@ class IBMSVChost(object):
 
         if self.partition and self.partition != data['partition_name']:
             if data['partition_name'] != '':
-                self.module.fail_json(msg="Host already belongs to partition [%s]" % data['partition_name'])
+                if is_uuid(self.partition) :
+                    partition_info = self.restapi.svc_obj_info(
+                        'lspartition',
+                        None,
+                        [data['partition_name']])
+                    if partition_info['uuid'] != self.partition:
+                        self.module.fail_json(msg="Host already belongs to partition [%s]" % data['partition_name'])
+                else:
+                    self.module.fail_json(msg="Host already belongs to partition [%s]" % data['partition_name'])
             else:
                 props += ['partition']
 
@@ -662,12 +747,20 @@ class IBMSVChost(object):
                 props += ['nopartition']
 
         if self.draftpartition:
-            if self.draftpartition == data['draft_partition_name']:
-                self.log("Host [%s] is already associated with draft partition [%s].", self.name, self.draftpartition)
-            elif self.draftpartition == data['partition_name']:
-                self.log("Host [%s] is already associated with partition [%s].", self.name, self.draftpartition)
+            if is_uuid(self.draftpartition) and data['draft_partition_name'] != '':
+                draft_partition_info = self.restapi.svc_obj_info(
+                    'lspartition',
+                    None,
+                    [data['draft_partition_name']])
+                if draft_partition_info['uuid'] != self.draftpartition:
+                    props += ['draftpartition']
             else:
-                props += ['draftpartition']
+                if self.draftpartition == data['draft_partition_name']:
+                    self.log("Host [%s] is already associated with draft partition [%s].", self.name, self.draftpartition)
+                elif self.draftpartition == data['partition_name']:
+                    self.log("Host [%s] is already associated with partition [%s].", self.name, self.draftpartition)
+                else:
+                    props += ['draftpartition']
 
         if self.nodraftpartition:
             if data['draft_partition_name'] != '':
@@ -684,17 +777,69 @@ class IBMSVChost(object):
                 self.nolocation = True
                 props += ['nolocation']
 
+        if self.autostoragediscovery:
+            if self.autostoragediscovery != data['auto_storage_discovery']:
+                props += ['autostoragediscovery']
+
         self.log("host_probe props='%s'", props)
         return props
 
-    def host_create(self):
-        if (not self.fcwwpn) and (not self.iscsiname) and (not self.nqn) and (not self.fdminame):
-            self.module.fail_json(msg="One of fcwwpn, iscsiname, nqn or fdminame must be provided to create a new host.")
+    def _is_portset_autozone_enabled(self, portset_name):
+        """Check if a portset has autozone enabled."""
+        if not portset_name:
+            return False
 
-        if (self.fcwwpn and self.iscsiname) or (self.nqn and self.iscsiname) or (
-            self.fcwwpn and self.nqn) or (self.fcwwpn and self.fdminame) or (
-                self.iscsiname and self.fdminame) or (self.nqn and self.fdminame):
-            self.module.fail_json(msg="You have to pass only one parameter among fcwwpn, nqn, iscsiname and fdminame to the module.")
+        portset_data = self.restapi.svc_obj_info(
+            cmd='lsportset',
+            cmdopts=None,
+            cmdargs=[portset_name]
+        )
+
+        if not portset_data:
+            self.module.fail_json(msg=f"Portset '{portset_name}' not found.")
+
+        return portset_data.get('auto_zone_enabled', 'no') == 'yes'
+
+    def _resolve_force_flag_for_host(self, host_data=None):
+        """Resolve the force flag based on portset autozone status."""
+        portset_to_check = self.portset
+
+        # If user didn't provide a portset, check if the host already has one
+        if not portset_to_check and host_data:
+            portset_to_check = host_data.get('portset_name') or host_data.get('portset_id')
+
+        if not portset_to_check:
+            return 'force'
+
+        # Use the helper method to check autozone status
+        if self._is_portset_autozone_enabled(portset_to_check):
+            code_level = self.restapi.get_system_code_level()
+            if not is_feature_supported('autozone_fields', code_level):
+                self.module.fail_json(
+                    msg=f"Autozone feature requires firmware version 9.1.2.0 or later. "
+                        f"Current version: {code_level}"
+                )
+            self.log("Portset '%s' has autozone enabled, using -forceautozone", portset_to_check)
+            return 'forceautozone'
+        else:
+            self.log("Portset '%s' has autozone disabled, using -force", portset_to_check)
+            return 'force'
+
+    def host_create(self):
+        if is_uuid(self.name):
+            self.module.fail_json(msg="Host with UUID [%s] does not exist and cannot be created." % self.name)
+        protocol_identifiers = [
+            self.fcwwpn,
+            self.saswwpn,
+            self.iscsiname,
+            self.nqn,
+            self.fdminame,
+        ]
+
+        selected_protocols = [id for id in protocol_identifiers if id]
+
+        if len(selected_protocols) != 1:
+            self.module.fail_json(msg="One of fcwwpn, saswwpn, iscsiname, nqn or fdminame must be provided to create a new host.")
 
         if self.draftpartition:
             self.module.fail_json(msg='[draftpartition] is not a supported parameter while creating host')
@@ -710,9 +855,15 @@ class IBMSVChost(object):
 
         # Make command
         cmd = 'mkhost'
-        cmdopts = {'name': self.name, 'force': True}
+        cmdopts = {'name': self.name}
 
-        for field in ['fcwwpn', 'iscsiname', 'nqn', 'fdminame']:
+        if self.fcwwpn:
+            force_flag = self._resolve_force_flag_for_host()
+        else:
+            force_flag = 'force'
+        cmdopts[force_flag] = True
+
+        for field in ['fcwwpn', 'saswwpn', 'iscsiname', 'nqn', 'fdminame']:
             value = getattr(self, field, None)
             if value is not None:
                 cmdopts[field] = value
@@ -722,7 +873,8 @@ class IBMSVChost(object):
             self.validate_iogrp()
 
         cmdopts['protocol'] = self.protocol if self.protocol else 'scsi'
-        for field in ['iogrp', 'type', 'site', 'portset', 'partition', 'location']:
+        for field in ['iogrp', 'type', 'site', 'portset', 'partition', 'location',
+                      'autostoragediscovery']:
             value = getattr(self, field, None)
             if value is not None:
                 cmdopts[field] = value
@@ -740,20 +892,45 @@ class IBMSVChost(object):
             self.module.fail_json(
                 msg="Failed to create host [%s]" % self.name)
 
-    def host_fcwwpn_update(self):
+    def host_fcwwpn_update(self, host_data):
+        """Update the FC WWPNs for the host."""
+
         to_be_removed = ':'.join(list(set(self.existing_fcwwpn) - set(self.input_fcwwpn)))
         if to_be_removed:
+            cmdopts = {'fcwwpn': to_be_removed, 'force': True}
             self.restapi.svc_run_command(
                 'rmhostport',
-                {'fcwwpn': to_be_removed, 'force': True},
+                cmdopts,
                 [self.name]
             )
             self.log('%s removed from %s', to_be_removed, self.name)
         to_be_added = ':'.join(list(set(self.input_fcwwpn) - set(self.existing_fcwwpn)))
         if to_be_added:
+            # Resolve correct force flag based on portset autozone status
+            force_flag = self._resolve_force_flag_for_host(host_data)
+            cmdopts = {'fcwwpn': to_be_added}
+            cmdopts[force_flag] = True
             self.restapi.svc_run_command(
                 'addhostport',
-                {'fcwwpn': to_be_added, 'force': True},
+                cmdopts,
+                [self.name]
+            )
+            self.log('%s added to %s', to_be_added, self.name)
+
+    def host_saswwpn_update(self):
+        to_be_removed = ':'.join(list(set(self.existing_saswwpn) - set(self.input_saswwpn)))
+        if to_be_removed:
+            self.restapi.svc_run_command(
+                'rmhostport',
+                {'saswwpn': to_be_removed, 'force': True},
+                [self.name]
+            )
+            self.log('%s removed from %s', to_be_removed, self.name)
+        to_be_added = ':'.join(list(set(self.input_saswwpn) - set(self.existing_saswwpn)))
+        if to_be_added:
+            self.restapi.svc_run_command(
+                'addhostport',
+                {'saswwpn': to_be_added, 'force': True},
                 [self.name]
             )
             self.log('%s added to %s', to_be_added, self.name)
@@ -821,10 +998,24 @@ class IBMSVChost(object):
         cmd = 'chhost'
         cmdopts = {}
         if 'fcwwpn' in modify:
-            self.host_fcwwpn_update()
+            # Update portset first if changing it alongside fcwwpn, so WWPN operations
+            # use the correct force flag (-force vs -forceautozone) based on the new portset configuration.
+            if "portset" in modify:
+                cmdopts["portset"] = getattr(self, "portset")
+                cmdargs = [self.name]
+                self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
+                modify.remove("portset")
+                self.log("portset of %s updated to %s before fcwwpn update", self.name, self.portset)
+                cmdopts = {}
+            self.host_fcwwpn_update(host_data)
             self.changed = True
             self.log("fcwwpn of %s updated", self.name)
             modify.remove('fcwwpn')
+        if 'saswwpn' in modify:
+            self.host_saswwpn_update()
+            self.changed = True
+            self.log("saswwpn of %s updated", self.name)
+            modify.remove('saswwpn')
         if 'iscsiname' in modify:
             self.host_iscsiname_update()
             self.changed = True
@@ -845,6 +1036,13 @@ class IBMSVChost(object):
             cmdopts[param] = getattr(self, param)
 
         if cmdopts:
+            if 'partition' in cmdopts:
+                cmdopts['partition'] = self.partition
+            if 'hostcluster' in cmdopts:
+                cmdopts['hostcluster'] = self.hostcluster
+            if 'draftpartition' in cmdopts:
+                cmdopts['draftpartition'] = self.draftpartition
+
             cmdargs = [self.name]
             self.restapi.svc_run_command(cmd, cmdopts, cmdargs)
             # Any error will have been raised in svc_run_command
@@ -926,7 +1124,10 @@ class IBMSVChost(object):
         if not old_host_data and not host_data:
             self.module.fail_json(msg="Host [{0}] does not exists.".format(self.old_name))
         elif old_host_data and host_data:
-            self.module.fail_json(msg="Host [{0}] already exists.".format(self.name))
+            if old_host_data.get(UUID) == host_data.get(UUID):
+                msg = "Host [{0}] already renamed.".format(self.name)
+            else:
+                self.module.fail_json(msg="Host [{0}] already exists.".format(self.name))
         elif not old_host_data and host_data:
             msg = "Host with name [{0}] already exists.".format(self.name)
         elif old_host_data and not host_data:

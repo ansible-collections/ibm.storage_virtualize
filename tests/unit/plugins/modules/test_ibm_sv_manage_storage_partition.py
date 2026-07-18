@@ -1592,6 +1592,125 @@ class TestIBMSVStoragePartition(unittest.TestCase):
                 "Parameter managementportset and nomanagementportset are mutually exclusive."
             )
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_storage_partition_using_UUID_idempotency(self,
+                                                             svc_authorize_mock,
+                                                             partition_exist_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED7000000000000020',
+            'state': 'present'
+        }):
+            partition_exist_mock.return_value = {
+                "id": "1",
+                "name": "ptn0",
+                "uuid": "60050768108180ED7000000000000020"
+            }
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_storage_partition_using_UUID_replicationpolicy(self,
+                                                                   svc_authorize_mock,
+                                                                   svc_run_command_mock,
+                                                                   partition_exist_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition1',
+            'replicationpolicy': '058C1215-9786-5C3E-9D17-4E82B6F0A3C5',
+            'state': 'present'
+        }):
+            partition_exist_mock.return_value = {}
+            svc_run_command_mock.return_value = {}
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped - mkpartition uses positional args
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[1]['replicationpolicy'], '058C1215-9786-5C3E-9D17-4E82B6F0A3C5')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_storage_partition_using_UUID_replicationpolicy_idempotency(self,
+                                                                               svc_authorize_mock,
+                                                                               svc_obj_info_mock,
+                                                                               partition_exist_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition1',
+            'replicationpolicy': '058C1215-9786-5C3E-9D17-4E82B6F0A3C5',
+            'state': 'present'
+        }):
+            partition_exist_mock.return_value = {
+                "id": "1",
+                "name": "partition1",
+                "replication_policy_name": "policy1"
+            }
+            svc_obj_info_mock.return_value = {
+                "name": "policy1",
+                "uuid": "058C1215-9786-5C3E-9D17-4E82B6F0A3C5"
+            }
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_storage_partition_using_UUID_name(self,
+                                                      svc_authorize_mock,
+                                                      svc_run_command_mock,
+                                                      partition_exist_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50',
+            'state': 'absent',
+            'deletenonpreferredmanagementobjects': True
+        }):
+            partition_exist_mock.return_value = {
+                "id": "1",
+                "name": "0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50"
+            }
+            svc_run_command_mock.return_value = {}
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped - rmpartition uses keyword args
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(kwargs['cmdargs'][0], '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50')
+
 
 if __name__ == '__main__':
     unittest.main()

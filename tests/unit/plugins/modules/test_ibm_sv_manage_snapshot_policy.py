@@ -179,6 +179,53 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_snapshot_policy(self, svc_authorize_mock,
+                                    svc_run_command_mock, svc_obj_info_mock, sp_exists_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshotpolicy1',
+            'old_name': 'snapshotpolicy0',
+            'state': 'present'
+        }):
+            sp_exists_mock.return_value = {}
+            svc_obj_info_mock.return_value = [{"id": "3", "name": "snapshotpolicy0"}]
+
+            sp = IBMSVCSnapshotPolicy()
+
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'], 'Snapshot policy [snapshotpolicy0] has been successfully renamed to [snapshotpolicy1]')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_snapshot_policy_with_unsupported_parameters(self, svc_authorize_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'snapshotpolicy1',
+            'old_name': 'snapshotpolicy0',
+            'backupinterval': '1',
+            'state': 'present'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVCSnapshotPolicy()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn("Parameters ['backupinterval'] not supported while renaming a snapshot policy", exc.value.args[0]['msg'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -331,6 +378,73 @@ class TestIBMSVCSnapshotPolicy(unittest.TestCase):
             with pytest.raises(AnsibleExitJson) as exc:
                 sp.apply()
             self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_snapshot_policy_using_UUID_name_idempotency(self, svc_authorize_mock,
+                                                                svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '058C1215-9786-5C3E-AC19-5E73D2F8B640',
+            'backupunit': 'day',
+            'backupinterval': '1',
+            'backupstarttime': '2102281800',
+            'retentiondays': '10',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = [{
+                "policy_id": "3",
+                "policy_name": "058C1215-9786-5C3E-AC19-5E73D2F8B640",
+                "schedule_id": "1",
+                "backup_unit": "day",
+                "backup_interval": "1",
+                "backup_start_time": "210228180000",
+                "retention_days": "10"
+            }]
+            sp = IBMSVCSnapshotPolicy()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_snapshotpolicy.IBMSVCSnapshotPolicy.policy_exists')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_snapshot_policy_using_UUID_name(self, svc_authorize_mock,
+                                                    svc_run_command_mock, sp_exists_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '058C1215-9786-5C3E-9D17-4E82B6F0A3C5',
+            'state': 'absent'
+        }):
+            sp_exists_mock.return_value = {
+                "policy_id": "3",
+                "policy_name": "058C1215-9786-5C3E-9D17-4E82B6F0A3C5",
+                "schedule_id": "1",
+                "backup_unit": "day",
+                "backup_interval": "1",
+                "backup_start_time": "210228180000",
+                "retention_days": "10"
+            }
+            svc_run_command_mock.return_value = {}
+            sp = IBMSVCSnapshotPolicy()
+            with pytest.raises(AnsibleExitJson) as exc:
+                sp.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            # Verify UUID was stripped in the command
+            args, kwargs = svc_run_command_mock.call_args
+            # svc_run_command(cmd, cmdopts, cmdargs) - cmdargs is passed as keyword argument
+            self.assertEqual(kwargs['cmdargs'][0], '058C1215-9786-5C3E-9D17-4E82B6F0A3C5')
 
 
 if __name__ == '__main__':

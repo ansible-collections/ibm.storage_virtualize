@@ -1611,6 +1611,35 @@ class TestIBMSVCvolume(unittest.TestCase):
             v = IBMSVCvolume()
             v.create_volume()
 
+    # Create thinclone from volume
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_thinclone_using_UID(self, svc_authorize_mock,
+                                               svc_run_command_mock,
+                                               create_transient_snapshot_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_volume',
+            'pool': 'test_pool',
+            'type': 'thinclone',
+            'fromsourcevolume': '60050764008881864800000000000472'
+        }):
+            svc_run_command_mock.return_value = {
+                'id': '25',
+                'message': 'Volume, id [25], successfully created'
+            }
+            create_transient_snapshot_mock.return_value = 10
+            v = IBMSVCvolume()
+            v.create_volume()
+
     # Create clone from volume
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_manage_volume.IBMSVCvolume.create_transient_snapshot')
@@ -2911,6 +2940,417 @@ class TestIBMSVCvolume(unittest.TestCase):
                 v.apply()
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'], "Parameter [autoexpand] is invalid without [thin]")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_volume_using_UID(self, auth, svc_obj_info_mock, svc_run_command_mock):
+        '''
+        Test volume rename for a volume test_vol to havol1 on level 9.1.0.0
+        This will use chvolume.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vol',
+            'old_name': '60050764008881864800000000000472',
+            'state': 'present'
+        }):
+
+            svc_obj_info_mock.side_effect = [
+                {},
+                {
+                    "id": "78", "name": "test_vol", "vdisk_UID": "60050764008881864800000000000472",
+                },
+                {'code_level': '9.1.0.0 187.26.2506011402000'}
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_rename_volume_using_UID_idempotency(self, auth, svc_obj_info_mock):
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_vol',
+            'old_name': '60050764008881864800000000000472',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.side_effect = [
+                [{"id": "78", "name": "test_vol", "vdisk_UID": "60050764008881864800000000000472"},
+                 {"auto_delete": "no", "autoexpand": "", "compressed_copy": "no"}],
+                [{"id": "78", "name": "test_vol", "vdisk_UID": "60050764008881864800000000000472"},
+                 {"auto_delete": "no", "autoexpand": "", "compressed_copy": "no"}]
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    # UUID-based tests
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_get_existing_volume_using_UUID(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test getting existing volume using UUID instead of name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'pool': 'test_pool',
+            'size': '1',
+            'unit': 'gb',
+            'iogrp': 'io_grp0, io_grp1',
+            'volumegroup': 'test_volumegroup'
+        }):
+            svc_obj_info_mock.return_value = [
+                {
+                    "id": "24", "name": "test_volume", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1", "capacity": "1073741824", "type": "striped",
+                    "formatted": "yes", "formatting": "no", "mdisk_id": "", "mdisk_name": "", "FC_id": "", "FC_name": "",
+                    "RC_id": "", "RC_name": "", "vdisk_UID": "60050768108180ED700000000000002E", "preferred_node_id": "1",
+                    "fast_write_state": "empty", "cache": "readwrite", "udid": "", "fc_map_count": "0", "sync_rate": "50",
+                    "copy_count": "1", "se_copy_count": "0", "filesystem": "", "mirror_write_priority": "latency",
+                    "RC_change": "no", "compressed_copy_count": "0", "access_IO_group_count": "2", "last_access_time": "",
+                    "parent_mdisk_grp_id": "2", "parent_mdisk_grp_name": "site1pool1", "owner_type": "none", "owner_id": "",
+                    "owner_name": "", "encrypt": "no", "volume_id": "24", "volume_name": "test_volume", "function": "", "throttle_id": "",
+                    "throttle_name": "", "IOPs_limit": "", "bandwidth_limit_MB": "", "volume_group_id": "0",
+                    "volume_group_name": "test_volumegroup", "cloud_backup_enabled": "no", "cloud_account_id": "",
+                    "cloud_account_name": "", "backup_status": "off", "last_backup_time": "", "restore_status": "none",
+                    "backup_grain_size": "", "deduplicated_copy_count": "0", "protocol": "", "preferred_node_name": "node1",
+                    "safeguarded_expiration_time": "", "safeguarded_backup_count": "0"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1",
+                    "type": "striped", "mdisk_id": "", "mdisk_name": "", "fast_write_state": "empty", "used_capacity": "1073741824",
+                    "real_capacity": "1073741824", "free_capacity": "0", "overallocation": "100", "autoexpand": "", "warning": "",
+                    "grainsize": "", "se_copy": "no", "easy_tier": "on", "easy_tier_status": "balanced", "tiers": [
+                        {"tier": "tier_scm", "tier_capacity": "0"},
+                        {"tier": "tier0_flash", "tier_capacity": "1073741824"},
+                        {"tier": "tier1_flash", "tier_capacity": "0"},
+                        {"tier": "tier_enterprise", "tier_capacity": "0"},
+                        {"tier": "tier_nearline", "tier_capacity": "0"}
+                    ], "compressed_copy": "no", "uncompressed_used_capacity": "1073741824", "parent_mdisk_grp_id": "2",
+                    "parent_mdisk_grp_name": "site1pool1", "encrypt": "no", "deduplicated_copy": "no",
+                    "used_capacity_before_reduction": "", "safeguarded_mdisk_grp_id": "", "safeguarded_mdisk_grp_name": ""
+                }
+            ]
+            v = IBMSVCvolume()
+            data = v.get_existing_volume('60050768108180ED700000000000002E')
+            self.assertEqual(data[0]['vdisk_UID'], '60050768108180ED700000000000002E')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_for_creating_new_volume_using_UUID(self, auth_mock, c1, c2, c3):
+        '''Test creating a new volume using UUID as name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002F',
+            'state': 'present',
+            'size': '1',
+            'unit': 'gb',
+            'pool': 'test_pool',
+            'iogrp': 'io_grp0, io_grp1',
+        }):
+            c3.return_value = []
+            with pytest.raises(AnsibleFailJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(exc.value.args[0]['msg'], "Volume with UUID [60050768108180ED700000000000002F] does not exist and cannot be created.")
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_idempotnecy_creating_an_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+        '''Test idempotency when creating an existing volume using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'state': 'present',
+            'size': '1',
+            'unit': 'gb',
+            'pool': 'test_pool',
+        }):
+            c3.return_value = [
+                {
+                    "id": "24", "name": "test_volume", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "test_pool", "capacity": "1073741824", "type": "striped",
+                    "formatted": "yes", "formatting": "no", "mdisk_id": "", "mdisk_name": "", "FC_id": "", "FC_name": "",
+                    "RC_id": "", "RC_name": "", "vdisk_UID": "60050768108180ED700000000000002E", "preferred_node_id": "1",
+                    "fast_write_state": "empty", "cache": "readwrite", "udid": "", "fc_map_count": "0", "sync_rate": "50",
+                    "copy_count": "1", "se_copy_count": "0", "filesystem": "", "mirror_write_priority": "latency",
+                    "RC_change": "no", "compressed_copy_count": "0", "access_IO_group_count": "2", "last_access_time": "",
+                    "parent_mdisk_grp_id": "2", "parent_mdisk_grp_name": "test_pool", "owner_type": "none", "owner_id": "",
+                    "owner_name": "", "encrypt": "no", "volume_id": "24", "volume_name": "test_volume", "function": "", "throttle_id": "",
+                    "throttle_name": "", "IOPs_limit": "", "bandwidth_limit_MB": "", "volume_group_id": "",
+                    "volume_group_name": "", "cloud_backup_enabled": "no", "cloud_account_id": "",
+                    "cloud_account_name": "", "backup_status": "off", "last_backup_time": "", "restore_status": "none",
+                    "backup_grain_size": "", "deduplicated_copy_count": "0", "protocol": "", "preferred_node_name": "node1",
+                    "safeguarded_expiration_time": "", "safeguarded_backup_count": "0"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "2", "mdisk_grp_name": "test_pool",
+                    "type": "striped", "mdisk_id": "", "mdisk_name": "", "fast_write_state": "empty", "used_capacity": "1073741824",
+                    "real_capacity": "1073741824", "free_capacity": "0", "overallocation": "100", "autoexpand": "", "warning": "",
+                    "grainsize": "", "se_copy": "no", "easy_tier": "on", "easy_tier_status": "balanced", "tiers": [
+                        {"tier": "tier_scm", "tier_capacity": "0"},
+                        {"tier": "tier0_flash", "tier_capacity": "1073741824"},
+                        {"tier": "tier1_flash", "tier_capacity": "0"},
+                        {"tier": "tier_enterprise", "tier_capacity": "0"},
+                        {"tier": "tier_nearline", "tier_capacity": "0"}
+                    ], "compressed_copy": "no", "uncompressed_used_capacity": "1073741824", "parent_mdisk_grp_id": "2",
+                    "parent_mdisk_grp_name": "test_pool", "encrypt": "no", "deduplicated_copy": "no",
+                    "used_capacity_before_reduction": "", "safeguarded_mdisk_grp_id": "", "safeguarded_mdisk_grp_name": ""
+                }
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_module_for_deleting_an_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+        '''Test deleting an existing volume using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'state': 'absent'
+        }):
+            c3.return_value = [
+                {
+                    "id": "24", "name": "test_volume", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1", "capacity": "1073741824", "type": "striped",
+                    "formatted": "yes", "formatting": "no", "mdisk_id": "", "mdisk_name": "", "FC_id": "", "FC_name": "",
+                    "RC_id": "", "RC_name": "", "vdisk_UID": "60050768108180ED700000000000002E", "preferred_node_id": "1",
+                    "fast_write_state": "empty", "cache": "readwrite", "udid": "", "fc_map_count": "0", "sync_rate": "50",
+                    "copy_count": "1", "se_copy_count": "0", "filesystem": "", "mirror_write_priority": "latency",
+                    "RC_change": "no", "compressed_copy_count": "0", "access_IO_group_count": "2", "last_access_time": "",
+                    "parent_mdisk_grp_id": "2", "parent_mdisk_grp_name": "site1pool1", "owner_type": "none", "owner_id": "",
+                    "owner_name": "", "encrypt": "no", "volume_id": "24", "volume_name": "test_volume", "function": "", "throttle_id": "",
+                    "throttle_name": "", "IOPs_limit": "", "bandwidth_limit_MB": "", "volume_group_id": "0",
+                    "volume_group_name": "test_volumegroup", "cloud_backup_enabled": "no", "cloud_account_id": "",
+                    "cloud_account_name": "", "backup_status": "off", "last_backup_time": "", "restore_status": "none",
+                    "backup_grain_size": "", "deduplicated_copy_count": "0", "protocol": "", "preferred_node_name": "node1",
+                    "safeguarded_expiration_time": "", "safeguarded_backup_count": "0"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1",
+                    "type": "striped", "mdisk_id": "", "mdisk_name": "", "fast_write_state": "empty", "used_capacity": "1073741824",
+                    "real_capacity": "1073741824", "free_capacity": "0", "overallocation": "100", "autoexpand": "", "warning": "",
+                    "grainsize": "", "se_copy": "no", "easy_tier": "on", "easy_tier_status": "balanced", "tiers": [
+                        {"tier": "tier_scm", "tier_capacity": "0"},
+                        {"tier": "tier0_flash", "tier_capacity": "1073741824"},
+                        {"tier": "tier1_flash", "tier_capacity": "0"},
+                        {"tier": "tier_enterprise", "tier_capacity": "0"},
+                        {"tier": "tier_nearline", "tier_capacity": "0"}
+                    ], "compressed_copy": "no", "uncompressed_used_capacity": "1073741824", "parent_mdisk_grp_id": "2",
+                    "parent_mdisk_grp_name": "site1pool1", "encrypt": "no", "deduplicated_copy": "no",
+                    "used_capacity_before_reduction": "", "safeguarded_mdisk_grp_id": "", "safeguarded_mdisk_grp_name": ""
+                }
+            ]
+            c4.return_value = None
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_idempotency_deleting_non_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+        '''Test idempotency when deleting a non-existing volume using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'state': 'absent'
+        }):
+            c3.return_value = []
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_remove_volume_with_unmap_using_UUID(self,
+                                                 svc_authorize_mock,
+                                                 svc_obj_info_mock,
+                                                 svc_run_command_mock):
+        '''Test removing a volume with unmap using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'state': 'absent',
+            'unmap': ['host_mappings', 'remotecopy_relationships', 'flashcopy_mappings']
+        }):
+            svc_obj_info_mock.return_value = [
+                {
+                    "name": "test_volume",
+                    "type": "striped",
+                    "RC_name": "",
+                    "vdisk_UID": "60050768108180ED700000000000002E"
+                },
+                {}
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.create_transient_snapshot')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.get_existing_volume')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.assemble_iogrp')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_volume_thinclone_using_source_UUID(self, auth_mock, c1, c2, c3, c4, c5):
+        '''Test creating a thinclone volume using source volume UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test_thinclone_volume',
+            'pool': 'test_pool',
+            'type': 'thinclone',
+            'fromsourcevolume': '60050764008881864800000000000472'
+        }):
+            c3.return_value = []
+            c4.return_value = {
+                'id': '25',
+                'message': 'Volume, id [25], successfully created'
+            }
+            c5.return_value = 10
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_update_volume_using_UUID(self, auth, svc_obj_info_mock, svc_run_command_mock):
+        '''Test updating volume properties using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000002E',
+            'state': 'present',
+            'cache': 'readwrite'
+        }):
+            svc_obj_info_mock.return_value = [
+                {
+                    "id": "24", "name": "test_volume", "IO_group_id": "0", "IO_group_name": "io_grp0", "status": "online",
+                    "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1", "capacity": "1073741824", "type": "striped",
+                    "formatted": "yes", "formatting": "no", "mdisk_id": "", "mdisk_name": "", "FC_id": "", "FC_name": "",
+                    "RC_id": "", "RC_name": "", "vdisk_UID": "60050768108180ED700000000000002E", "preferred_node_id": "1",
+                    "fast_write_state": "empty", "cache": "none", "udid": "", "fc_map_count": "0", "sync_rate": "50",
+                    "copy_count": "1", "se_copy_count": "0", "filesystem": "", "mirror_write_priority": "latency",
+                    "RC_change": "no", "compressed_copy_count": "0", "access_IO_group_count": "2", "last_access_time": "",
+                    "parent_mdisk_grp_id": "2", "parent_mdisk_grp_name": "site1pool1", "owner_type": "none", "owner_id": "",
+                    "owner_name": "", "encrypt": "no", "volume_id": "24", "volume_name": "test_volume", "function": "", "throttle_id": "",
+                    "throttle_name": "", "IOPs_limit": "", "bandwidth_limit_MB": "", "volume_group_id": "0",
+                    "volume_group_name": "test_volumegroup", "cloud_backup_enabled": "no", "cloud_account_id": "",
+                    "cloud_account_name": "", "backup_status": "off", "last_backup_time": "", "restore_status": "none",
+                    "backup_grain_size": "", "deduplicated_copy_count": "0", "protocol": "", "preferred_node_name": "node1",
+                    "safeguarded_expiration_time": "", "safeguarded_backup_count": "0"
+                }, {
+                    "copy_id": "0", "status": "online",
+                    "sync": "yes", "auto_delete": "no", "primary": "yes", "mdisk_grp_id": "2", "mdisk_grp_name": "site1pool1",
+                    "type": "striped", "mdisk_id": "", "mdisk_name": "", "fast_write_state": "empty", "used_capacity": "1073741824",
+                    "real_capacity": "1073741824", "free_capacity": "0", "overallocation": "100", "autoexpand": "", "warning": "",
+                    "grainsize": "", "se_copy": "no", "easy_tier": "on", "easy_tier_status": "balanced", "tiers": [
+                        {"tier": "tier_scm", "tier_capacity": "0"},
+                        {"tier": "tier0_flash", "tier_capacity": "1073741824"},
+                        {"tier": "tier1_flash", "tier_capacity": "0"},
+                        {"tier": "tier_enterprise", "tier_capacity": "0"},
+                        {"tier": "tier_nearline", "tier_capacity": "0"}
+                    ], "compressed_copy": "no", "uncompressed_used_capacity": "1073741824", "parent_mdisk_grp_id": "2",
+                    "parent_mdisk_grp_name": "site1pool1", "encrypt": "no", "deduplicated_copy": "no",
+                    "used_capacity_before_reduction": "", "safeguarded_mdisk_grp_id": "", "safeguarded_mdisk_grp_name": ""
+                }
+            ]
+            with pytest.raises(AnsibleExitJson) as exc:
+                v = IBMSVCvolume()
+                v.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

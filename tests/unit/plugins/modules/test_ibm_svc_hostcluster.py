@@ -530,7 +530,7 @@ class TestIBMSVChostcluster(unittest.TestCase):
             with pytest.raises(AnsibleFailJson) as exc:
                 hostcluster.apply()
             self.assertTrue(exc.value.args[0]['failed'])
-            self.assertEqual(exc.value.args[0]['msg'], "Published partition is not supported while updating host cluster")
+            self.assertEqual(exc.value.args[0]['msg'], "Published partition cannot be used while updating host cluster")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
@@ -825,6 +825,199 @@ class TestIBMSVChostcluster(unittest.TestCase):
                 "Cannot remove host cluster [ansible_hostcluster] as it is associated with a partition. "
                 "Use removemappings=false to delete the host cluster to keep host to volume mappings."
             )
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_get_existing_hostcluster_using_UUID(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test getting existing hostcluster using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000013D',
+        }):
+            hostcluster_ret = {
+                "id": "1", "name": "ansible_hostcluster", "port_count": "1", "mapping_count": "4",
+                "status": "offline", "host_count": "1", "protocol": "nvme",
+                "owner_id": "", "owner_name": "", "uuid": "60050768108180ED700000000000013D"
+            }
+            svc_obj_info_mock.return_value = hostcluster_ret
+            host = IBMSVChostcluster().get_existing_hostcluster()
+            self.assertEqual('ansible_hostcluster', host['name'])
+            self.assertEqual('1', host['id'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_hostcluster_using_UUID_partition(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        '''Test creating a hostcluster using UUID for partition parameter'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_hostcluster',
+            'partition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {},
+                {
+                    'id': '0',
+                    'name': 'partition1',
+                    'draft': "no",
+                    'uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+                }
+            ]
+            hostcluster_created = IBMSVChostcluster()
+            with pytest.raises(AnsibleExitJson) as exc:
+                hostcluster_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            args, kwargs = svc_run_command_mock.call_args
+            self.assertEqual(args[0], 'mkhostcluster')
+            self.assertEqual(args[1]['partition'], '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_hostcluster_using_UUID_partition_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when creating hostcluster using UUID for partition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'state': 'present',
+            'username': 'username',
+            'password': 'password',
+            'name': 'ansible_hostcluster',
+            'partition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+        }):
+            svc_obj_info_mock.side_effect = [
+                {
+                    "id": "0",
+                    "name": "ansible_hostcluster",
+                    "partition_id": "0",
+                    "partition_name": "partition1",
+                    "partition_uuid": "0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25",
+                    "draft_partition_id": "",
+                    "draft_partition_name": "",
+                    "host_count": "1"
+                },
+                {
+                    'id': '0',
+                    'name': 'partition1',
+                    'draft': "no",
+                    'uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+                },
+                {
+                    'id': '0',
+                    'name': 'partition1',
+                    'draft': "no",
+                    'uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+                }
+            ]
+            hostcluster = IBMSVChostcluster()
+            with pytest.raises(AnsibleExitJson) as exc:
+                hostcluster.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_delete_hostcluster_using_UUID(self, svc_authorize_mock, svc_obj_info_mock, svc_run_command_mock):
+        '''Test deleting a hostcluster using UUID'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000016A',
+            'state': 'absent',
+        }):
+            svc_obj_info_mock.return_value = {
+                "id": "0",
+                "name": "ansible_hostcluster",
+                "status": "offline",
+                "host_count": "2",
+                "mapping_count": "2",
+                "port_count": "2",
+                "protocol": "scsi",
+                "owner_id": "",
+                "owner_name": "",
+                "partition_id": "",
+                "partition_name": "",
+                "draft_partition_id": "",
+                "draft_partition_name": "",
+                "uuid": "60050768108180ED700000000000016A"
+            }
+            hostcluster = IBMSVChostcluster()
+            with pytest.raises(AnsibleExitJson) as exc:
+                hostcluster.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_hostcluster_using_UUID_idempotency(self, svc_authorize_mock, svc_obj_info_mock):
+        '''Test idempotency when hostcluster already exists with UUID name'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': '60050768108180ED700000000000001A',
+            'state': 'present'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': '60050768108180ED700000000000001A'
+            }
+            hostcluster = IBMSVChostcluster()
+            with pytest.raises(AnsibleExitJson) as exc:
+                hostcluster.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_hostcluster.IBMSVChostcluster.get_existing_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_create_hostcluster_using_UUID_partition_idempotency(self, svc_authorize_mock, svc_obj_info_mock, get_partition_mock):
+        '''Test idempotency when hostcluster already exists with UUID partition'''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'hostcluster1',
+            'state': 'present',
+            'partition': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+        }):
+            svc_obj_info_mock.return_value = {
+                'id': '1',
+                'name': 'hostcluster1',
+                'partition_name': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25'
+            }
+            get_partition_mock.return_value = {
+                'uuid': '0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25',
+                'draft': 'no'
+            }
+            hostcluster = IBMSVChostcluster()
+            with pytest.raises(AnsibleExitJson) as exc:
+                hostcluster.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

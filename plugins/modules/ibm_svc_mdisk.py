@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Copyright (C) 2020 IBM CORPORATION
 # Author(s): Peng Wang <wangpww@cn.ibm.com>
+#            Sandip Gulab Rajbanshi <sandip.rajbanshi@ibm.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -59,7 +60,7 @@ options:
     type: str
   mdiskgrp:
     description:
-      - The storage pool (mdiskgrp) to which you want to add the MDisk.
+      - Specifies the name or UUID of storage pool (mdiskgrp) to which you want to add the MDisk.
     type: str
   log_path:
     description:
@@ -117,6 +118,7 @@ options:
     version_added: '2.0.0'
 author:
     - Peng Wang(@wangpww)
+    - Sandip Gulab Rajbanshi (@Sandip-Rajbanshi)
 notes:
     - This module supports C(check_mode).
 '''
@@ -153,6 +155,27 @@ EXAMPLES = '''
     name: mdisk20
     state: absent
     mdiskgrp: pool20
+- name: Create MDisk and name as mdisk20 specifying mdiskgrp UUID
+  ibm.storage_virtualize.ibm_svc_mdisk:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: mdisk20
+    state: present
+    level: raid0
+    drive: '5:6'
+    encrypt: 'no'
+    mdiskgrp: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
+- name: Delete MDisk named mdisk20 specifying mdiskgrp UUID
+  ibm.storage_virtualize.ibm_svc_mdisk:
+    clustername: "{{ clustername }}"
+    domain: "{{ domain }}"
+    username: "{{ username }}"
+    password: "{{ password }}"
+    name: mdisk20
+    state: absent
+    mdiskgrp: 0D6A7840-1AD2-57D1-9E42-6FA8C31D7B25
 '''
 
 RETURN = '''#'''
