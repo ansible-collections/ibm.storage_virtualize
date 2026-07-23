@@ -15,10 +15,10 @@ import logging
 from uuid import UUID, getnode
 import inspect
 from time import sleep
+from urllib.parse import quote
+from urllib.error import HTTPError
 
 from ansible.module_utils.urls import open_url
-from ansible.module_utils.six.moves.urllib.parse import quote
-from ansible.module_utils.six.moves.urllib.error import HTTPError
 
 COLLECTION_VERSION = "3.4.0"
 TIMEOUT = 600
