@@ -1711,6 +1711,495 @@ class TestIBMSVStoragePartition(unittest.TestCase):
             args, kwargs = svc_run_command_mock.call_args
             self.assertEqual(kwargs['cmdargs'][0], '0D6A7840-1AD2-57D1-A3D8-71F4C92E6B50')
 
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_creates_draft_and_publishes(self,
+                                                         svc_authorize_mock,
+                                                         svc_run_command_mock,
+                                                         get_partition_mock,
+                                                         get_vg_mock):
+        '''
+        Happy path: source partition exists, target partition does not exist.
+        mkpartition -splitfrompartition creates an empty draft; module then
+        moves vg1 and vg2 via chvolumegroup -draftpartition and publishes.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2']
+        }):
+            # apply() calls get_storage_partition_details twice:
+            #   1st: lookup source (partition0) — exists
+            #   2nd: lookup target (partition1) — does not exist → mkpartition called
+            #   3rd: re-fetch target after mkpartition — now exists as draft
+            get_partition_mock.side_effect = [
+                {'id': '0', 'name': 'partition0'},            # source exists
+                {},                                            # target does not exist
+                {'id': '1', 'name': 'partition1', 'draft': 'yes'}  # target after mkpartition
+            ]
+            # Draft was created empty; both VGs are missing then moved; no extras after
+            get_vg_mock.side_effect = [
+                [],               # Stage 4: draft is empty — both VGs missing
+                ['vg1', 'vg2'],   # Stage 5: after moving both VGs — no extras
+            ]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                'Storage Partition (partition0) split into (partition1) successfully.'
+            )
+            calls = svc_run_command_mock.call_args_list
+            # calls[0]: mkpartition
+            mk_call = calls[0]
+            self.assertEqual(mk_call[0][0], 'mkpartition')
+            self.assertTrue(mk_call[1]['cmdopts'].get('draft'))
+            self.assertEqual(mk_call[1]['cmdopts'].get('splitfrompartition'), 'partition0')
+            self.assertEqual(mk_call[1]['cmdopts'].get('name'), 'partition1')
+            # calls[1] and calls[2]: chvolumegroup for each missing VG
+            ch_cmds = [c[0][0] for c in calls[1:-1]]
+            self.assertTrue(all(c == 'chvolumegroup' for c in ch_cmds))
+            ch_partitions = [c[1]['cmdopts'].get('draftpartition') for c in calls[1:-1]]
+            self.assertTrue(all(p == 'partition1' for p in ch_partitions))
+            # last call: chpartition -publish
+            pub_call = calls[-1]
+            self.assertEqual(pub_call[0][0], 'chpartition')
+            self.assertTrue(pub_call[1]['cmdopts'].get('publish'))
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_HA_partition_creates_draft_and_publishes(self,
+                                                            svc_authorize_mock,
+                                                            svc_run_command_mock,
+                                                            get_partition_mock,
+                                                            get_vg_mock):
+        '''
+        Happy path: source partition exists with replication policy specified, target partition does not exist.
+        mkpartition -splitfrompartition creates an empty draft; module then
+        moves vg1 and vg2 via chvolumegroup -draftpartition and publishes.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2'],
+            'replicationpolicy': "ha-replication_1"
+        }):
+            # apply() calls get_storage_partition_details twice:
+            #   1st: lookup source (partition0) — exists
+            #   2nd: lookup target (partition1) — does not exist → mkpartition called
+            #   3rd: re-fetch target after mkpartition — now exists as draft
+            get_partition_mock.side_effect = [
+                {'id': '0', 'name': 'partition0', 'replication_policy_name': "ha-replication_1"},            # source exists
+                {},                                            # target does not exist
+                {'id': '1', 'name': 'partition1', 'draft': 'yes'}  # target after mkpartition
+            ]
+            # Draft was created empty; both VGs are missing then moved; no extras after
+            get_vg_mock.side_effect = [
+                [],               # Stage 4: draft is empty — both VGs missing
+                ['vg1', 'vg2'],   # Stage 5: after moving both VGs — no extras
+            ]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                'Storage Partition (partition0) split into (partition1) successfully.'
+            )
+            calls = svc_run_command_mock.call_args_list
+            # calls[0]: mkpartition
+            mk_call = calls[0]
+            self.assertEqual(mk_call[0][0], 'mkpartition')
+            self.assertTrue(mk_call[1]['cmdopts'].get('draft'))
+            self.assertEqual(mk_call[1]['cmdopts'].get('splitfrompartition'), 'partition0')
+            self.assertEqual(mk_call[1]['cmdopts'].get('name'), 'partition1')
+            # calls[1] and calls[2]: chvolumegroup for each missing VG
+            ch_cmds = [c[0][0] for c in calls[1:-1]]
+            self.assertTrue(all(c == 'chvolumegroup' for c in ch_cmds))
+            ch_partitions = [c[1]['cmdopts'].get('draftpartition') for c in calls[1:-1]]
+            self.assertTrue(all(p == 'partition1' for p in ch_partitions))
+            # last call: chpartition -publish
+            pub_call = calls[-1]
+            self.assertEqual(pub_call[0][0], 'chpartition')
+            self.assertTrue(pub_call[1]['cmdopts'].get('publish'))
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_split_HA_partition(self,
+                                        svc_authorize_mock,
+                                        svc_run_command_mock,
+                                        get_partition_mock):
+        '''
+        Invalid replication policy replication_2 is specified
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2'],
+            'replicationpolicy': "replication_2"
+        }):
+            # apply() calls get_storage_partition_details twice:
+            #   1st: lookup source (partition0) — exists
+            #   2nd: lookup target (partition1) — does not exist → mkpartition called
+            #   3rd: re-fetch target after mkpartition — now exists as draft
+            get_partition_mock.side_effect = [
+                {'id': '0', 'name': 'partition0', 'replication_policy_name': "ha-replication_1"}]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                'Parameter replicationpolicy (replication_2) does not match the replication policy '
+                'of source partition (ha-replication_1). Cannot change replication policy during a split.'
+            )
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_moves_missing_vgs(self,
+                                               svc_authorize_mock,
+                                               svc_run_command_mock,
+                                               get_partition_mock,
+                                               get_vg_mock):
+        '''
+        Resume: pre-existing draft target has only vg1 (vg2 still missing).
+        Module should move the missing vg2 via chvolumegroup -draftpartition, then publish.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2']
+        }):
+            # Target draft already exists (interrupted resume)
+            get_partition_mock.return_value = {'id': '1', 'name': 'partition1', 'draft': 'yes'}
+            get_vg_mock.side_effect = [
+                ['vg1'],          # Stage 4: vg2 is missing
+                ['vg1', 'vg2'],   # Stage 5: after moving vg2 — no extras
+            ]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                'Storage Partition (partition0) split into (partition1) successfully.'
+            )
+            calls = svc_run_command_mock.call_args_list
+            # First call: chvolumegroup to move missing vg2
+            ch_call = calls[0]
+            self.assertEqual(ch_call[0][0], 'chvolumegroup')
+            self.assertEqual(ch_call[1]['cmdopts'].get('draftpartition'), 'partition1')
+            self.assertEqual(ch_call[1]['cmdargs'], ['vg2'])
+            # Last call: publish
+            pub_call = calls[-1]
+            self.assertEqual(pub_call[0][0], 'chpartition')
+            self.assertTrue(pub_call[1]['cmdopts'].get('publish'))
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_idempotency_already_published(self,
+                                                           svc_authorize_mock,
+                                                           svc_run_command_mock,
+                                                           get_partition_mock,
+                                                           get_vg_mock):
+        '''
+        Idempotency: target partition already exists and is published with
+        exactly the expected VGs. No changes should be made.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2']
+        }):
+            get_partition_mock.return_value = {'id': '1', 'name': 'partition1', 'draft': 'no'}
+            get_vg_mock.return_value = ['vg1', 'vg2']
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleExitJson) as exc:
+                p.apply()
+            self.assertFalse(exc.value.args[0]['changed'])
+            self.assertEqual(
+                exc.value.args[0]['msg'],
+                'Storage Partition (partition0) split into (partition1) already completed.'
+            )
+            svc_run_command_mock.assert_not_called()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_fails_if_published_target_has_extra_vgs(self,
+                                                                     svc_authorize_mock,
+                                                                     svc_run_command_mock,
+                                                                     get_partition_mock,
+                                                                     get_vg_mock):
+        '''
+        Failure: target partition already published but contains an extra VG
+        not in volumegroup_list. Should fail without rollback.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2']
+        }):
+            get_partition_mock.return_value = {'id': '1', 'name': 'partition1', 'draft': 'no'}
+            get_vg_mock.return_value = ['vg1', 'vg2', 'vg3']  # vg3 is extra
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('vg3', exc.value.args[0]['msg'])
+            svc_run_command_mock.assert_not_called()
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_rollback_extra_vgs_in_preexisting_draft(self,
+                                                                     svc_authorize_mock,
+                                                                     svc_run_command_mock,
+                                                                     get_partition_mock,
+                                                                     get_vg_mock):
+        '''
+        Failure + rollback: pre-existing draft has extra vg3 (manually added
+        outside this module). No chvolumegroup rollback possible — module must
+        delete the draft via rmpartition and fail.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1', 'vg2']
+        }):
+            # Pre-existing draft
+            get_partition_mock.return_value = {'id': '1', 'name': 'partition1', 'draft': 'yes'}
+            get_vg_mock.side_effect = [
+                ['vg1', 'vg2'],         # Stage 4: no missing VGs
+                ['vg1', 'vg2', 'vg3'],  # Stage 5: extra vg3 detected
+            ]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('vg3', exc.value.args[0]['msg'])
+            # Only rmpartition must be called — no chvolumegroup
+            calls = svc_run_command_mock.call_args_list
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0][0], 'rmpartition')
+            self.assertEqual(calls[0][1]['cmdargs'], ['partition1'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_volume_groups_for_partition')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_sv_manage_storage_partition.IBMSVStoragePartition.get_storage_partition_details')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi.svc_run_command')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_rollback_host_mapping_pulls_extra_vg(self,
+                                                                  svc_authorize_mock,
+                                                                  svc_run_command_mock,
+                                                                  get_partition_mock,
+                                                                  get_vg_mock):
+        '''
+        Failure + rollback: SVC auto-pulled vg2 into the draft because host1
+        maps to volumes in both vg1 and vg2, but user only requested vg1.
+        Module must delete draft via rmpartition and fail with a hint to include
+        all dependent VGs.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1']
+        }):
+            # Target does not exist — mkpartition will be called
+            get_partition_mock.side_effect = [
+                {'id': '0', 'name': 'partition0'},             # source exists
+                {},                                             # target does not exist
+                {'id': '1', 'name': 'partition1', 'draft': 'yes'}  # target after mkpartition
+            ]
+            get_vg_mock.side_effect = [
+                ['vg1', 'vg2'],  # Stage 4: after moving vg1, SVC also pulled vg2 (host mapping)
+                ['vg1', 'vg2'],  # Stage 5: vg2 is extra vs requested [vg1]
+            ]
+            p = IBMSVStoragePartition()
+            with pytest.raises(AnsibleFailJson) as exc:
+                p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('vg2', exc.value.args[0]['msg'])
+            self.assertIn('host-to-volume mapping dependencies', exc.value.args[0]['msg'])
+            # calls: mkpartition, chvolumegroup (move vg1), rmpartition
+            calls = svc_run_command_mock.call_args_list
+            self.assertEqual(calls[0][0][0], 'mkpartition')
+            self.assertEqual(calls[-1][0][0], 'rmpartition')
+            self.assertEqual(calls[-1][1]['cmdargs'], ['partition1'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_fails_without_volumegroup_list(self, svc_authorize_mock):
+        '''
+        Failure: target_partition_name provided without volumegroup_list.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                p = IBMSVStoragePartition()
+                # Patch get_storage_partition_details so source exists
+                with patch.object(p, 'get_storage_partition_details',
+                                  return_value={'id': '0', 'name': 'partition0'}):
+                    p.apply()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('volumegroup_list', exc.value.args[0]['msg'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_fails_if_target_partition_name_with_invalid_params(self,
+                                                                                svc_authorize_mock):
+        '''
+        Failure: target_partition_name is mutually exclusive with partition_to_merge.
+        Note: draft=True is explicitly allowed alongside target_partition_name
+        (it is silently accepted since split always uses a draft internally).
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'partition_to_merge': 'partition2'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVStoragePartition()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('mutually exclusive', exc.value.args[0]['msg'].lower())
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_draft_true_allowed_with_target_partition_name(self, svc_authorize_mock):
+        '''
+        draft=True alongside target_partition_name must NOT fail at basic_checks —
+        it is silently accepted (split always uses a draft internally).
+        Initialisation should succeed without raising AnsibleFailJson.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'present',
+            'target_partition_name': 'partition1',
+            'volumegroup_list': ['vg1'],
+            'draft': True
+        }):
+            # Should construct without raising
+            p = IBMSVStoragePartition()
+            self.assertEqual(p.target_partition_name, 'partition1')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_split_partition_not_allowed_on_delete(self, svc_authorize_mock):
+        '''
+        Failure: target_partition_name must not be accepted when state=absent.
+        '''
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'partition0',
+            'state': 'absent',
+            'target_partition_name': 'partition1'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVStoragePartition()
+            self.assertTrue(exc.value.args[0]['failed'])
+            self.assertIn('target_partition_name', exc.value.args[0]['msg'])
+
 
 if __name__ == '__main__':
     unittest.main()
