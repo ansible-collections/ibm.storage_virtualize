@@ -1,8 +1,0 @@
----
-profile: production
-
-exclude_paths:
-  - playbooks/cisco_fc_zoning/
-  - changelogs/
-  - docs/
-  - .ansible/
