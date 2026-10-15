@@ -116,7 +116,7 @@ from traceback import format_exc
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import svc_ssh_argument_spec, get_logger
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_ssh import IBMSVCssh
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 
 class IBMSVCsshClient(object):
@@ -196,6 +196,7 @@ class IBMSVCsshClient(object):
 
     def send_svctask_command(self):
         message = ""
+        rc = 0
         if self.ssh_client.is_client_connected:
             for cmd in self.command:
                 self.log("Executing CLI command: %s", cmd)

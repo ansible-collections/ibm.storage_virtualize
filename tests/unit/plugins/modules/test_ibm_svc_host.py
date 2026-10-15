@@ -17,7 +17,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_host import IBMSVChost
 import contextlib
@@ -2529,7 +2529,7 @@ class TestIBMSVChost(unittest.TestCase):
             'state': 'present',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000004B',
+            'name': 'A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90',
         }):
             host_ret = [{"id": "1", "name": "ansible_host", "port_count": "1",
                          "iogrp_count": "4", "status": "offline",
@@ -2560,7 +2560,7 @@ class TestIBMSVChost(unittest.TestCase):
             'state': 'absent',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000004B',
+            'name': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438',
         }):
             host_ret = [{"id": "1", "name": "ansible_host", "port_count": "1",
                          "iogrp_count": "4", "status": "offline",
@@ -2588,7 +2588,7 @@ class TestIBMSVChost(unittest.TestCase):
             'state': 'absent',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000004B',
+            'name': '2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35',
         }):
             get_existing_host_mock.return_value = []
             host_deleted = IBMSVChost()
@@ -2612,7 +2612,7 @@ class TestIBMSVChost(unittest.TestCase):
             'state': 'present',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000004B',
+            'name': '8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592',
             'site': 'site2'
         }):
             host_ret = {
@@ -2645,7 +2645,7 @@ class TestIBMSVChost(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'new_host_name',
-            'old_name': 'C0050768108180ED70000000000000AA',
+            'old_name': '9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836',
             'state': 'present',
         }):
             svc_obj_info_mock.side_effect = [
@@ -2653,7 +2653,7 @@ class TestIBMSVChost(unittest.TestCase):
                 {    # old UUID exists
                     "id": "14",
                     "name": "old_host_name",
-                    "host_id": "C0050768108180ED70000000000000AA",
+                    "host_id": "9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836",
                     "port_count": "1",
                     "iogrp_count": "4",
                     "status": "offline",
@@ -2694,7 +2694,7 @@ class TestIBMSVChost(unittest.TestCase):
             'name': 'test_host',
             'state': 'present',
             'fcwwpn': '100000109B570216',
-            'hostcluster': 'D0050768108180ED70000000000000BB'
+            'hostcluster': 'D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64'
         }):
             get_existing_host_mock.return_value = []
             get_existing_hostcluster_mock.return_value = {
@@ -2707,7 +2707,7 @@ class TestIBMSVChost(unittest.TestCase):
                 "protocol": "scsi",
                 "owner_id": "0",
                 "owner_name": "group5",
-                "uuid": "D0050768108180ED70000000000000BB",
+                "uuid": "D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64",
             }
             svc_run_command_mock.return_value = {
                 'id': '14',
@@ -2735,13 +2735,13 @@ class TestIBMSVChost(unittest.TestCase):
             'password': 'password',
             'name': 'test_host',
             'state': 'present',
-            'hostcluster': 'D0050768108180ED70000000000000BB'
+            'hostcluster': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
         }):
             svc_obj_info_mock.side_effect = [
                 {    # existing host
                     "id": "14",
                     "name": "test_host",
-                    "host_id": "C0050768108180ED70000000000000AA",
+                    "host_id": "A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90",
                     "port_count": "1",
                     "iogrp_count": "4",
                     "status": "offline",
@@ -2757,7 +2757,7 @@ class TestIBMSVChost(unittest.TestCase):
                 {    # hostcluster info
                     'id': '1',
                     'name': 'test_hostcluster',
-                    'uuid': 'D0050768108180ED70000000000000BB'
+                    'uuid': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
                 }
             ]
             with pytest.raises(AnsibleExitJson) as exc:
@@ -2783,7 +2783,7 @@ class TestIBMSVChost(unittest.TestCase):
             'name': 'test_host',
             'state': 'present',
             'fcwwpn': '100000109B570216',
-            'partition': 'E0050768108180ED70000000000000CC'
+            'partition': '2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35'
         }):
             svc_obj_info_mock.return_value = []
             svc_run_command_mock.return_value = {
@@ -2812,13 +2812,13 @@ class TestIBMSVChost(unittest.TestCase):
             'password': 'password',
             'name': 'test_host',
             'state': 'present',
-            'partition': 'E0050768108180ED70000000000000CC'
+            'partition': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24'
         }):
             svc_obj_info_mock.side_effect = [
                 {    # existing host
                     "id": "14",
                     "name": "test_host",
-                    "host_id": "C0050768108180ED70000000000000AA",
+                    "host_id": "A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90",
                     "port_count": "1",
                     "iogrp_count": "4",
                     "status": "offline",
@@ -2834,7 +2834,7 @@ class TestIBMSVChost(unittest.TestCase):
                 {    # partition info
                     'id': '1',
                     'name': 'test_partition',
-                    'uuid': 'E0050768108180ED70000000000000CC'
+                    'uuid': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24'
                 }
             ]
             with pytest.raises(AnsibleExitJson) as exc:
@@ -2859,12 +2859,12 @@ class TestIBMSVChost(unittest.TestCase):
             'password': 'password',
             'name': 'test_host',
             'state': 'present',
-            'draftpartition': 'F0050768108180ED70000000000000DD'
+            'draftpartition': '2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35'
         }):
             svc_obj_info_mock.return_value = {
                 "id": "14",
                 "name": "test_host",
-                "host_id": "C0050768108180ED70000000000000AA",
+                "host_id": "9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836",
                 "port_count": "1",
                 "iogrp_count": "4",
                 "status": "offline",
@@ -2900,7 +2900,7 @@ class TestIBMSVChost(unittest.TestCase):
             'password': 'password',
             'name': 'test_host',
             'state': 'present',
-            'draftpartition': 'F0050768108180ED70000000000000DD'
+            'draftpartition': '8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592'
         }):
             svc_obj_info_mock.side_effect = [
                 {    # existing host
@@ -2922,7 +2922,7 @@ class TestIBMSVChost(unittest.TestCase):
                 {    # draftpartition info
                     'id': '1',
                     'name': 'test_draft_partition',
-                    'uuid': 'F0050768108180ED70000000000000DD',
+                    'uuid': '8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592',
                     'draft': 'yes'
                 }
             ]
@@ -2930,6 +2930,39 @@ class TestIBMSVChost(unittest.TestCase):
                 h = IBMSVChost()
                 h.apply()
             self.assertFalse(exc.value.args[0]['changed'])
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.host_fcwwpn_update')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
+           'ibm_svc_host.IBMSVChost.get_existing_host')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_add_fcwwpn_into_no_fcwwpn_host(self, svc_authorize_mock, get_existing_host_mock, host_fcwwpn_update_mock):
+        """
+        If all the wwpn are removed from host using rmhostport,
+        lshost does not contains nodes parameter.
+        Test to valided fcwwpn to that perticular host.
+        """
+        with set_module_args({
+            'clustername': 'clustername',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'name': 'test',
+            'state': 'present',
+            'fcwwpn': '1000001AA0570260:1000001AA0570261:1000001AA0570262:1000001AA0570264',
+            'protocol': 'scsi',
+            'type': 'generic'
+        }):
+            lshost_data = {'id': '24', 'name': 'test', 'port_count': '0', 'type': 'generic',
+                           'mask': '1111111', 'iogrp_count': '4', 'status': 'offline',
+                           'site_id': '', 'site_name': '', 'host_cluster_id': '', 'host_cluster_name': '',
+                           'protocol': 'scsi'}
+            get_existing_host_mock.return_value = lshost_data
+            host_created = IBMSVChost()
+            with pytest.raises(AnsibleExitJson) as exc:
+                host_created.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
 
 
 if __name__ == '__main__':

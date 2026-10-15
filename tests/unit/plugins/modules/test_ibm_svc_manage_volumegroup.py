@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_volumegroup import IBMSVCVG
 import contextlib
@@ -2218,7 +2218,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 "snapshot_policy_suspended": "no",
                 "ignore_user_flash_copy_maps": "no",
                 "snapshot_policy_safeguarded": "no",
-                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+                "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
             }
             with pytest.raises(AnsibleExitJson) as exc:
                 v = IBMSVCVG()
@@ -2247,7 +2247,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 "id": "10",
                 "name": "test_volumegroup",
                 "volume_count": "0",
-                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+                "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
             }
             svc_run_command_mock.return_value = None
             with pytest.raises(AnsibleExitJson) as exc:
@@ -2310,7 +2310,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 "snapshot_policy_suspended": "no",
                 "ignore_user_flash_copy_maps": "no",
                 "snapshot_policy_safeguarded": "no",
-                "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
+                "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40"
             }
             svc_run_command_mock.return_value = None
             with pytest.raises(AnsibleExitJson) as exc:
@@ -2342,7 +2342,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 {    # old UUID exists
                     "id": "10",
                     "name": "old_vg_name",
-                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
                     "volume_count": "0",
                     "owner_name": "",
                     "snapshot_policy_name": "",
@@ -2409,7 +2409,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 {    # existing volumegroup
                     "id": "10",
                     "name": "test_vg",
-                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
                     "volume_count": "0",
                     "owner_name": "",
                     "snapshot_policy_name": "test_snapshot_policy",
@@ -2448,7 +2448,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'state': 'present',
             'type': 'clone',
             'fromsourcegroup': 'source_vg',
-            'pool': '80050768108180ED700000000000006A'
+            'pool': 'E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3'
         }):
             svc_obj_info_mock.return_value = []
             svc_run_command_mock.return_value = {
@@ -2512,7 +2512,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 {    # existing volumegroup
                     "id": "10",
                     "name": "test_vg",
-                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
                     "volume_count": "0",
                     "owner_name": "",
                     "snapshot_policy_name": "",
@@ -2548,7 +2548,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_vg',
             'state': 'present',
-            'partition': 'A0050768108180ED700000000000008A'
+            'partition': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
         }):
             svc_obj_info_mock.return_value = []
             svc_run_command_mock.return_value = {
@@ -2577,13 +2577,13 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_vg',
             'state': 'present',
-            'partition': 'A0050768108180ED700000000000008A'
+            'partition': 'D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64'
         }):
             svc_obj_info_mock.side_effect = [
                 {    # existing volumegroup
                     "id": "10",
                     "name": "test_vg",
-                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
                     "volume_count": "0",
                     "owner_name": "",
                     "snapshot_policy_name": "",
@@ -2594,7 +2594,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 {    # partition info
                     'id': '1',
                     'name': 'test_partition',
-                    'uuid': 'A0050768108180ED700000000000008A'
+                    'uuid': 'D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64'
                 }
             ]
             with pytest.raises(AnsibleExitJson) as exc:
@@ -2619,7 +2619,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_vg',
             'state': 'present',
-            'draftpartition': 'B0050768108180ED700000000000009A'
+            'draftpartition': '6C1D9B3E-A7F4-4E85-BC2A-D8F1E3A7C594'
         }):
             svc_obj_info_mock.return_value = []
             svc_run_command_mock.return_value = {
@@ -2648,13 +2648,13 @@ class TestIBMSVCvdisk(unittest.TestCase):
             'password': 'password',
             'name': 'test_vg',
             'state': 'present',
-            'draftpartition': 'B0050768108180ED700000000000009A'
+            'draftpartition': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
         }):
             svc_obj_info_mock.side_effect = [
                 {    # existing volumegroup
                     "id": "10",
                     "name": "test_vg",
-                    "uid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
+                    "uuid": "420EC615-4404-55BA-D8A7-5F91C23E7B40",
                     "volume_count": "0",
                     "owner_name": "",
                     "snapshot_policy_name": "",
@@ -2665,7 +2665,7 @@ class TestIBMSVCvdisk(unittest.TestCase):
                 {    # draftpartition info
                     'id': '1',
                     'name': 'test_draft_partition',
-                    'uuid': 'B0050768108180ED700000000000009A'
+                    'uuid': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
                 }
             ]
             with pytest.raises(AnsibleExitJson) as exc:

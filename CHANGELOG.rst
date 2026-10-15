@@ -4,6 +4,20 @@ IBM Storage Virtualize Release Notes
 
 .. contents:: Topics
 
+v3.5.0
+======
+
+Release Summary
+---------------
+
+Added support for split partition, changing FlashSystem grid coordinator, and addressed paramiko compatibility and ansible compatibility issues
+
+Minor Changes
+-------------
+
+- ibm_sv_manage_flashsystem_grid - Added support for changing FlashSystem grid coordinator.
+- ibm_sv_manage_storage_partition - Added support for split partition by specifying the list of volume groups and target partition.
+
 v3.4.0
 ======
 
@@ -17,7 +31,7 @@ Minor Changes
 
 - ibm_sv_manage_fcportsetmember - Added support for adding autozone-incapable port into autozone-capable portset.
 - ibm_sv_manage_snapshotpolicy - Added support for renaming snapshot policy.
-- ibm_svc_host - Added support for create host using SAS protocol and automated storage rescans at known intervals.
+- ibm_svc_host - Added support for creating host using SAS protocol and automated storage rescans at known intervals.
 - ibm_svc_initial_setup - Added support for system-wide autozone prefix option.
 - ibm_svc_manage_portset - Added support for enabling autozoning functionality.
 

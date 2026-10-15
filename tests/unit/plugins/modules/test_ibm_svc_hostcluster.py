@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_hostcluster import IBMSVChostcluster
 import contextlib
@@ -838,12 +838,12 @@ class TestIBMSVChostcluster(unittest.TestCase):
             'state': 'present',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000013D',
+            'name': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24',
         }):
             hostcluster_ret = {
                 "id": "1", "name": "ansible_hostcluster", "port_count": "1", "mapping_count": "4",
                 "status": "offline", "host_count": "1", "protocol": "nvme",
-                "owner_id": "", "owner_name": "", "uuid": "60050768108180ED700000000000013D"
+                "owner_id": "", "owner_name": "", "uuid": "3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24"
             }
             svc_obj_info_mock.return_value = hostcluster_ret
             host = IBMSVChostcluster().get_existing_hostcluster()
@@ -941,7 +941,7 @@ class TestIBMSVChostcluster(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000016A',
+            'name': '2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35',
             'state': 'absent',
         }):
             svc_obj_info_mock.return_value = {
@@ -958,7 +958,7 @@ class TestIBMSVChostcluster(unittest.TestCase):
                 "partition_name": "",
                 "draft_partition_id": "",
                 "draft_partition_name": "",
-                "uuid": "60050768108180ED700000000000016A"
+                "uuid": "2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35"
             }
             hostcluster = IBMSVChostcluster()
             with pytest.raises(AnsibleExitJson) as exc:
@@ -976,12 +976,12 @@ class TestIBMSVChostcluster(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000001A',
+            'name': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438',
             'state': 'present'
         }):
             svc_obj_info_mock.return_value = {
                 'id': '1',
-                'name': '60050768108180ED700000000000001A'
+                'name': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438'
             }
             hostcluster = IBMSVChostcluster()
             with pytest.raises(AnsibleExitJson) as exc:

@@ -24,7 +24,7 @@ It continuously monitors partition migration events on the FlashSystems and perf
 ### Controller Requirements
 
 - IBM Storage Virtualize Ansible Collection plugins **v2.7.4 or above** must be installed.
-- The Ansible controller machine must have **Python 3.10+**.
+- The Ansible controller machine must have **Python 3.11+**.
 
 ### Target Host Requirements
 

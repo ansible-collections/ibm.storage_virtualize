@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_replication_policy import IBMSVReplicationPolicy
 import contextlib
@@ -630,7 +630,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED70000000000000B1',
+            'name': 'E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3',
             'topology': '2-site-async-dr',
             'location1system': 'cluster_A',
             'location1iogrp': 0,
@@ -646,7 +646,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
                 rp.apply()
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'], "Replication policy with specified UUID "
-                             "(60050768108180ED70000000000000B1) does not exist and cannot be created.")
+                             "(E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3) does not exist and cannot be created.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -661,7 +661,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED70000000000000B1',
+            'name': 'A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90',
             'topology': '2-site-async-dr',
             'location1system': 'cluster_A',
             'location1iogrp': 0,
@@ -679,7 +679,7 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
                 'location2_system_name': 'cluster_B',
                 'location2_iogrp_id': '0',
                 'rpo_alert': '60',
-                'uuid': '60050768108180ED70000000000000B1'
+                'uuid': 'A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90'
             }
             rp = IBMSVReplicationPolicy()
 
@@ -777,13 +777,13 @@ class TestIBMSVReplicationPolicy(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED70000000000000D3',
+            'name': '7F9A1C38-5E42-4D7B-A8F1-3C6E92B4D1F7',
             'state': 'absent'
         }):
             rp_exists_mock.return_value = {
                 'id': 0,
                 'name': 'rp0',
-                'uuid': '60050768108180ED70000000000000D3'
+                'uuid': '7F9A1C38-5E42-4D7B-A8F1-3C6E92B4D1F7'
             }
             rp = IBMSVReplicationPolicy()
 

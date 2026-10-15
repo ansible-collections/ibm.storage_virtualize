@@ -445,7 +445,7 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     is_feature_supported
 )
 
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 UUID = 'uuid'
 
@@ -670,19 +670,19 @@ class IBMSVChost(object):
                 props += ['type']
 
         if self.fcwwpn:
-            self.existing_fcwwpn = [node["WWPN"] for node in data['nodes'] if "WWPN" in node]
+            self.existing_fcwwpn = [node["WWPN"] for node in data.get('nodes', []) if "WWPN" in node]
             self.input_fcwwpn = self.fcwwpn.upper().split(":")
             if set(self.existing_fcwwpn).symmetric_difference(set(self.input_fcwwpn)):
                 props += ['fcwwpn']
 
         if self.saswwpn:
-            self.existing_saswwpn = [node["SAS_WWPN"].upper() for node in data['nodes'] if "SAS_WWPN" in node]
+            self.existing_saswwpn = [node["SAS_WWPN"].upper() for node in data.get('nodes', []) if "SAS_WWPN" in node]
             self.input_saswwpn = self.saswwpn.upper().split(":")
             if set(self.existing_saswwpn).symmetric_difference(set(self.input_saswwpn)):
                 props += ['saswwpn']
 
         if self.iscsiname:
-            self.existing_iscsiname = [node["iscsi_name"] for node in data['nodes'] if "iscsi_name" in node]
+            self.existing_iscsiname = [node["iscsi_name"] for node in data.get('nodes', []) if "iscsi_name" in node]
             self.input_iscsiname = self.iscsiname.split(",")
             if set(self.existing_iscsiname).symmetric_difference(set(self.input_iscsiname)):
                 props += ['iscsiname']
@@ -708,7 +708,7 @@ class IBMSVChost(object):
                     props += ['iogrp']
 
         if self.nqn:
-            self.existing_nqn = [node["nqn"] for node in data['nodes'] if "nqn" in node]
+            self.existing_nqn = [node["nqn"] for node in data.get('nodes', []) if "nqn" in node]
             self.input_nqn = self.nqn.split(",")
             if set(self.existing_nqn).symmetric_difference(set(self.input_nqn)):
                 props += ['nqn']
