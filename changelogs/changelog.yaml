@@ -285,4 +285,4 @@ releases:
 
       release_summary: Added support for split partition, changing FlashSystem grid coordinator,
         and addressed paramiko compatibility and ansible compatibility issues
-      release_date: '2026-10-08'
+      release_date: '2026-15-08'
