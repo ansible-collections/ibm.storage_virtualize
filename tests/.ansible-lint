@@ -1,0 +1,6 @@
+---
+profile: production
+
+exclude_paths:
+  - playbooks/cisco_fc_zoning # This playbook depend on external collection Cisco.Nxos
+                              # Lint unable to find external collection module/collection
