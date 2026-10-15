@@ -18,16 +18,16 @@ jobs:
       - name: Set up Python3
         uses: actions/setup-python@v2
         with:
-          python-version: 3.9
+          python-version: 3.11
 
       - name: Upgrade PIP
-        run: python3.9 -m pip install --upgrade pip
+        run: python3.11 -m pip install --upgrade pip
 
       - name: Install ansible
-        run: python3.9 -m pip install ansible --disable-pip-version-check
+        run: python3.11 -m pip install ansible --disable-pip-version-check
 
       - name: Install galaxy-importer tool
-        run: python3.9 -m pip install galaxy_importer --disable-pip-version-check
+        run: python3.11 -m pip install galaxy_importer --disable-pip-version-check
 
       - name: Make directory to sync
         run: |
@@ -43,5 +43,5 @@ jobs:
         run: |
           export GALAXY_IMPORTER_CONFIG=$(readlink -f galaxy-importer.cfg)
           env | grep galaxy
-          python3.9 -m galaxy_importer.main ibm-storage_virtualize-*.tar.gz
+          python3.11 -m galaxy_importer.main ibm-storage_virtualize-*.tar.gz
         working-directory: ./ansible_collections/ibm/storage_virtualize

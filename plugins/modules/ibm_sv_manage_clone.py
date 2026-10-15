@@ -290,7 +290,7 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     get_logger,
     is_uuid
 )
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 UUID = 'uuid'
 

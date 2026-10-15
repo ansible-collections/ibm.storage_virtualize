@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_switch_replication_direction import IBMSVSwitchReplication
 import contextlib
@@ -168,12 +168,12 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED7000000000000023',
+            'name': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438',
             'mode': 'independent',
         }):
             get_volumegroup_info_mock.return_value = {
                 "id": "1",
-                "name": "60050768108180ED7000000000000023"
+                "name": "C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438"
             }
             svc_run_command_mock.return_value = ''
             obj = IBMSVSwitchReplication()
@@ -182,7 +182,7 @@ class TestIBMSVSwitchReplication(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             # Verify UUID was stripped - svc_run_command uses positional args
             args, kwargs = svc_run_command_mock.call_args
-            self.assertEqual(kwargs['cmdargs'][0], '60050768108180ED7000000000000023')
+            self.assertEqual(kwargs['cmdargs'][0], 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438')
 
 
 if __name__ == '__main__':

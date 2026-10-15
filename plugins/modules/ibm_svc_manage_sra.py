@@ -132,7 +132,7 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     IBMSVCRestApi, svc_argument_spec,
     get_logger
 )
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 
 class IBMSVCSupportRemoteAssistance:

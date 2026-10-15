@@ -172,6 +172,21 @@ options:
         type: bool
         choices: [ true ]
         version_added: 3.0.0
+    target_partition_name:
+        description:
+            - Specifies the name of the target partition to which the selected objects will be split and moved.
+            - Applies when I(state=present).
+        type: str
+        version_added: '3.5.0'
+    volumegroup_list:
+        description:
+            - Specifies the list of volume groups that need to be split from the source partition.
+            - Each entry can be either a volume group name or a UUID, but all entries must be
+              of the same type. Mixing names and UUIDs in the same list is not supported.
+            - Applies when I(state=present) and I(target_partition_name) is specified.
+        type: list
+        elements: str
+        version_added: '3.5.0'
 author:
     - Shilpi Jain (@Shilpi-J)
     - Sumit Kumar Gupta (@sumitguptaibm)
@@ -280,6 +295,17 @@ EXAMPLES = '''
    name: partition1
    nomanagementportset: true
    state: present
+- name: Split partition1 from partition0 and migrate volume groups vg1 and vg2 to partition1.
+  ibm.storage_virtualize.ibm_sv_manage_storage_partition:
+   clustername: '{{ clustername }}'
+   username: '{{ username }}'
+   password: '{{ password }}'
+   name: partition0
+   state: present
+   target_partition_name: partition1
+   volumegroup_list:
+    - vg1
+    - vg2
 - name: Rename partition partition0 to partition1
   ibm_sv_manage_storage_partition:
    clustername: '{{ clustername }}'
@@ -315,7 +341,7 @@ from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_uti
     get_logger,
     is_uuid
 )
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 UUID = 'uuid'
 
@@ -384,6 +410,13 @@ class IBMSVStoragePartition:
                 nomanagementportset=dict(
                     type='bool',
                     choices=[True]
+                ),
+                target_partition_name=dict(
+                    type='str'
+                ),
+                volumegroup_list=dict(
+                    type='list',
+                    elements='str'
                 )
             )
         )
@@ -412,6 +445,8 @@ class IBMSVStoragePartition:
         self.old_name = self.module.params.get('old_name')
         self.managementportset = self.module.params.get('managementportset')
         self.nomanagementportset = self.module.params.get('nomanagementportset')
+        self.target_partition_name = self.module.params.get('target_partition_name')
+        self.volumegroup_list = self.module.params.get('volumegroup_list', [])
         # logging setup
         self.log_path = self.module.params['log_path']
         log = get_logger(self.__class__.__name__, self.log_path)
@@ -444,7 +479,7 @@ class IBMSVStoragePartition:
             'removedrlink', 'drlink_partition_uuid',
             'draft', 'partition_to_merge',
             'location', 'migrationaction', 'old_name',
-            'nomanagementportset'
+            'nomanagementportset', 'target_partition_name'
         ]
 
         if self.state == 'present':
@@ -457,21 +492,48 @@ class IBMSVStoragePartition:
                         'deletenonpreferredmanagementobjects, deletepreferredmanagementobjects'
                 )
 
+            if (self.target_partition_name and not self.volumegroup_list) or (
+                    self.volumegroup_list and not self.target_partition_name):
+                self.module.fail_json(
+                    msg='Parameters target_partition_name and volumegroup_list are required together.')
+
+            if self.name == self.target_partition_name:
+                self.module.fail_json(
+                    msg="Parameter 'name' and 'target_partition_name' must be different."
+                )
+
             # These parameters are loners; cannot be specified with any other parameters in common_invalids
             loners_list = ['drlink_partition_uuid', 'removedrlink', 'draft',
-                           'partition_to_merge', 'location', 'migrationaction', 'old_name', 'nomanagementportset']
+                           'partition_to_merge', 'location', 'migrationaction', 'old_name',
+                           'nomanagementportset', 'target_partition_name']
             for attr in loners_list:
                 if getattr(self, attr) is not None:
                     # Remove attr itself from list, and get invalids with this loner
                     common_invalids.remove(attr)
-                    current_invalids = ', '.join((var for var in common_invalids if not getattr(self, var) in {'', None}))
+                    # When target_partition_name is set, draft=True and replicationpolicy
+                    # are silently accepted — draft is implicit in the split workflow and
+                    # replicationpolicy is validated at runtime against the source partition.
+                    if attr == 'target_partition_name':
+                        allowed_with_split = {'draft'}
+                        current_invalids = ', '.join(
+                            var for var in common_invalids
+                            if var not in allowed_with_split and getattr(self, var) not in {'', None}
+                        )
+                    elif attr == 'draft':
+                        allowed_with_split = {'target_partition_name'}
+                        current_invalids = ', '.join(
+                            var for var in common_invalids
+                            if var not in allowed_with_split and getattr(self, var) not in {'', None}
+                        )
+                    else:
+                        current_invalids = ', '.join((var for var in common_invalids if not getattr(self, var) in {'', None}))
                     if current_invalids:
                         self.module.fail_json(
                             msg="Parameter {0} is mutually exclusive with"
                             " specified parameters: {1}.".format(attr, current_invalids))
         else:
-            invalids_for_delete = common_invalids + ['remotesystem', 'managementportset']
-            invalid_exists = ', '.join((var for var in invalids_for_delete if getattr(self, var) not in {'', None}))
+            invalids_for_delete = common_invalids + ['remotesystem', 'managementportset', 'volumegroup_list']
+            invalid_exists = ', '.join((var for var in invalids_for_delete if getattr(self, var) not in ('', None, [])))
             if invalid_exists:
                 self.module.fail_json(
                     msg='state=absent but following parameter(s) have been passed: {0}'.format(invalid_exists)
@@ -498,7 +560,10 @@ class IBMSVStoragePartition:
             self.module.fail_json(
                 msg='Parameters not supported while creation: {0}'.format(unsupported_exists)
             )
-
+        if self.target_partition_name:
+            self.module.fail_json(
+                msg='Source partition ({0}) does not exist.'.format(self.name)
+            )
         if self.module.check_mode:
             self.changed = True
             return
@@ -647,6 +712,156 @@ class IBMSVStoragePartition:
         self.restapi.svc_run_command(cmd, cmdopts=cmdopts, cmdargs=[self.name])
         self.changed = True
 
+    def get_volume_groups_for_partition(self, partition_name, use_uuid=False, is_draft=False):
+        filter_key = 'draft_partition_name' if is_draft else 'partition_name'
+        data = self.restapi.svc_obj_info(
+            cmd='lsvolumegroup',
+            cmdopts={'filtervalue': '{0}={1}'.format(filter_key, partition_name)},
+            cmdargs=None
+        )
+        if not data:
+            return set()
+        field = UUID if use_uuid else 'name'
+        if isinstance(data, list):
+            # Multiple VGs returned as a list of dicts
+            return {vg[field] for vg in data if vg.get(field)}
+        if isinstance(data, dict):
+            # Exactly one VG returned as a plain dict
+            return {data[field]} if data.get(field) else set()
+        return set()
+
+    def _rollback_draft_partition(self, rest):
+        """
+        Remove the draft target partition to roll back a failed split, then
+        re-raise the original REST error in the standard dict format used by
+        all other modules.  Called only when this module created the draft
+        (draft_created_here=True); svc_run_command calls fail_json/sys.exit
+        internally so a try/except Exception cannot catch those exits.
+        """
+        self.log("[ERROR]: Unable to connect via REST: %s", rest['err'])
+        unreachable = False
+        if "Operation timed out" in rest['err']:
+            unreachable = True
+            self.module.exit_json(msg=rest, unreachable=unreachable)
+        if self.draft_created_here:
+            self.log('Rolling back draft partition (%s) due to error: %s',
+                     self.target_partition_name, rest['err'])
+            self.restapi.svc_run_command('rmpartition', cmdopts={}, cmdargs=[self.target_partition_name])
+
+    def split_partition(self):
+        """
+        Splits the source partition (self.name) by moving the volume groups in
+        self.volumegroup_list into self.target_partition_name.
+        """
+        if self.module.check_mode:
+            self.changed = True
+            return
+
+        target_data = self.get_storage_partition_details(self.target_partition_name)
+
+        self.draft_created_here = False
+
+        if not target_data:
+            # Stage 1: Create an empty draft via mkpartition -draft -splitfrompartition.
+            self.log('Target partition (%s) does not exist; creating draft via mkpartition -splitfrompartition',
+                     self.target_partition_name)
+            self.restapi.svc_run_command(
+                'mkpartition',
+                cmdopts={
+                    'draft': True,
+                    'splitfrompartition': self.name,
+                    'name': self.target_partition_name
+                },
+                cmdargs=None
+            )
+            self.draft_created_here = True
+        else:
+            is_draft = target_data.get('draft', '') == 'yes'
+            if not is_draft:
+                # Stage 2: Target already published — idempotency check.
+                use_uuid = is_uuid(self.volumegroup_list[0])
+                target_vgs = self.get_volume_groups_for_partition(self.target_partition_name, use_uuid=use_uuid, is_draft=False)
+                expected_vgs = set(self.volumegroup_list)
+                extra_vgs = target_vgs - expected_vgs
+                if extra_vgs:
+                    self.module.fail_json(
+                        msg='Split already completed but target partition ({0}) contains unexpected '
+                            'volume groups: {1}.'.format(self.target_partition_name, ', '.join(extra_vgs))
+                    )
+                missing_vgs = expected_vgs - target_vgs
+                if missing_vgs:
+                    self.module.fail_json(
+                        msg='Volume group(s) ({0}) cannot be moved to published partition '
+                        '({1}).'.format(', '.join(missing_vgs), self.target_partition_name)
+                    )
+                self.msg = 'Storage Partition ({0}) split into ({1}) already completed.'.format(
+                    self.name, self.target_partition_name)
+                return
+
+        # Stage 3: Target is a pre-existing draft (interrupted resume) — fall through. Move any VGs missing from the draft into it.
+        use_uuid = is_uuid(self.volumegroup_list[0])
+        draft_vgs = self.get_volume_groups_for_partition(self.target_partition_name, use_uuid=use_uuid, is_draft=True)
+        expected_vgs = set(self.volumegroup_list)
+        missing_vgs = expected_vgs - draft_vgs
+
+        for vg_name in missing_vgs:
+            self.log('Moving volume group (%s) to draft target partition (%s)', vg_name, self.target_partition_name)
+            # svc_run_command calls fail_json (sys.exit) on REST error — roll back
+            # the draft we created before the error propagates.
+            rest = self.restapi._svc_token_wrap(
+                'chvolumegroup',
+                {'draftpartition': self.target_partition_name},
+                [vg_name]
+            )
+            if rest['err']:
+                self._rollback_draft_partition(rest)
+                self.module.fail_json(msg=rest)
+
+        # # Dont remove this comment # #
+        # This check is not same as stage3 check. This is specifically for volumegroups
+        # which unintentionally got added during stage3 (for loop)
+
+        # Stage 4: Check for extra VGs in the draft.
+        # Extra VGs can appear in two situations:
+        #   a) Pre-existing draft: VGs were manually added outside this module.
+        #   b) Host-mapping dependency: SVC automatically pulls additional VGs
+        #      into the draft to preserve host-to-volume mapping integrity.
+        #      e.g. host1 maps to vol1 (VG1) and vol2 (VG2); user requests only
+        #      VG1 — SVC also moves VG2 into the draft automatically.
+        # In both cases, extra VGs cannot be moved back individually.
+        # rmpartition is the only option — it returns all draft VGs to source.
+        if missing_vgs:
+            draft_vgs = self.get_volume_groups_for_partition(self.target_partition_name, use_uuid=use_uuid, is_draft=True)
+        extra_vgs = draft_vgs - expected_vgs
+
+        if extra_vgs:
+            self.log('Draft (%s) has extra VGs (%s); deleting draft to return all VGs to source',
+                     self.target_partition_name, ', '.join(extra_vgs))
+            self.restapi.svc_run_command('rmpartition', cmdopts={}, cmdargs=[self.target_partition_name])
+            self.module.fail_json(
+                msg='Draft target partition ({0}) contains unexpected volume groups: {1}. '
+                    'This may be caused by host-to-volume mapping dependencies that require '
+                    'additional volume groups to move together. '
+                    'The draft has been deleted and all VGs returned to source partition ({2}). '
+                    'Please include all dependent volume groups in volumegroup_list and re-run.'.format(
+                        self.target_partition_name, ', '.join(extra_vgs), self.name)
+            )
+
+        # Stage 5: Publish the draft target partition.
+        self.log('Publishing draft target partition (%s)', self.target_partition_name)
+        rest = self.restapi._svc_token_wrap(
+            'chpartition',
+            {'publish': True},
+            [self.target_partition_name]
+        )
+        if rest['err']:
+            self._rollback_draft_partition(rest)
+            self.module.fail_json(msg=rest)
+
+        self.changed = True
+        self.msg = 'All specified volumegroups moved from Storage Partition ({0}) to ({1}) successfully.'.format(
+            self.name, self.target_partition_name)
+
     def merge_partitions(self):
         '''
         This funcion merges partititon_to_merge into target partition.
@@ -685,7 +900,9 @@ class IBMSVStoragePartition:
         data = self.get_storage_partition_details(self.name)
         if data:
             if self.state == 'present':
-                if self.partition_to_merge:
+                if self.target_partition_name:
+                    self.split_partition()
+                elif self.partition_to_merge:
                     self.merge_partitions()
                 else:
                     modifications = self.partition_probe(data)

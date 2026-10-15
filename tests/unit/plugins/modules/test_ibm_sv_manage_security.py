@@ -14,7 +14,7 @@ import json
 import random
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_security import IBMSVSecurityMgmt
 import contextlib

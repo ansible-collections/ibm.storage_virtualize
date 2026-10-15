@@ -17,10 +17,10 @@ import inspect
 from time import sleep
 
 from ansible.module_utils.urls import open_url
-from ansible.module_utils.six.moves.urllib.parse import quote
-from ansible.module_utils.six.moves.urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.error import HTTPError
 
-COLLECTION_VERSION = "3.4.0"
+COLLECTION_VERSION = "3.5.0"
 TIMEOUT = 600
 
 

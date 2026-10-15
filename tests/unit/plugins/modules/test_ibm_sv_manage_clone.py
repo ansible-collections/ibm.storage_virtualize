@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_clone import IBMSVClone
 import contextlib
@@ -985,7 +985,7 @@ class TestIBMSVClone(unittest.TestCase):
             'name': 'clone_name_01',
             'state': 'present',
             'type': 'clone',
-            'snapshot': '60050768108180ED70000000000000AF',
+            'snapshot': '7F9A1C38-5E42-4D7B-A8F1-3C6E92B4D1F7',
             'pool': 'pool1',
             'fromsourcevolumes': "test_vol_3"
         }):

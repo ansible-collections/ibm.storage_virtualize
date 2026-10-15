@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_snapshot import IBMSVSnapshot
 import contextlib
@@ -1000,7 +1000,7 @@ class TestIBMSVSnapshot(unittest.TestCase):
             'password': 'password',
             'name': 'snapshot0',
             'src_volumegroup_name': 'volgrp0',
-            'snapshot_pool': '60050768108180ED700000000000010A',
+            'snapshot_pool': '6C1D9B3E-A7F4-4E85-BC2A-D8F1E3A7C594',
             'state': 'present',
         }):
             snapshot_exists_mock.return_value = {}
@@ -1011,7 +1011,7 @@ class TestIBMSVSnapshot(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             args, kwargs = svc_run_command_mock.call_args
             self.assertEqual(args[0], 'addsnapshot')
-            self.assertEqual(args[1]['pool'], '60050768108180ED700000000000010A')
+            self.assertEqual(args[1]['pool'], '6C1D9B3E-A7F4-4E85-BC2A-D8F1E3A7C594')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_snapshot.IBMSVSnapshot.is_snapshot_exists')
@@ -1077,7 +1077,7 @@ class TestIBMSVSnapshot(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000012C',
+            'name': 'F4A8C1D7-3E5B-4F92-8C6D-1B7E9A3D5F28',
             'state': 'absent',
         }):
             snapshot_exists_mock.side_effect = iter([
@@ -1085,7 +1085,7 @@ class TestIBMSVSnapshot(unittest.TestCase):
                     "id": '0',
                     "name": 'snapshot0',
                     "owner_name": '',
-                    "uuid": '60050768108180ED700000000000012C'
+                    "uuid": 'F4A8C1D7-3E5B-4F92-8C6D-1B7E9A3D5F28'
                 },
                 {}
             ])
@@ -1108,20 +1108,20 @@ class TestIBMSVSnapshot(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000001A',
+            'name': 'E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3',
             'state': 'present',
             'src_volume_names': 'vol1',
             'snapshot_pool': 'pool1'
         }):
             svc_obj_info_mock.return_value = {
                 'id': '1',
-                'name': '60050768108180ED700000000000001A',
+                'name': 'E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3',
                 'volume_name': 'vol1',
                 'mdisk_grp_name': 'pool1'
             }
             snapshot_exists_mock.return_value = {
                 'id': '1',
-                'name': '60050768108180ED700000000000001A',
+                'name': 'E1C92B74-8D5F-4A36-B7E2-91F4C8D2A6B3',
                 'volume_name': 'vol1',
                 'mdisk_grp_name': 'pool1'
             }
@@ -1145,19 +1145,19 @@ class TestIBMSVSnapshot(unittest.TestCase):
             'password': 'password',
             'name': 'snapshot1',
             'state': 'present',
-            'src_volumegroup_name': '60050768108180ED700000000000002B',
+            'src_volumegroup_name': '9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836',
             'snapshot_pool': 'pool1'
         }):
             svc_obj_info_mock.return_value = {
                 'id': '1',
                 'name': 'snapshot1',
-                'volume_group_name': '60050768108180ED700000000000002B',
+                'volume_group_name': '9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836',
                 'mdisk_grp_name': 'pool1'
             }
             snapshot_exists_mock.return_value = {
                 'id': '1',
                 'name': 'snapshot1',
-                'volume_group_name': '60050768108180ED700000000000002B',
+                'volume_group_name': '9B2E7C54-1F8A-4D63-B5C1-E7A9D2F4C836',
                 'mdisk_grp_name': 'pool1'
             }
             snapshot = IBMSVSnapshot()
@@ -1181,19 +1181,19 @@ class TestIBMSVSnapshot(unittest.TestCase):
             'name': 'snapshot1',
             'state': 'present',
             'src_volume_names': 'vol1',
-            'snapshot_pool': '60050768108180ED700000000000003C'
+            'snapshot_pool': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24'
         }):
             svc_obj_info_mock.return_value = {
                 'id': '1',
                 'name': 'snapshot1',
                 'volume_name': 'vol1',
-                'mdisk_grp_name': '60050768108180ED700000000000003C'
+                'mdisk_grp_name': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24'
             }
             snapshot_exists_mock.return_value = {
                 'id': '1',
                 'name': 'snapshot1',
                 'volume_name': 'vol1',
-                'mdisk_grp_name': '60050768108180ED700000000000003C'
+                'mdisk_grp_name': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24'
             }
             snapshot = IBMSVSnapshot()
             with pytest.raises(AnsibleExitJson) as exc:

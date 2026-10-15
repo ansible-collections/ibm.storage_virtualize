@@ -12,7 +12,7 @@ import pytest
 import json
 from mock import patch, Mock
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_truststore_for_replication import (
     IBMSVTrustStore
 )
@@ -87,7 +87,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
                 IBMSVTrustStore()
             self.assertTrue(exc.value.args[0]['failed'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore(self, svc_connect_mock, ssh_mock):
@@ -119,7 +120,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_idempotency(self, svc_connect_mock, ssh_mock):
@@ -150,7 +152,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
 
             self.assertFalse(exc.value.args[0]['changed'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_delete_truststore(self, svc_connect_mock, ssh_mock):
@@ -177,7 +180,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
                 ts.apply()
             self.assertTrue(exc.value.args[0]['changed'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_delete_truststore_idempotency(self, svc_connect_mock, ssh_mock):
@@ -204,7 +208,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
                 ts.apply()
             self.assertFalse(exc.value.args[0]['changed'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_with_syslog_and_restapi_on(self, svc_connect_mock, ssh_mock):
@@ -238,7 +243,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_with_ipsec_and_vasa(self, svc_connect_mock, ssh_mock):
@@ -274,7 +280,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_sv_manage_truststore_for_replication.IBMSVTrustStore.is_truststore_present')
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_update_truststore_props_ipsec_and_vasa(self,
@@ -316,7 +323,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_for_flashsystem_grid(self, svc_connect_mock, ssh_mock):
@@ -349,7 +357,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore_for_flashsystem_grid_idempotency(self, svc_connect_mock, ssh_mock):
@@ -382,7 +391,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertFalse(exc.value.args[0]['changed'])
             self.assertTrue('truststore1' in exc.value.args[0]['msg'])
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_failure_update_existing_truststore_for_flashsystem_grid(self, svc_connect_mock, ssh_mock):
@@ -420,7 +430,8 @@ class TestIBMSVTrustStore(unittest.TestCase):
             self.assertEqual(exc.value.args[0]['msg'],
                              'CMMVC1274E The command failed as the trust store entry is being used for another member of the grid.')
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_failure_update_truststore_grid_attr(self, svc_connect_mock, ssh_mock):

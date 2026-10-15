@@ -85,7 +85,8 @@ class TestIBMSVModuleUtilsSsh(unittest.TestCase):
         ret = self.sshclient._svc_disconnect()
         self.assertTrue(ret)
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     def test_register_plugin(self, ssh_mock):
         if paramiko is None:
             print("paramiko is not installed")

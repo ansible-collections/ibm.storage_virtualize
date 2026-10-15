@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_manage_volume import IBMSVCvolume
 import contextlib
@@ -3004,7 +3004,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_get_existing_volume_using_UUID(self, svc_authorize_mock, svc_obj_info_mock):
+    def test_get_existing_volume_using_UID(self, svc_authorize_mock, svc_obj_info_mock):
         '''Test getting existing volume using UUID instead of name'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3063,7 +3063,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_for_creating_new_volume_using_UUID(self, auth_mock, c1, c2, c3):
+    def test_failure_for_creating_new_volume_using_UID(self, auth_mock, c1, c2, c3):
         '''Test creating a new volume using UUID as name'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3094,7 +3094,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_idempotnecy_creating_an_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+    def test_idempotnecy_creating_an_existing_volume_using_UID(self, auth_mock, c1, c2, c3, c4):
         '''Test idempotency when creating an existing volume using UUID'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3154,7 +3154,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_module_for_deleting_an_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+    def test_module_for_deleting_an_existing_volume_using_UID(self, auth_mock, c1, c2, c3, c4):
         '''Test deleting an existing volume using UUID'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3212,7 +3212,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_idempotency_deleting_non_existing_volume_using_UUID(self, auth_mock, c1, c2, c3, c4):
+    def test_idempotency_deleting_non_existing_volume_using_UID(self, auth_mock, c1, c2, c3, c4):
         '''Test idempotency when deleting a non-existing volume using UUID'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3274,7 +3274,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_manage_volume.IBMSVCvolume.mandatory_parameter_validation')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_create_volume_thinclone_using_source_UUID(self, auth_mock, c1, c2, c3, c4, c5):
+    def test_create_volume_thinclone_using_source_UID(self, auth_mock, c1, c2, c3, c4, c5):
         '''Test creating a thinclone volume using source volume UUID'''
         with set_module_args({
             'clustername': 'clustername',
@@ -3304,7 +3304,7 @@ class TestIBMSVCvolume(unittest.TestCase):
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
-    def test_update_volume_using_UUID(self, auth, svc_obj_info_mock, svc_run_command_mock):
+    def test_update_volume_using_UID(self, auth, svc_obj_info_mock, svc_run_command_mock):
         '''Test updating volume properties using UUID'''
         with set_module_args({
             'clustername': 'clustername',

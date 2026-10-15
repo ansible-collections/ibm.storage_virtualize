@@ -13,7 +13,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_flashsystem_grid import IBMSVFlashsystemGridMgmt
 import contextlib
@@ -583,7 +583,7 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
                 fg.apply()
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'],
-                             'action and target_cluster_name must be provided together')
+                             'action (join) and target_cluster_name must be provided together')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
@@ -631,6 +631,71 @@ class TestIBMSVFlashsystemGridMgmt(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['failed'])
             self.assertEqual(exc.value.args[0]['msg'],
                              'Invalid parameter(s) for state=absent: target_cluster_name, truststore')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_removeinvalidmembers_requires_makecoordinator(self, svc_authorize_mock):
+        '''
+        Test that 'removeinvalidmembers' causes a failure if action 'makecoordinator' is not provided.
+        '''
+        with set_module_args({
+            'clustername': '1.2.3.4',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'action': 'remove',
+            'target_cluster_name': '1.2.3.5',
+            'removeinvalidmembers': True,
+            'state': 'present'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVFlashsystemGridMgmt()
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'Parameter (removeinvalidmembers) is only valid with action=makecoordinator')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    def test_failure_makecoordinator_mutually_exclusive_with_target_cluster_name(self, svc_authorize_mock):
+        '''
+        Test that action 'makecoordinator' is mutually-exclusive with target_cluster_name
+        '''
+        with set_module_args({
+            'clustername': '1.2.3.4',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'action': 'makecoordinator',
+            'target_cluster_name': '1.2.3.5',
+            'state': 'present'
+        }):
+            with pytest.raises(AnsibleFailJson) as exc:
+                IBMSVFlashsystemGridMgmt()
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'action (makecoordinator) is mutually exclusive with target_cluster_name')
+
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_authorize')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_utils.IBMSVCRestApi._svc_token_wrap')
+    def test_makecoordinator_success(self, svc_token_wrap_mock, svc_authorize_mock):
+        '''
+        Test successfully making the cluster a coordinator marks the state as changed.
+        '''
+        with set_module_args({
+            'clustername': '1.2.3.4',
+            'domain': 'domain',
+            'username': 'username',
+            'password': 'password',
+            'action': 'makecoordinator',
+            'state': 'present'
+        }):
+            svc_token_wrap_mock.return_value = {'err': None, 'out': None}
+            fg = IBMSVFlashsystemGridMgmt()
+            with pytest.raises(AnsibleExitJson) as exc:
+                fg.apply()
+            self.assertTrue(exc.value.args[0]['changed'])
+            self.assertEqual(exc.value.args[0]['msg'],
+                             'Made this cluster the flashsystem-grid coordinator successfully.')
 
 
 if __name__ == '__main__':

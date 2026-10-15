@@ -50,8 +50,14 @@ options:
     action:
         description:
             - Specifies action to be run.
-        choices: [ join, accept, remove ]
+        choices: [ join, accept, remove, makecoordinator ]
         type: str
+    removeinvalidmembers:
+        description:
+            - If C(true), removes invalid members (only valid with I(action=makecoordinator)).
+        type: bool
+        default: false
+        version_added: 3.5.0
     target_cluster_name:
         description:
             - The FQDN or IP of the flashsystem-grid coordinator (in case of join action)
@@ -88,6 +94,7 @@ notes:
       as this system is already a member of a grid".
     - If a flashsystem grid coordinator tries to join another flashsystem grid, the module will fail with error
       "CMMVC6036E This system is flashsystem grid coordinator".
+    - C(action=makecoordinator) fails with C(CMMVC1563E) if the flashsystem is not in a grid.
 '''
 
 EXAMPLES = r'''
@@ -136,12 +143,31 @@ EXAMPLES = r'''
    password: "{{ flashsystemgrid_owner_password }}"
    log_path: /tmp/playbook.debug
    state: absent
+- name: Make this cluster flashsystem-grid coordinator
+  ibm.storage_virtualize.ibm_sv_manage_flashsystem_grid:
+   clustername: "{{ flashsystemgrid_member_ip }}"
+   domain: "{{ domain }}"
+   username: "{{ flashsystemgrid_member_username }}"
+   password: "{{ flashsystemgrid_member_password }}"
+   log_path: /tmp/playbook.debug
+   action: makecoordinator
+   state: present
+- name: Make this cluster flashsystem-grid coordinator and remove all invalid members
+  ibm.storage_virtualize.ibm_sv_manage_flashsystem_grid:
+   clustername: "{{ flashsystemgrid_member_ip }}"
+   domain: "{{ domain }}"
+   username: "{{ flashsystemgrid_member_username }}"
+   password: "{{ flashsystemgrid_member_password }}"
+   log_path: /tmp/playbook.debug
+   action: makecoordinator
+   removeinvalidmembers: true
+   state: present
 '''
 
 RETURN = r'''#'''
 
 from traceback import format_exc
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import (IBMSVCRestApi,
                                                                                            svc_argument_spec,
@@ -154,9 +180,10 @@ class IBMSVFlashsystemGridMgmt(object):
         argument_spec.update(
             dict(
                 name=dict(type='str'),
-                action=dict(type='str', choices=['join', 'accept', 'remove']),
+                action=dict(type='str', choices=['join', 'accept', 'remove', 'makecoordinator']),
                 target_cluster_name=dict(type='str'),
                 truststore=dict(type='str'),
+                removeinvalidmembers=dict(type='bool', default=False),
                 state=dict(type='str', choices=['present', 'absent'], required=True)
             )
         )
@@ -172,6 +199,7 @@ class IBMSVFlashsystemGridMgmt(object):
         self.action = self.module.params.get('action')
         self.target_cluster_name = self.module.params.get('target_cluster_name')
         self.truststore = self.module.params.get('truststore')
+        self.removeinvalidmembers = self.module.params.get('removeinvalidmembers')
         self.log_path = self.module.params['log_path']
 
         self.basic_checks()
@@ -205,10 +233,19 @@ class IBMSVFlashsystemGridMgmt(object):
                         msg='Parameter name is mutually exclusive with action and target_cluster_name'
                     )
 
+            # removeinvalidmembers is only valid with makecoordinator
+            if self.removeinvalidmembers and self.action != 'makecoordinator':
+                self.module.fail_json(msg='Parameter (removeinvalidmembers) is only valid with action=makecoordinator')
+
+            # makecoordinator does not use target_cluster_name or truststore
+            if self.action == 'makecoordinator':
+                for invalid_param in ('target_cluster_name', 'truststore'):
+                    if getattr(self, invalid_param):
+                        self.module.fail_json(msg='action (makecoordinator) is mutually exclusive with {0}'.format(invalid_param))
             # join, accept and remove require both action and target_cluster_name params together
-            if bool(self.action) != bool(self.target_cluster_name):
+            elif bool(self.action) != bool(self.target_cluster_name):
                 self.module.fail_json(
-                    msg='action and target_cluster_name must be provided together'
+                    msg='action ({0}) and target_cluster_name must be provided together'.format(self.action)
                 )
 
             if self.action in ['join', 'accept'] and not self.truststore:
@@ -221,7 +258,7 @@ class IBMSVFlashsystemGridMgmt(object):
                 )
 
         if self.state == 'absent':
-            invalids = ('action', 'target_cluster_name', 'truststore', 'name')
+            invalids = ('action', 'target_cluster_name', 'truststore', 'name', 'removeinvalidmembers')
             invalid_exists = ', '.join((var for var in invalids if getattr(self, var)))
 
             if invalid_exists:
@@ -300,6 +337,13 @@ class IBMSVFlashsystemGridMgmt(object):
             # Delete flashsystem-grid
             cmdopts['leave'] = True
             self.msg = "Deleted flashsystem-grid successfully"
+
+        elif action == 'makecoordinator':
+            # Make this cluster the flashsystem-grid coordinator
+            cmdopts['makecoordinator'] = True
+            if self.removeinvalidmembers:
+                cmdopts['removeinvalidmembers'] = True
+            self.msg = "Made this cluster the flashsystem-grid coordinator successfully."
         else:
             self.module.fail_json(msg="Invalid action: {0}".format(action))
 
@@ -310,6 +354,10 @@ class IBMSVFlashsystemGridMgmt(object):
         if self.module.check_mode:
             self.msg = 'skipping changes due to check mode.'
             self.module.exit_json(changed=False, msg=self.msg)
+
+        # makecoordinator does not require a pre-check of existing grid
+        if self.state == "present" and self.action == "makecoordinator":
+            self.manage_flashsystem_grid(action='makecoordinator')
 
         fg_member_data = self.get_fg_info('members')
         self.log("Grid Member: %s", fg_member_data)

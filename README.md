@@ -8,8 +8,8 @@ This collection provides a series of Ansible modules and plugins for interacting
 
 ## Requirements
 
-- Ansible version 2.16 or higher
-- Python 3.10 or higher for controller nodes
+- Ansible version 2.19 or higher
+- Python 3.11 or higher for controller nodes
 
 ## Installation
 

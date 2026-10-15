@@ -12,7 +12,7 @@ import pytest
 import json
 from mock import patch, Mock
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_sv_manage_system_certificate import (
     IBMSVManageSystemCert
 )
@@ -116,7 +116,8 @@ class TestIBMSVManageSystemCert(unittest.TestCase):
             self.assertEqual(exc.value.args[0]['msg'],
                              "missing required arguments: primary_truststore_name")
 
-    @patch('ansible.module_utils.compat.paramiko.paramiko.SSHClient')
+    @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
+           'ibm_svc_ssh.paramiko.SSHClient')
     @patch('ansible_collections.ibm.storage_virtualize.plugins.'
            'module_utils.ibm_svc_ssh.IBMSVCssh._svc_connect')
     def test_create_truststore(self,

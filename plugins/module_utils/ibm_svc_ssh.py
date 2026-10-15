@@ -11,11 +11,30 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import inspect
+import warnings
 from uuid import getnode
-from ansible.module_utils.compat.paramiko import paramiko
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import get_logger
 
-COLLECTION_VERSION = "3.4.0"
+PARAMIKO_IMPORT_ERR = None
+
+try:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Blowfish has been ",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message="TripleDES has been ",
+            category=UserWarning,
+        )
+        import paramiko
+except Exception as err:
+    paramiko = None
+    PARAMIKO_IMPORT_ERR = err
+
+COLLECTION_VERSION = "3.5.0"
 
 
 class IBMSVCssh(object):
@@ -57,7 +76,10 @@ class IBMSVCssh(object):
 
         self.client_type = 'paramiko'
         if paramiko is None:
-            self.module.fail_json(msg='paramiko is not installed')
+            module.fail_json(
+                msg="Paramiko is required for SSH functionality.",
+                exception=str(PARAMIKO_IMPORT_ERR),
+            )
         self.client = paramiko.SSHClient()
 
         # connect through SSH

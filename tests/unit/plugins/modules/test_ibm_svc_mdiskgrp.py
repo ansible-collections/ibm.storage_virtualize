@@ -14,7 +14,7 @@ import pytest
 import json
 from mock import patch
 from ansible.module_utils import basic
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.common.text.converters import to_bytes
 from ansible_collections.ibm.storage_virtualize.plugins.module_utils.ibm_svc_utils import IBMSVCRestApi
 from ansible_collections.ibm.storage_virtualize.plugins.modules.ibm_svc_mdiskgrp import IBMSVCmdiskgrp
 import contextlib
@@ -1003,7 +1003,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'state': 'present',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000001A',
+            'name': '6C1D9B3E-A7F4-4E85-BC2A-D8F1E3A7C594',
             'datareduction': 'no',
             'easytier': 'auto',
             'encrypt': 'no',
@@ -1014,7 +1014,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             with pytest.raises(AnsibleFailJson) as exc:
                 pool_created.apply()
             self.assertTrue(exc.value.args[0]['failed'])
-            self.assertEqual(exc.value.args[0]['msg'], "Mdisk group with UUID [60050768108180ED700000000000001A] does not exist and cannot be created.")
+            self.assertEqual(exc.value.args[0]['msg'], "Mdisk group with UUID [6C1D9B3E-A7F4-4E85-BC2A-D8F1E3A7C594] does not exist and cannot be created.")
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -1033,7 +1033,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'child_pool',
-            'parentmdiskgrp': '60050768108180ED700000000000001B',
+            'parentmdiskgrp': '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24',
             'size': 1024,
             'unit': 'gb',
             'ext': '1024',
@@ -1046,7 +1046,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             # Verify UUID was stripped
             args, kwargs = svc_run_command_mock.call_args
-            self.assertEqual(args[1]['parentmdiskgrp'], '60050768108180ED700000000000001B')
+            self.assertEqual(args[1]['parentmdiskgrp'], '3D7A5F91-C8E4-4B2D-A6F9-7E1C3B5D8A24')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.modules.'
            'ibm_svc_mdiskgrp.IBMSVCmdiskgrp.mdiskgrp_exists')
@@ -1062,7 +1062,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'username': 'username',
             'password': 'password',
             'name': 'child_pool',
-            'parentmdiskgrp': '60050768108180ED700000000000001B',
+            'parentmdiskgrp': 'A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90',
             'size': 1024,
             'unit': 'gb',
             'ext': '1024',
@@ -1070,7 +1070,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             get_existing_pool_mock.return_value = {
                 "id": "1",
                 "name": "child_pool",
-                "parent_mdisk_grp_name": "60050768108180ED700000000000001B",
+                "parent_mdisk_grp_name": "A7F3D8C1-5B2E-4F69-9A84-2D7E3C1B5F90",
                 "status": "online"
             }
             pool_created = IBMSVCmdiskgrp()
@@ -1090,15 +1090,15 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'old_name': '60050768108180ED700000000000001C',
+            'old_name': 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438',
             'name': 'new_pool_name',
             'state': 'present',
         }):
             mock_old.return_value = [
                 {
                     "id": "1",
-                    "name": "60050768108180ED700000000000001C",
-                    "uuid": "60050768108180ED700000000000001C"
+                    "name": "C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438",
+                    "uuid": "C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438"
                 }
             ]
             mock_cmd.return_value = None
@@ -1107,7 +1107,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             self.assertTrue(data)
             # Verify UUID was stripped in the command
             args, kwargs = mock_cmd.call_args
-            self.assertEqual(args[2][0], '60050768108180ED700000000000001C')
+            self.assertEqual(args[2][0], 'C7E1B9A4-2D6F-4C85-A3E7-F9B2D1C6A438')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -1119,7 +1119,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'domain': 'domain',
             'username': 'username',
             'password': 'password',
-            'old_name': '60050768108180ED700000000000001C',
+            'old_name': '8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592',
             'name': 'new_pool_name',
             'state': 'present',
         }):
@@ -1128,13 +1128,13 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
                 'name': 'child_pool',
                 'easy_tier': 'auto',
                 'compressed_copy': 'no',
-                'uuid': "60050768108180ED700000000000001C"
+                'uuid': "8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592"
             }, {
                 'id': '2',
                 'name': 'child_pool',
                 'easy_tier': 'auto',
                 'compressed_copy': 'no',
-                'uuid': "60050768108180ED700000000000001C"
+                'uuid': "8A3C5F1D-B7E9-4A62-9D4F-C1E8A3B7D592"
             }]
             with pytest.raises(AnsibleExitJson) as exc:
                 mdiskgrp = IBMSVCmdiskgrp()
@@ -1157,11 +1157,11 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'state': 'absent',
             'username': 'username',
             'password': 'password',
-            'name': '60050768108180ED700000000000001D',
+            'name': 'D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64',
         }):
             get_existing_pool_mock.return_value = {
                 "id": "0",
-                "name": "60050768108180ED700000000000001D",
+                "name": "D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64",
                 "status": "online"
             }
             svc_run_command_mock.return_value = {}
@@ -1171,7 +1171,7 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             self.assertTrue(exc.value.args[0]['changed'])
             # Verify UUID was stripped
             args, kwargs = svc_run_command_mock.call_args
-            self.assertEqual(args[2][0], '60050768108180ED700000000000001D')
+            self.assertEqual(args[2][0], 'D5F7A2C8-9E1B-4D34-B6A9-3C8F1E7D2A64')
 
     @patch('ansible_collections.ibm.storage_virtualize.plugins.module_utils.'
            'ibm_svc_utils.IBMSVCRestApi.svc_obj_info')
@@ -1188,14 +1188,14 @@ class TestIBMSVCmdiskgrp(unittest.TestCase):
             'state': 'present',
             'datareduction': 'no',
             'easytier': 'auto',
-            'parentmdiskgrp': '60050768108180ED700000000000002B'
+            'parentmdiskgrp': '2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35'
         }):
             svc_obj_info_mock.return_value = {
                 'id': '2',
                 'name': 'child_pool',
                 'easy_tier': 'auto',
                 'compressed_copy': 'no',
-                'uuid': "60050768108180ED700000000000001C"
+                'uuid': "2E8A4D7C-F1B3-4C96-A5E7-9D2B6F1C8A35"
             }
             with pytest.raises(AnsibleExitJson) as exc:
                 mdiskgrp = IBMSVCmdiskgrp()
