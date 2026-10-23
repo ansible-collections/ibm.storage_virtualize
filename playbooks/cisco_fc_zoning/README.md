@@ -17,8 +17,8 @@ Automate and synchronize Fibre Channel zoning on Cisco SAN switches using zone d
 ## Prerequisites
 
 - Controller Requirements:
-    - Python version 3.11 or later.
-    - Install **Ansible** (*v2.19* or later)
+    - Python version 3.10 or later.
+    - Install **Ansible** (*v2.16* or later)
     - Install **IBM Storage Virtualize Ansible Collection**:  
         ```bash
         ansible-galaxy collection install ibm.storage_virtualize
